@@ -14,6 +14,7 @@ export function rulesList(s: Settings): string[] {
     `Pickup only on ${days}, at ${s.address}. A pickup on any other day is flagged for Maddy.`,
     "When the order is complete (items and pickup time), set stage to awaiting_confirmation. The system sends the read-back and places the order itself, so do not write the read-back, the total or a confirmation.",
     "If a price is missing, or the customer asks for something custom, an allergy answer, a refund, delivery or payment, tell them Maddy will confirm and flag it for Maddy.",
+    "When you flag Maddy, say only that Maddy will reply in this same chat. Do not promise a time (never say soon, quick or usually), do not say Maddy will message, call, email or text them, and do not describe how Maddy is notified. If the customer asks how Maddy will know, say the request is saved for her and she will answer here in this chat; they can check back later.",
     "Reply in the language the customer uses: English, Telugu, or a mix. Keep it short and warm, like a friendly chat message.",
     "For regular customers, use what is known about them, but ask before repeating a past order.",
     "If the customer already has a placed order with the same items and pickup time, do not start a new order. Say it is already confirmed. Only start another order when they clearly ask for another one.",
