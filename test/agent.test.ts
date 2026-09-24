@@ -69,12 +69,12 @@ test("regression: asked for Bagara rice and chicken fry, model wrote kheema fry"
   assert.doesNotMatch(r.replies[0]!, /Kheema/);
   // no price is set for this combo (removed from the menu here), so Maddy confirms it
   assert.match(r.replies[0]!, /price to be confirmed/);
-  assert.match(r.replies[0]!, /Maddy needs to confirm this order first \(price not set\)/);
+  assert.match(r.replies[0]!, /Annapurna Home Foods needs to confirm this order first \(price not set\)/);
   const r2 = await t.say("yes");
   const o = t.store.listOrders()[0]!;
   assert.deepEqual([o.status, o.flags], ["hold", ["Price not set"]]);
   assert.equal(o.items[0]!.id, "bagara_chicken_fry");
-  assert.match(r2.replies[0]!, /Maddy needs to confirm it first/);
+  assert.match(r2.replies[0]!, /reach out to you here in this chat/);
   assert.equal(t.notifier.sent.at(-1)!.title, "Order #1 needs you");
 });
 
@@ -197,7 +197,7 @@ test("cancel of a placed order: alert with the order id, the order stays, nothin
   const r = await t.say("please cancel my order");
   assert.equal(r.route, "cancel_placed");
   assert.equal(t.llm.prompts.length, calls);
-  assert.match(r.replies[0]!, /passed this to Maddy/);
+  assert.match(r.replies[0]!, /passed this to Annapurna Home Foods/);
   assert.doesNotMatch(r.replies[0]!, /(is|been|now) cancel+ed/i);
   const a = t.store.listAlerts(true);
   assert.equal(a.length, 1);
@@ -251,7 +251,7 @@ test("unclear turns: the draft is frozen, and Maddy is pulled in after a streak"
   t.llm.push(modelReply({ reply: "Could you tell me a bit more?" }));
   const r2 = await t.say("that other one");
   assert.equal(t.store.listAlerts(true).length, 1);
-  assert.match(r2.replies[0]!, /asked Maddy to help you/);
+  assert.match(r2.replies[0]!, /asked Annapurna Home Foods to help you/);
 
   unclear = false; // a normal turn resets the streak
   t.llm.push(modelReply({ items: [KHEEMA_BOGO], pickup: FRI_6PM }));
@@ -426,4 +426,31 @@ test("a different pickup time or different items is a new order, not a duplicate
   t.llm.push(modelReply({ items: [KHEEMA_BOGO], pickup: "2026-09-25T19:00", stage: "awaiting_confirmation" }));
   const r = await t.say("2 kheema fry combos for friday 7pm");
   assert.match(r.replies[0]!, /Please check your order/);
+});
+
+test("spice level: the assistant asks once, the answer goes on the order as a note, no owner alert", async () => {
+  const t = setup({ judge: yesJudge });
+  t.llm.push(modelReply({ reply: "Would you like regular, medium or less spicy? Any other request?", items: [KHEEMA_BOGO], pickup: FRI_6PM, name: "Asha", stage: "collecting" }));
+  const r1 = await t.say("2 chicken kheema fry combos buy 1 get 1, friday 6pm");
+  assert.match(r1.replies[0]!, /regular, medium or less spicy/i);
+  assert.equal(t.store.getDraft("+15195550101")!.stage, "collecting");
+  t.llm.push(modelReply({ reply: "Noted!", items: [KHEEMA_BOGO], pickup: FRI_6PM, name: "Asha", notes: "Medium spice", stage: "awaiting_confirmation" }));
+  const r2 = await t.say("medium spice");
+  assert.match(r2.replies[0]!, /Note: Medium spice/);
+  assert.equal(t.notifier.sent.length, 0, "a spice choice is not something the owner has to act on");
+  await t.say("yes");
+  const o = t.store.listOrders()[0]!;
+  assert.equal(o.notes, "Medium spice");
+  assert.equal(o.status, "cook");
+});
+
+test("customer-facing wording never names Maddy", async () => {
+  const t = setup({ judge: yesJudge });
+  const menu = t.store.getMenu();
+  menu.find((m) => m.id === "kheema_fry")!.single = null;
+  t.store.putMenu(menu);
+  const r = await orderAndReadBack(t, [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "kheema fry" }]);
+  const r2 = await t.say("yes");
+  for (const text of [...r.replies, ...r2.replies]) assert.doesNotMatch(text, /Maddy/);
+  assert.match(t.llm.prompts[0]!, /never see the name Maddy/);
 });

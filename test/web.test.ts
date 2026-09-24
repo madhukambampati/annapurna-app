@@ -134,7 +134,7 @@ describe("web: menu and sessions", () => {
       // the weekly plan is a list of lines, one weekday each, for the Menu sheet
       assert.ok(r.json.weekly.length >= 6);
       assert.match(r.json.weekly[0], /^Monday: /);
-      assert.ok(r.json.weekly.every((l: string) => !/never quote a price|Maddy confirms those/.test(l)), "agent-only notes are not shown to customers");
+      assert.ok(r.json.weekly.every((l: string) => !/never quote a price|Annapurna Home Foods confirms those/.test(l)), "agent-only notes are not shown to customers");
     }));
 
   test("owner can edit the weekly plan shown to customers", () =>

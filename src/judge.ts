@@ -70,7 +70,7 @@ export function buildQuestions(ctx: TurnContext): Record<string, unknown> {
       criteria: {
         order: "Wants to order food, or is adding to, removing from or changing an order that is still being put together (items, quantity, pickup day or time, name).",
         question: "Asks about the menu, prices, what is included, opening days, location or pickup, without ordering yet.",
-        owner_topic: "Asks about payment, delivery, refunds, allergies or dietary needs, custom or bulk orders, catering, or complains about food.",
+        owner_topic: "Asks about payment, delivery, refunds, allergies or dietary needs, custom dishes, bulk orders or catering (but NOT spice level or small tweaks like less spicy, medium spice, no onion, which are normal order details), or complains about food.",
         smalltalk: "Greeting, thanks or a friendly message that needs no action.",
         other: "Anything else, or the meaning is unclear.",
       },

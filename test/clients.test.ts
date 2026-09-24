@@ -177,3 +177,11 @@ test("HeuristicJudge: acknowledgements and 'already confirmed' are small talk, n
   // while a read-back is waiting, "ok" is still a yes
   assert.ok((await j.judge(ctx("ok", true))).agrees! >= 0.9);
 });
+
+test("HeuristicJudge: spice level and small tweaks are ordinary order turns", async () => {
+  const j = new HeuristicJudge();
+  for (const m of ["medium spice", "less spicy please", "regular", "no onion and less oil"]) {
+    const r = await j.judge({ message: m, awaitingConfirmation: false, hasPlacedOrder: false } as TurnContext);
+    assert.equal(r.intent.label, "order", m);
+  }
+});

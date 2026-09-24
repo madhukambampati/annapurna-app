@@ -102,7 +102,7 @@ export const DEFAULT_NOTES =
   "Thursday, breakfast 2 uttapam. Lunch and dinner: rice 24oz box (600 g), veg curry or sambar 24oz box (450 to 500 g), papad.\n" +
   "Friday, healthy combo, breakfast 1 thatte idli. Lunch and dinner alternate by week. Week 1: rice 16oz box (300 g), 1 ragi mudha, chicken curry 24oz box (450 to 500 g). Week 2: coconut rice 24oz box (600 g) and chicken curry 24oz box (450 to 500 g).\n" +
   "Chicken is served 2 days a week. Everything is fresh homemade with no preservatives.\n" +
-  "Single weekday boxes have no prices set here, so never quote a price for them. Maddy confirms those.";
+  "Single weekday boxes have no prices set here, so never quote a price for them. Annapurna Home Foods confirms those.";
 
 export const DEFAULT_WEEKLY =
   "Monday: Breakfast 4 idli. Lunch and dinner alternate by week: chicken pulav with Mirchi Ka Salan and raita, or Bagara rice with Kodi Vepudu and raita.\n" +

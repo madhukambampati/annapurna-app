@@ -184,8 +184,8 @@ export function createServer(d: ServerDeps): Server {
   };
 
   const orderNote = (o: Order, from: OrderStatus, to: OrderStatus, s: Settings): string | null => {
-    if (from === "hold" && to === "cook") return `Maddy confirmed your order #${o.id}. Pickup ${formatWhen(o.pickup)} at ${s.address}.`;
-    if (to === "cancelled") return `Order #${o.id} has been cancelled by Maddy. She may message you here about it.`;
+    if (from === "hold" && to === "cook") return `Annapurna Home Foods confirmed your order #${o.id}. Pickup ${formatWhen(o.pickup)} at ${s.address}.`;
+    if (to === "cancelled") return `Order #${o.id} has been cancelled by Annapurna Home Foods. We may write to you here about it.`;
     if (to === "ready") return `Your order #${o.id} is ready for pickup at ${s.address}.`;
     return null;
   };
@@ -230,7 +230,7 @@ export function createServer(d: ServerDeps): Server {
           const name = cleanText(b.name, 60);
           const contact = cleanText(b.contact, 80);
           if (!name) throw new HttpError(400, "Please enter your name.");
-          if (!validContact(contact)) throw new HttpError(400, "Please enter a phone number or email so Maddy can reach you.");
+          if (!validContact(contact)) throw new HttpError(400, "Please enter a phone number or email so Annapurna Home Foods can reach you.");
           if (b.consent !== true) throw new HttpError(400, "Please tick the box to continue.");
           const waId = `web:${randomBytes(8).toString("hex")}`;
           const token = randomBytes(24).toString("base64url");
@@ -249,7 +249,7 @@ export function createServer(d: ServerDeps): Server {
           limit(`min:${waId}`, w.msgPerMinute, 60_000);
           limit(`day:${waId}`, w.msgPerDay, DAY);
           const g = limiter.hit("global-day", w.globalPerDay, DAY);
-          if (!g.ok) throw new HttpError(503, "Maddy's assistant is very busy right now. Please try again later.", g.retryAfter);
+          if (!g.ok) throw new HttpError(503, "Our ordering assistant is very busy right now. Please try again later.", g.retryAfter);
           const before = store.lastMessage(waId)?.id ?? 0;
           const c = store.getCustomer(waId)!;
           const out = await agent.handle({ from: waId, name: c.name, text });

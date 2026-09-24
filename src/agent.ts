@@ -125,7 +125,7 @@ export class Agent {
         const o = open[0]!;
         const ids = open.map((x) => `#${x.id}`).join(", ");
         await this.raise(msg.from, customer.name || msg.name || "Customer", `Wants to cancel or change order ${open.length > 1 ? `(open orders ${ids}, most likely #${o.id})` : `#${o.id}`}: "${text.slice(0, 140)}"`, o.id, out);
-        out.replies.push(`Got it, I've passed this to Maddy. She'll confirm here whether order #${o.id} can be changed or cancelled.`);
+        out.replies.push(`Got it, I've passed this to Annapurna Home Foods. We'll confirm here whether order #${o.id} can be changed or cancelled.`);
         break;
       }
       default:
@@ -147,7 +147,7 @@ export class Agent {
     const menu = store.getMenu();
     // A clarify turn, or a customer who only asked a question, must not start or change the order.
     const frozen = r.kind === "clarify" || (r.kind === "normal" && r.freeze === true);
-    const hint = r.kind === "clarify" ? r.hint : frozen ? "The customer is only asking a question or chatting. Answer it. Do not start or change the order, and keep stage as it is." : r.kind === "owner_topic" ? "This is a topic only Maddy can settle (payment, delivery, refund, allergy, custom or complaint). Do not answer it yourself. Say warmly that Maddy will confirm and get back to them." : undefined;
+    const hint = r.kind === "clarify" ? r.hint : frozen ? "The customer is only asking a question or chatting. Answer it. Do not start or change the order, and keep stage as it is." : r.kind === "owner_topic" ? "This is a topic only Maddy can settle (payment, delivery, refund, allergy, custom or complaint). Do not answer it yourself. Say warmly that Annapurna Home Foods will reach out to them here in this chat. Never name Maddy to the customer." : undefined;
 
     const prompt = buildPrompt({
       now, settings, menu, customer: { waId: msg.from, name: customer.name, contact: "", profile: customer.profile, uncertainStreak: streak },
@@ -163,7 +163,7 @@ export class Agent {
     } catch (e) {
       console.error("model turn failed", e);
       out.route += "+model_error";
-      out.replies.push("Sorry, I couldn't process that just now. Please send it once more, or Maddy will help you directly.");
+      out.replies.push("Sorry, I couldn't process that just now. Please send it once more, or Annapurna Home Foods will help you here.");
       await this.raise(msg.from, customer.name || msg.name || "Customer", `The assistant could not answer this customer (model error). Check the Claude key and credits, or reply yourself. Their message: "${text.slice(0, 100)}"`, null, out);
       return;
     }
@@ -199,14 +199,14 @@ export class Agent {
     const unclear = issues.filter((i): i is Extract<Issue, { kind: "unclear_item" }> => i.kind === "unclear_item");
     const weekday = issues.find((i): i is Extract<Issue, { kind: "weekday_mismatch" }> => i.kind === "weekday_mismatch");
     if (notLive.length) {
-      fixes.push(`Sorry, ${notLive.map((n) => n.name).join(" and ")} ${notLive.length > 1 ? "aren't" : "isn't"} running right now, so I can't take that one. I've let Maddy know.`);
+      fixes.push(`Sorry, ${notLive.map((n) => n.name).join(" and ")} ${notLive.length > 1 ? "aren't" : "isn't"} running right now, so I can't take that one. I've let Annapurna Home Foods know.`);
       await this.raise(msg.from, customer.name || msg.name || "Customer", `Asked for ${notLive.map((n) => n.name).join(", ")}, which is switched off right now.`, null, out);
     }
     for (const u of unclear) {
       if (u.candidates.length) {
         fixes.push(`Just to be sure I get it right, which one did you mean for "${u.askedFor}": ${u.candidates.join(", or ")}?`);
       } else {
-        fixes.push(`I don't see "${u.askedFor}" on the ordering menu. I've let Maddy know. Would you like something from the menu instead?`);
+        fixes.push(`I don't see "${u.askedFor}" on the ordering menu. I've let Annapurna Home Foods know. Would you like something from the menu instead?`);
         await this.raise(msg.from, customer.name || msg.name || "Customer", `Asked for "${u.askedFor}", which is not on the menu.`, null, out);
       }
     }
@@ -258,7 +258,7 @@ export class Agent {
     }
     if (r.kind === "clarify" && streak >= this.d.cfg.thresholds.unclearStreak) {
       await this.raise(msg.from, customer.name || msg.name || "Customer", `The agent has been unsure what this customer wants for ${streak} messages in a row. Latest: "${text.slice(0, 140)}"`, null, out);
-      out.replies[out.replies.length - 1] += "\nI've also asked Maddy to help you.";
+      out.replies[out.replies.length - 1] += "\nI've also asked Annapurna Home Foods to help you.";
     }
   }
 
@@ -270,11 +270,11 @@ export class Agent {
     const out = [
       "Please check your order:",
       ...lines,
-      t == null ? "Total: Maddy will confirm the price" : `Total: ${money(t)}`,
+      t == null ? "Total: Annapurna Home Foods will confirm the price" : `Total: ${money(t)}`,
       `Pickup: ${formatWhen(d.pickup_local)} at ${s.address}`,
     ];
     if (d.notes) out.push(`Note: ${d.notes}`);
-    if (flags.length) out.push(`Maddy needs to confirm this order first (${flags.join("; ").toLowerCase()}).`);
+    if (flags.length) out.push(`Annapurna Home Foods needs to confirm this order first (${flags.join("; ").toLowerCase()}).`);
     out.push("Reply YES to confirm, or tell me what to change.");
     return out.join("\n");
   }
@@ -319,7 +319,7 @@ export class Agent {
     const who = customer.name || draft.customer_name;
     const listing = items.map((it) => `- ${itemLabel(it)}`).join("\n");
     if (flags.length) {
-      out.replies.push(`Thank you${who ? ` ${who}` : ""}! I've noted order #${order.id}:\n${listing}\nMaddy needs to confirm it first (${flags.join("; ").toLowerCase()}). She'll message you here soon.`);
+      out.replies.push(`Thank you${who ? ` ${who}` : ""}! I've noted order #${order.id}:\n${listing}\nWe need to confirm it first (${flags.join("; ").toLowerCase()}). Annapurna Home Foods will reach out to you here in this chat.`);
     } else {
       out.replies.push(`Thank you${who ? ` ${who}` : ""}! Order #${order.id} is confirmed:\n${listing}\nTotal: ${money(t)}\nPickup: ${formatWhen(draft.pickup_local)} at ${s.address}`);
     }

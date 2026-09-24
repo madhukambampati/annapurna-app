@@ -5,7 +5,7 @@
   var NAME_KEY = "annapurna-name";
   var CHIPS = ["What's on the menu?", "Tell me about the weekly plans", "What weekend combos are running?"];
   var STATUS = {
-    hold: ["Waiting for Maddy to confirm", ""],
+    hold: ["Waiting for Annapurna Home Foods to confirm", ""],
     cook: ["Being prepared", ""],
     ready: ["Ready for pickup", "ready"],
     done: ["Picked up", "done"],
@@ -49,7 +49,7 @@
     });
   }
 
-  function money(n) { return n == null ? "Ask Maddy" : "$" + (Math.round(n * 100) / 100); }
+  function money(n) { return n == null ? "Ask us" : "$" + (Math.round(n * 100) / 100); }
   function clock(ts) { try { return new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); } catch (e) { return ""; } }
 
   /* ---------- screens ---------- */
@@ -71,7 +71,7 @@
 
   function bubble(m, pending) {
     var kids = [];
-    if (m.who === "owner") kids.push(h("span", { class: "who" }, "Maddy"));
+    if (m.who === "owner") kids.push(h("span", { class: "who" }, "Annapurna"));
     kids.push(m.text);
     kids.push(h("time", {}, m.ts ? clock(m.ts) : ""));
     return h("div", { class: "b " + m.who + (pending ? " pending" : ""), "data-id": m.id || "" }, kids);
@@ -81,7 +81,7 @@
 
   function renderEmptyHello() {
     if (msgsEl.children.length) return;
-    msgsEl.append(h("div", { class: "hello", id: "hello" }, "Namaste" + (store(NAME_KEY) ? ", " + store(NAME_KEY) : "") + "! Ask about our menu or tell me what you'd like to order. I'll check everything with you before Maddy cooks it."));
+    msgsEl.append(h("div", { class: "hello", id: "hello" }, "Namaste" + (store(NAME_KEY) ? ", " + store(NAME_KEY) : "") + "! Ask about our menu or tell me what you'd like to order. I'll check everything with you before we cook it."));
   }
 
   function addMessages(list) {
@@ -173,14 +173,14 @@
 
   function renderOrders() {
     var body = $("sheetBody"); body.replaceChildren();
-    if (!orders.length) { body.append(h("p", { class: "tiny" }, "No orders yet. Once Maddy confirms an order it shows up here.")); return; }
+    if (!orders.length) { body.append(h("p", { class: "tiny" }, "No orders yet. Once Annapurna Home Foods confirms an order it shows up here.")); return; }
     orders.forEach(function (o) {
       var st = STATUS[o.status] || [o.status, ""];
       body.append(h("div", { class: "ord" },
         h("div", {}, h("b", {}, "Order #" + o.id + " "), h("span", { class: "st " + st[1] }, st[0])),
         h("ul", {}, o.items.map(function (x) { return h("li", {}, x); })),
         h("div", { class: "tiny" }, "Pickup: " + o.pickupText + (o.status === "ready" || o.status === "cook" ? " at " + o.address : "")),
-        h("div", {}, h("b", {}, o.total == null ? "Total to be confirmed by Maddy" : "Total: " + money(o.total)))
+        h("div", {}, h("b", {}, o.total == null ? "Total to be confirmed by Annapurna Home Foods" : "Total: " + money(o.total)))
       ));
     });
   }
@@ -243,7 +243,7 @@
   function showOrders() { openSheet("orders", "Your orders"); renderOrders(); loadOrders(); }
 
   function deleteChat() {
-    if (!confirm("Delete this chat from our system? Orders already placed stay so Maddy can cook them.")) return;
+    if (!confirm("Delete this chat from our system? Orders already placed stay so we can cook them.")) return;
     api("DELETE", "/web/me").then(function () { store(NAME_KEY, null); toBoarding("Your chat was deleted."); }).catch(function (e) { toast(errText(e)); });
   }
 
