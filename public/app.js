@@ -23,6 +23,7 @@
     person: ["M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M4 21a8 8 0 0 1 16 0"],
     trash: ["M5 7h14M10 11v6M14 11v6", "M6 7l1 13h10l1-13", "M9 7V4h6v3"],
     plus: ["M12 5v14M5 12h14"],
+    sun: ["M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"],
     chili: ["M5.5 8.5c2.6-.8 5 .4 6.4 2.8 1.6 2.8 3.6 5.2 7.6 6.2.6.2.5 1-.1 1.2C13.6 21 7 18.6 5 13.2c-.6-1.7-.6-3.6.5-4.7z", "M5.5 8.5C5 6.5 6 4.5 8.5 4"]
   };
 
@@ -244,19 +245,68 @@
   }
 
   /* When the assistant asks about spice, offer one-tap answers. Only on the newest message. */
+  /* Only when a question itself asks about spice, not when a reply just mentions it ("medium spice noted! What day?"). */
+  function asksSpice(m) {
+    if (m.who !== "agent" || /Order #\d+ is confirmed|Please check your order/.test(m.text)) return false;
+    return (m.text.match(/[^.!?\n]*\?/g) || []).some(function (q) { return /\bspic(e|y|iness)\b/i.test(q); });
+  }
   var SPICE = [["Less spicy", 1], ["Medium", 2], ["Spicy", 3]];
   function spiceRow(m) {
-    if (m.who !== "agent" || !/\bspic(e|y)\b/i.test(m.text) || m.text.indexOf("?") < 0 || /Order #\d+ is confirmed|Please check your order/.test(m.text)) return null;
+    if (!asksSpice(m)) return null;
     return h("div", { class: "spice" }, SPICE.map(function (s) {
       var chili = h("span", { class: "chili", "aria-hidden": "true" });
       for (var i = 0; i < s[1]; i++) chili.append(icon("chili"));
       return h("button", { type: "button", onclick: function () { if (!busy) send(s[0] === "Medium" ? "Medium spice" : s[0]); } }, chili, s[0]);
     }));
   }
+
+  /* ---------- week card: when a reply walks through the week ("Mon: ..."), draw a timeline ---------- */
+  var DAYRE = /^\s*[-\u2022*]?\s*\**(mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?\**\s*(\([^)]*\))?\s*[:\-\u2013]\s*(.+)$/i;
+  var DOW = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+  function weekCard(m) {
+    if (m.who !== "agent") return null;
+    var rows = [], before = [], after = [];
+    m.text.split("\n").forEach(function (l) {
+      var d = DAYRE.exec(l);
+      if (d) rows.push({ day: d[1].toLowerCase(), extra: (d[2] || "").replace(/[()]/g, ""), text: d[3].trim() });
+      else if (!rows.length) before.push(l); else after.push(l);
+    });
+    if (rows.length < 3) return null;
+    var today = new Date().getDay();
+    var fresh = m.ts && Date.now() - new Date(m.ts).getTime() < 90000;
+    return h("div", { class: "b agent week" + (fresh ? " fresh" : ""), "data-id": m.id || "" },
+      before.join("\n").trim() ? h("p", { class: "intro" }, before.join("\n").trim()) : null,
+      h("ol", { class: "wlist" }, rows.map(function (r, k) {
+        var parts = r.text.split(/;\s*|\.\s+(?=[A-Z])/), bf = "", rest = [];
+        parts.forEach(function (p) {
+          if (!bf && /breakfast/i.test(p)) bf = p.replace(/\bbreakfast\b:?/i, "").replace(/^[\s,:\-]+|[\s,:\-]+$/g, "");
+          else if (p.trim()) rest.push(p.trim().replace(/^lunch\s*(\/|and|&)\s*dinner\s*:?\s*/i, ""));
+        });
+        var meal = rest.join("; "), alt = /^(alternates?|alternating)(\s+(by|each|every)\s+week)?\s*[-:\u2013]?\s*/i;
+        var alternates = alt.test(meal) || /\balternat/i.test(r.extra);
+        meal = meal.replace(alt, "");
+        var all = r.text.toLowerCase(), tags = [];
+        if (/chicken|kodi|kheema/.test(all)) tags.push(["Chicken", "t-chk"]);
+        if (/\begg/.test(all)) tags.push(["Egg", "t-egg"]);
+        if (!tags.length || /\bveg\b/.test(all) && !/chicken|kodi|egg/.test(all)) { if (!tags.length) tags.push(["Veg", "t-veg"]); }
+        if (alternates) tags.push(["Alternates weekly", "t-x"]);
+        if (r.extra && !/\balternat/i.test(r.extra)) tags.push([r.extra.charAt(0).toUpperCase() + r.extra.slice(1), "t-x"]);
+        var isToday = DOW[r.day] === today;
+        return h("li", { class: "wday" + (isToday ? " today" : ""), style: "--i:" + k },
+          h("div", { class: "dchip" }, h("b", {}, r.day.slice(0, 3).toUpperCase()), isToday ? h("small", {}, "Today") : null),
+          h("div", { class: "wbody" },
+            bf ? h("div", { class: "wrow" }, icon("sun"), h("span", {}, h("em", {}, "Breakfast "), bf)) : null,
+            meal ? h("div", { class: "wrow" }, icon("bowl"), h("span", {}, bf ? h("em", {}, "Lunch & dinner ") : null, meal)) : null,
+            h("div", { class: "tags" }, tags.map(function (t) { return h("span", { class: "tag " + t[1] }, t[0]); }))));
+      })),
+      after.join("\n").trim() ? h("p", { class: "outro" }, after.join("\n").trim()) : null,
+      h("time", {}, m.ts ? clock(m.ts) : ""));
+  }
+
   function bubble(m, pending) {
     if (m.who === "agent" && /^Please check your order:/.test(m.text)) return summary(m);
     if (m.who === "agent" && /^[^\n]*Order #\d+ is confirmed:/.test(m.text)) return confirmed(m);
-    var card = dishes(m); if (card) return card;
+    var card = dishes(m) || weekCard(m); if (card) return card;
     var kids = [];
     if (m.who === "owner") kids.push(h("span", { class: "who" }, "Annapurna"));
     kids.push(m.text);
