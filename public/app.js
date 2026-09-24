@@ -22,7 +22,8 @@
     phone: ["M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"],
     person: ["M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M4 21a8 8 0 0 1 16 0"],
     trash: ["M5 7h14M10 11v6M14 11v6", "M6 7l1 13h10l1-13", "M9 7V4h6v3"],
-    plus: ["M12 5v14M5 12h14"]
+    plus: ["M12 5v14M5 12h14"],
+    chili: ["M5.5 8.5c2.6-.8 5 .4 6.4 2.8 1.6 2.8 3.6 5.2 7.6 6.2.6.2.5 1-.1 1.2C13.6 21 7 18.6 5 13.2c-.6-1.7-.6-3.6.5-4.7z", "M5.5 8.5C5 6.5 6 4.5 8.5 4"]
   };
 
   var token = "", lastId = 0, busy = false, seen = {}, orders = [], pollTimer = 0;
@@ -175,12 +176,91 @@
       h("time", {}, m.ts ? clock(m.ts) : ""));
   }
 
+
+  /* ---------- dish cards: when a reply lists menu items, draw them as cards ---------- */
+  /* Prices always come from the menu (code), never from the reply text. */
+  function norm(t) { return String(t || "").toLowerCase().replace(/[*_`]/g, "").replace(/^[\s\-\u2022\u2013\u2014>]*(\d+[.)]\s*)?/, "").replace(/\s+/g, " ").trim(); }
+  function matchDish(line) {
+    if (!menuData || !menuData.items) return null;
+    var l = norm(line);
+    if (!l) return null;
+    var best = null, bestLen = 0;
+    menuData.items.forEach(function (it) {
+      var names = [norm(it.name), norm(it.name).replace(/ combo$/, "")];
+      names.forEach(function (n) {
+        if (n.length > 5 && l.indexOf(n) === 0 && n.length > bestLen) { best = it; bestLen = n.length; }
+      });
+    });
+    return best;
+  }
+  function fillComposer(text) {
+    var t = $("text");
+    t.value = text; t.dispatchEvent(new Event("input"));
+    t.focus();
+    try { t.setSelectionRange(t.value.length, t.value.length); } catch (e) { /* older browsers */ }
+  }
+  function pill(price, label, cls, onTap) {
+    return h("button", { type: "button", class: "ppill" + (cls ? " " + cls : ""), onclick: onTap, "aria-label": label + " " + money(price) + ", tap to order" },
+      h("b", {}, money(price)), h("small", {}, label));
+  }
+  function dishCard(it, k) {
+    var kids = [];
+    if (it.kind === "plan") {
+      kids.push(pill(it.plan, it.unit ? it.unit.replace(/^per /, "/ ").replace(/ per /g, " / ") : "plan", "", function () { fillComposer("I'd like the " + it.name + " for 1 person, starting "); }));
+    } else {
+      if (it.single != null || it.bogo == null) kids.push(pill(it.single, "single", "", function () { fillComposer("1 " + it.name + ", single, pickup "); }));
+      if (it.bogo != null) kids.push(pill(it.bogo, "Buy 1 Get 1", "bogo", function () { fillComposer("1 " + it.name + ", Buy 1 Get 1, pickup "); }));
+    }
+    var hue = [148, 38, 12, 95, 170, 28, 120, 200][k % 8];
+    return h("li", { class: "dcard" + (it.live === false ? " off" : ""), style: "--i:" + k + ";--h:" + hue },
+      it.no ? h("span", { class: "no", "aria-label": "Option " + it.no }, String(it.no)) : null,
+      h("div", { class: "thumb" }, icon(it.kind === "plan" ? "clock" : "bowl")),
+      h("div", { class: "info" },
+        h("b", {}, it.name),
+        it.desc ? h("small", {}, it.desc) : null,
+        it.availability ? h("span", { class: "avail" }, it.availability) : null),
+      h("div", { class: "prices" }, kids));
+  }
+  function dishes(m) {
+    if (m.who !== "agent" || !menuData) return null;
+    var lines = m.text.split("\n"), found = [], before = [], after = [], ids = {};
+    lines.forEach(function (l) {
+      var it = matchDish(l);
+      if (it && !ids[it.id]) { ids[it.id] = true; found.push(it); }
+      else if (it) { /* same dish twice, skip */ }
+      else if (!found.length) before.push(l);
+      else after.push(l);
+    });
+    if (found.length < 2) return null;
+    found.sort(function (a, b) { return (a.no || 0) - (b.no || 0); });
+    var fresh = m.ts && Date.now() - new Date(m.ts).getTime() < 90000;
+    var intro = before.join("\n").trim(), outro = after.join("\n").trim();
+    return h("div", { class: "b agent dishes" + (fresh ? " fresh" : ""), "data-id": m.id || "" },
+      intro ? h("p", { class: "intro" }, intro) : null,
+      h("ul", { class: "dlist" }, found.map(dishCard)),
+      h("p", { class: "hint" }, "Tap a price, or just say \u201coption " + (found[0].no || 1) + "\u201d"),
+      outro ? h("p", { class: "outro" }, outro) : null,
+      h("time", {}, m.ts ? clock(m.ts) : ""));
+  }
+
+  /* When the assistant asks about spice, offer one-tap answers. Only on the newest message. */
+  var SPICE = [["Less spicy", 1], ["Medium", 2], ["Spicy", 3]];
+  function spiceRow(m) {
+    if (m.who !== "agent" || !/\bspic(e|y)\b/i.test(m.text) || m.text.indexOf("?") < 0 || /Order #\d+ is confirmed|Please check your order/.test(m.text)) return null;
+    return h("div", { class: "spice" }, SPICE.map(function (s) {
+      var chili = h("span", { class: "chili", "aria-hidden": "true" });
+      for (var i = 0; i < s[1]; i++) chili.append(icon("chili"));
+      return h("button", { type: "button", onclick: function () { if (!busy) send(s[0] === "Medium" ? "Medium spice" : s[0]); } }, chili, s[0]);
+    }));
+  }
   function bubble(m, pending) {
     if (m.who === "agent" && /^Please check your order:/.test(m.text)) return summary(m);
     if (m.who === "agent" && /^[^\n]*Order #\d+ is confirmed:/.test(m.text)) return confirmed(m);
+    var card = dishes(m); if (card) return card;
     var kids = [];
     if (m.who === "owner") kids.push(h("span", { class: "who" }, "Annapurna"));
     kids.push(m.text);
+    kids.push(spiceRow(m));
     kids.push(h("time", {}, m.ts ? clock(m.ts) : ""));
     return h("div", { class: "b " + m.who + (pending ? " pending" : ""), "data-id": m.id || "" }, kids);
   }
@@ -189,6 +269,7 @@
   function refreshActions() {
     var last = msgsEl.querySelector(".b:last-of-type");
     msgsEl.querySelectorAll(".sum .acts").forEach(function (a) { a.hidden = a.parentNode !== last; });
+    msgsEl.querySelectorAll(".spice").forEach(function (a) { a.hidden = a.parentNode !== last; });
   }
 
   function scrollDown() { msgsEl.scrollTop = msgsEl.scrollHeight; }
@@ -212,7 +293,11 @@
       msgsEl.append(bubble(m));
       added = true;
     });
-    if (added) { scrollDown(); refreshActions(); refreshChips(); }
+    if (added) {
+      scrollDown(); refreshActions(); refreshChips();
+      /* a new confirmation updates the Orders badge right away */
+      if (list.some(function (m) { return m.who === "agent" && /Order #\d+ is confirmed/.test(m.text || ""); })) loadOrders();
+    }
     return added;
   }
 
@@ -282,11 +367,16 @@
   function startPolling() { stopPolling(); pollTimer = setInterval(poll, 7000); }
   function stopPolling() { if (pollTimer) clearInterval(pollTimer); pollTimer = 0; }
 
+  function loadMenu() {
+    if (menuData) return Promise.resolve(menuData);
+    return fetch("/web/menu").then(function (r) { return r.json(); }).then(function (m) { menuData = m; return m; }).catch(function () { return null; });
+  }
+
   function openChat() {
     show("chat");
     msgsEl.replaceChildren(); seen = {}; lastId = 0;
     renderEmptyHello(); refreshChips();
-    api("GET", "/web/history?after=0").then(function (j) { addMessages(j.messages || []); setHandoff(j.handoff || null); if (j.name) store(NAME_KEY, j.name); }).catch(function (e) { if (e.status === 401) toBoarding("Your chat expired. Please start a new one."); });
+    loadMenu().then(function () { return api("GET", "/web/history?after=0"); }).then(function (j) { addMessages(j.messages || []); setHandoff(j.handoff || null); if (j.name) store(NAME_KEY, j.name); }).catch(function (e) { if (e.status === 401) toBoarding("Your chat expired. Please start a new one."); });
     loadOrders();
     startPolling();
   }
@@ -371,7 +461,7 @@
     }
     return h("article", { class: "dish" + (off ? " off" : "") },
       h("div", { class: "dmain" },
-        h("h3", { class: "dname" }, x.name),
+        h("h3", { class: "dname" }, x.no ? h("span", { class: "dno", "aria-label": "Option " + x.no }, String(x.no)) : null, x.name),
         x.desc ? h("p", { class: "desc" }, x.desc) : null,
         h("span", { class: "pill" + (off ? " off" : "") }, x.availability || (off ? "Not running right now" : "Available"))),
       price);

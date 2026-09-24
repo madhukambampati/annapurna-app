@@ -138,8 +138,8 @@ test("FallbackJudge uses the rules when TypeSafe errors or returns junk", async 
 test("HeuristicJudge: yes only counts when it is a plain yes", async () => {
   const j = new HeuristicJudge();
   const aw = (message: string) => j.judge(ctx({ message, awaitingConfirmation: true }));
-  for (const yes of ["yes", "Yes!", "ok", "Okay", "confirm", "avunu", "sare", "yes please"]) assert.ok((await aw(yes)).agrees! >= 0.9, yes);
-  for (const no of ["yes but make it 3", "no", "not yet", "wait change the time", "yes, and also add raita", "ok but pickup at 7"]) assert.ok((await aw(no)).agrees! < 0.5, no);
+  for (const yes of ["yes", "Yes!", "ok", "Okay", "confirm", "avunu", "sare", "yes please", "Yes, confirm", "yes, place my order", "Looks good", "ok go ahead", "yes that's correct"]) assert.ok((await aw(yes)).agrees! >= 0.9, yes);
+  for (const no of ["yes but make it 3", "no", "not yet", "wait change the time", "yes, and also add raita", "ok but pickup at 7", "the order", "my order", "place it at 7"]) assert.ok((await aw(no)).agrees! < 0.5, no);
   assert.equal((await j.judge(ctx({ message: "yes" }))).agrees, null);
 });
 

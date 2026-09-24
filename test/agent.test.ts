@@ -547,3 +547,39 @@ test("a normal order message does not trigger the handoff", async () => {
   const r = await orderAndReadBack(t);
   assert.notEqual(r.route, "handoff");
 });
+
+test("'option 2' is looked up by code and handed to the model as the exact dish, even when the judge is unsure", async () => {
+  const t = setup({ judge: () => ({ intent: { label: "other", prob: 0.4, confidence: 0.3 } }) });
+  t.llm.push(modelReply({ reply: "Great pick! Single or Buy 1 Get 1, when is pickup, and how spicy: less spicy, medium or spicy?", items: [], pickup: null, name: "Asha", stage: "collecting" }));
+  const r = await t.say("I want to go with option 2");
+  assert.equal(r.route, "normal", "a picked option is an order step, not an unclear message");
+  assert.match(t.llm.prompts[0]!, /option 2: Gongura Chicken Kheema Pulao \(id gongura_kheema_pulao\)/);
+  assert.match(t.llm.prompts[0]!, /"option_no":2,"id":"gongura_kheema_pulao"/);
+  assert.match(t.llm.prompts[0]!, /less spicy, medium or spicy/);
+});
+
+test("an option number that is not on the menu is not guessed", async () => {
+  const t = setup();
+  t.llm.push(modelReply({ reply: "We don't have an option 40. Which dish did you mean?", items: [], pickup: null, name: "Asha", stage: "browsing" }));
+  await t.say("option 40");
+  assert.match(t.llm.prompts[0]!, /There is no option 40 on the menu/);
+});
+
+test("the 'Yes, place order' button places the order even with the offline judge", async () => {
+  const { HeuristicJudge } = await import("../src/judge.js");
+  const t = setup();
+  (t.agent as unknown as { d: { judge: unknown } }).d.judge = new HeuristicJudge();
+  await orderAndReadBack(t);
+  const r = await t.say("Yes, confirm");
+  assert.equal(r.route, "confirm_order");
+  assert.match(r.replies[0]!, /Order #1 is confirmed/);
+  assert.equal(t.store.listOrders().length, 1);
+});
+
+test("the button text counts as yes even if the judge doubts it", async () => {
+  const t = setup({ judge: () => ({ agrees: 0.2 }) });
+  await orderAndReadBack(t);
+  const r = await t.say("Yes, confirm");
+  assert.equal(r.route, "confirm_order");
+  assert.equal(t.store.listOrders().length, 1);
+});

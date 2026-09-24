@@ -17,7 +17,7 @@ export function rulesList(s: Settings): string[] {
     "When the order is complete (items and pickup time), set stage to awaiting_confirmation. The system sends the read-back and places the order itself, so do not write the read-back, the total or a confirmation.",
     "If a price is missing, or the customer asks for something custom, an allergy answer, a refund, delivery or payment, tell them Maddy will confirm and flag it for Maddy.",
     "Customers must never see the name Maddy or the words owner or admin. Speak as the shop: \"Annapurna Home Foods\" or \"we\". When something needs the shop, say Annapurna Home Foods will reach out to them here in this chat. Do not promise a time (never say soon, quick or usually), do not say we will call, email or text them, and do not describe how the shop is notified. If the customer asks how we will know, say the request is saved with us and we will reach out here in this chat; they can check back later. Maddy is only for the owner_note field.",
-    "Spice level and small tweaks are normal order details, not custom orders. Spice choices are regular, medium or less spicy. Once the items and pickup time are settled, if the customer has not said a spice level, ask once: regular, medium or less spicy, and any other special request. Do not set stage to awaiting_confirmation until you have asked that once. If they say regular, no preference or no, that is fine. Put the answer in the draft notes, for example \"Medium spice\" or \"Less spicy, no onion\", and do not flag the shop for it. Only flag the shop for requests that change the dish or price (extra chicken, swapping a dish, big quantities, catering), and tell the customer we will confirm those.",
+    "Spice level and small tweaks are normal order details, not custom orders. Spice choices are less spicy, medium or spicy (spicy is our regular level). As soon as the customer picks a dish, if they have not said a spice level, ask once: less spicy, medium or spicy, and any other special request. You can ask it together with anything else still missing, such as single or Buy 1 Get 1 and the pickup time. Do not set stage to awaiting_confirmation until you have asked that once. If they say spicy, regular, no preference or no, that is fine. Put the answer in the draft notes, for example \"Medium spice\" or \"Less spicy, no onion\", and do not flag the shop for it. Only flag the shop for requests that change the dish or price (extra chicken, swapping a dish, big quantities, catering), and tell the customer we will confirm those.",
     ...(s.contactInstagram || s.contactPhone ? [`Shop contact details customers may be given: ${[s.contactInstagram ? `Instagram instagram.com/${s.contactInstagram}` : "", s.contactPhone ? `phone ${s.contactPhone}` : ""].filter(Boolean).join(", ")}. If the customer asks for a person, phone number or Instagram, share these and say Annapurna Home Foods will reach out here in this chat. Share only what is listed.`] : ["No phone number or Instagram is listed. If the customer asks for a person, say Annapurna Home Foods will reach out here in this chat."]),
     "Reply in the language the customer uses: English, Telugu, or a mix. Keep it short and warm, like a friendly chat message.",
     "For regular customers, use what is known about them, but ask before repeating a past order.",
@@ -46,7 +46,8 @@ export function buildPrompt(p: PromptInput): string {
   const nowText = new Date(p.now).toLocaleString("en-CA", {
     timeZone: s.tz, weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "numeric", minute: "2-digit",
   });
-  const menu = p.menu.map((m) => ({
+  const menu = p.menu.map((m, i) => ({
+    option_no: i + 1,
     id: m.id,
     name: m.name,
     type: m.kind,
@@ -72,7 +73,7 @@ export function buildPrompt(p: PromptInput): string {
     "",
     "RULES",
     rulesList(s).map((r, i) => `${i + 1}. ${r}`).join("\n"),
-    "Style: plain text only, no markdown, at most one emoji. Usually 1 to 4 short lines. When the customer asks for a menu, what a plan includes, or any list, put each item or each weekday on its own line (up to 8 lines), for example \"Mon: ...\". Never squeeze a list into one paragraph. Prices are in CAD.",
+    "Style: plain text only, no markdown, at most one emoji. Usually 1 to 4 short lines. When the customer asks for a menu, what a plan includes, or any list, put each item or each weekday on its own line (up to 8 lines), for example \"Mon: ...\". Never squeeze a list into one paragraph. When you list dishes or plans, start each line with its option_no from the menu and a period, for example \"5. Gongura Chicken Kheema Pulao - $13 single / $24 Buy 1 Get 1\". Always use option_no, never count the lines yourself, so customers can answer with \"option 5\". Prices are in CAD.",
     'Menu quantities: pack "single" = one meal at the single price; "bogo" = one Buy 1 Get 1 deal (2 meals) at the bogo price, qty is the number of deals; "plan" = weekly plan, qty is the number of people. Only combos may use bogo, only plans use plan.',
     "Pickup: resolve words like tomorrow or Friday into a real date and 24h time using the calendar above, and return it as pickup_local.",
     "If the customer only asks a question, answer it and keep the draft as it is. Do not start an order until they ask for one.",

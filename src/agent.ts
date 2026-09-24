@@ -2,7 +2,7 @@ import type { Config } from "./config.js";
 import { checkFlags, checkWeekday, draftHash, sanitizeItems, type Issue } from "./guards.js";
 import { HeuristicJudge, type Judge, type Judgment } from "./judge.js";
 import type { Llm } from "./llm.js";
-import { findItem, itemLabel, lineAmt, money, total } from "./menu.js";
+import { findItem, itemLabel, lineAmt, money, total, optionPicks } from "./menu.js";
 import type { Notifier } from "./notify.js";
 import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
 import { route as decideRoute, type Route } from "./router.js";
@@ -56,6 +56,8 @@ const THANKS = /^(thanks|thank you|thank u|thankyou|thx|ty|tq|many thanks|thanks
 const BARE_OK = /^(yes|yep|yeah|yup|y|ya|ok|okay|k|sure|done|fine|alright)[\s!.]*$/i;
 /** The customer wants a real person, a phone number or the Instagram page. */
 const HUMAN = /\b(real (person|human)|human being|a human|(talk|speak|chat) (to|with) (a |the |an )?(person|human|someone|somebody|owner|maddy|team|staff|agent)|contact (you|us|number|info|details)|phone( number)?|your number|call me|call you|instagram|insta|whatsapp|customer (service|support))\b/i;
+/** Text sent by the web app's "Yes, place order" button. */
+const CONFIRM_BUTTON = /^yes, confirm$/i;
 export const HANDOFF_NOTE = "Wants to talk to a person";
 
 /** Identity of an order for duplicate checks: what is ordered and when it is picked up. */
@@ -122,6 +124,8 @@ export class Agent {
       console.error("judge failed, using rules", e);
       judgment = await this.heuristic.judge(ctx);
     }
+    // The "Yes, place order" button sends exactly this text. It is a yes, whatever the judge thinks.
+    if (ctx.awaitingConfirmation && CONFIRM_BUTTON.test(text) && judgment.cancelPlaced < 0.5) judgment = { ...judgment, agrees: Math.max(judgment.agrees ?? 0, 0.99) };
     out.judgment = judgment;
 
     let r = decideRoute(judgment, { awaitingConfirmation: ctx.awaitingConfirmation, readbackCurrent, hasPlacedOrder: open.length > 0 }, cfg.thresholds);
@@ -129,6 +133,16 @@ export class Agent {
     if (r.kind === "normal" && !r.freeze) {
       const idle = !draft || (!draft.items.length && !draft.pickup_local);
       if (THANKS.test(text) || (BARE_OK.test(text) && open.length > 0 && idle)) r = { kind: "normal", freeze: true };
+    }
+    // "option 5" or just "5" after a numbered list: code looks the number up, so it is a real pick, not small talk.
+    const picks = optionPicks(text, store.getMenu(), lastShop);
+    let pickHint: string | undefined;
+    if (picks.length) {
+      const generic = r.kind === "clarify" && /^It is not clear/.test(r.hint);
+      if (generic || (r.kind === "normal" && r.freeze)) r = { kind: "normal" };
+      pickHint = picks.map((p) => p.item
+        ? `The customer's "${p.no}" means option ${p.no}: ${p.item.name} (id ${p.item.id}).`
+        : `There is no option ${p.no} on the menu. Say so kindly and ask which dish they mean.`).join(" ");
     }
     out.route = r.kind;
 
@@ -152,7 +166,7 @@ export class Agent {
         break;
       }
       default:
-        await this.modelTurn(msg, text, r, draft, open, customer, settings, out, streak);
+        await this.modelTurn(msg, text, r, draft, open, customer, settings, out, streak, pickHint);
     }
 
     for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
@@ -163,7 +177,7 @@ export class Agent {
 
   private async modelTurn(
     msg: Inbound, text: string, r: Route, draft: Draft | null, open: Order[],
-    customer: { name: string; profile: string }, settings: Settings, out: Outcome, streak: number,
+    customer: { name: string; profile: string }, settings: Settings, out: Outcome, streak: number, pickHint?: string,
   ): Promise<void> {
     const { store } = this.d;
     const now = this.now();
@@ -174,7 +188,7 @@ export class Agent {
 
     const prompt = buildPrompt({
       now, settings, menu, customer: { waId: msg.from, name: customer.name, contact: "", profile: customer.profile, uncertainStreak: streak },
-      draft, history: store.getMessages(msg.from, 40), hint,
+      draft, history: store.getMessages(msg.from, 40), hint: [pickHint, hint].filter(Boolean).join(" ") || undefined,
       placed: open.map((o) => `#${o.id} (${o.status}) ${o.items.map(itemLabel).join(", ")}, pickup ${formatWhen(o.pickup)}`),
     });
 

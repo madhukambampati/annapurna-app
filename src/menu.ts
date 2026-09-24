@@ -144,6 +144,29 @@ export function dayRange(days: number[]): string {
   return run && order.length >= 3 ? `${SHORT[order[0]!]} to ${SHORT[order.at(-1)!]}` : order.map((d) => SHORT[d]).join(", ");
 }
 
+/** Option numbers customers can say, like "option 5". Menu order, starting at 1, same on the website and for the assistant. */
+export function optionNo(menu: MenuItem[], id: string): number {
+  return menu.findIndex((m) => m.id === id) + 1;
+}
+
+const OPTION_WORD = /\b(?:option|opt|number|num|no\.?|item|dish|choice)\s*#?\s*(\d{1,2})\b|#\s*(\d{1,2})\b/gi;
+const BARE_NUMBERS = /^\s*(\d{1,2})(?:\s*(?:,|and|&|\+)\s*(\d{1,2}))*\s*(?:please|pls|plz)?[\s.!]*$/i;
+
+/**
+ * Finds option numbers in a customer message: "option 5", "no 3", "#2", or just "5" (only when the last
+ * shop message listed numbered dishes). Each number is looked up in the menu, so the model never guesses.
+ */
+export function optionPicks(text: string, menu: MenuItem[], lastShop: string | null): { no: number; item?: MenuItem }[] {
+  const nums: number[] = [];
+  for (const m of text.matchAll(OPTION_WORD)) nums.push(Number(m[1] ?? m[2]));
+  if (!nums.length && BARE_NUMBERS.test(text) && lastShop) {
+    for (const d of text.match(/\d{1,2}/g) ?? []) {
+      if (new RegExp(`^\\s*${d}[.)]\\s`, "m").test(lastShop)) nums.push(Number(d));
+    }
+  }
+  return [...new Set(nums)].map((no) => ({ no, item: no >= 1 ? menu[no - 1] : undefined }));
+}
+
 export function findItem(menu: MenuItem[], id: string): MenuItem | undefined {
   return menu.find((m) => m.id === id);
 }

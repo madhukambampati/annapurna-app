@@ -53,3 +53,26 @@ test("an old stored menu is upgraded once and keeps live/recipe choices", () => 
   assert.equal(c.getMenu().find((x) => x.id === "chicken_pulao_salan")!.single, 11);
   c.close();
 });
+
+import { optionPicks, optionNo } from "../src/menu.js";
+
+test("option numbers: 'option 5', '#2', 'no 3' map to the dish in menu order", () => {
+  const menu = defaultMenu();
+  assert.equal(optionNo(menu, "kheema_fry"), 1);
+  assert.equal(optionNo(menu, "gongura_kheema_pulao"), 2);
+  assert.equal(optionPicks("I want to go with option 5", menu, null)[0]!.item!.id, menu[4]!.id);
+  assert.deepEqual(optionPicks("#2 and option 3 please", menu, null).map((p) => p.item!.id), ["gongura_kheema_pulao", "fry_piece_pulao"]);
+  assert.equal(optionPicks("no 3", menu, null)[0]!.no, 3);
+  assert.equal(optionPicks("option 40", menu, null)[0]!.item, undefined, "a number past the menu is reported, not guessed");
+  assert.deepEqual(optionPicks("no onion please", menu, null), []);
+  assert.deepEqual(optionPicks("2 chicken kheema fry combos", menu, null), [], "a quantity is not an option");
+});
+
+test("option numbers: a bare '5' counts only right after a numbered list", () => {
+  const menu = defaultMenu();
+  const list = "Here are our weekend combos:\n1. Chicken Kheema Fry combo - $18\n5. Chicken Pulao - $10\nWhich one?";
+  assert.equal(optionPicks("5", menu, list)[0]!.no, 5);
+  assert.deepEqual(optionPicks("5", menu, "How many would you like?"), []);
+  assert.deepEqual(optionPicks("5", menu, null), []);
+  assert.deepEqual(optionPicks("1 and 5", menu, list).map((p) => p.no), [1, 5]);
+});

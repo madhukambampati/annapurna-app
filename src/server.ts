@@ -216,7 +216,7 @@ export function createServer(d: ServerDeps): Server {
         if (m === "GET" && path === "/web/menu") {
           limit(`menu:${ip}`, 60, 60_000);
           const s = store.getSettings();
-          const items = store.getMenu().map((x) => {
+          const items = store.getMenu().map((x, i) => {
             const live = x.kind === "combo" ? x.live : true;
             const days = itemDays(x, s);
             // One availability status per dish. A single-day offer also shows its next date.
@@ -224,7 +224,7 @@ export function createServer(d: ServerDeps): Server {
             if (days.length === 1) label += ` · ${dayLabel(nextDateForDow(now(), s.tz, days[0]!)).replace(/^\w+, /, "")}`;
             if (!live) label = "Not running right now";
             return {
-              id: x.id, name: x.name, kind: x.kind, single: x.single, bogo: x.bogo, plan: x.plan, unit: x.unit,
+              no: i + 1, id: x.id, name: x.name, kind: x.kind, single: x.single, bogo: x.bogo, plan: x.plan, unit: x.unit,
               desc: /price not set yet|please add/i.test(x.desc ?? "") ? "" : x.desc,
               live, availability: label,
             };

@@ -133,7 +133,13 @@ export function parseResponse(r: SystemOneResponse, ctx: TurnContext): Judgment 
 
 /* ---------- offline fallback ---------- */
 
-const YES = /^(y|yes|yep|yeah|yup|ya|ok|okay|k|confirm|confirmed|sure|done|correct|right|go ahead|proceed|please confirm|yes please|yes confirm|avunu|avnu|sare|sarey|ok sir|okay sir)$/i;
+/** A yes is made only of these words, with at least one strong one ("yes, confirm", "ok place my order", "looks good"). */
+const YES_WORDS = new Set(["y", "yes", "yep", "yeah", "yup", "ya", "ok", "okay", "k", "confirm", "confirmed", "sure", "done", "correct", "right", "go", "ahead", "proceed", "please", "pls", "place", "order", "the", "my", "it", "that's", "thats", "is", "looks", "look", "good", "all", "fine", "perfect", "great", "avunu", "avnu", "sare", "sarey", "sir", "thanks", "thank", "you"]);
+const YES_STRONG = /^(y|yes|yep|yeah|yup|ya|ok|okay|k|confirm|confirmed|sure|done|correct|right|ahead|proceed|place|good|perfect|fine|avunu|avnu|sare|sarey)$/;
+function isPlainYes(text: string): boolean {
+  const w = text.toLowerCase().replace(/[’]/g, "'").replace(/[,;:!.?]+/g, " ").split(/\s+/).filter(Boolean);
+  return w.length > 0 && w.length <= 6 && w.every((x) => YES_WORDS.has(x)) && w.some((x) => YES_STRONG.test(x));
+}
 const BLOCKERS = /\b(no|not|don'?t|dont|but|wait|change|instead|actually|cancel|however|only|except|without)\b/i;
 const CANCEL = /\b(cancel|cancellation|refund|raddu|don'?t want (it|this|the order)|no longer)\b|change (my|the) order/i;
 const OWNER = /\b(pay|payment|e-?transfer|interac|cash|deliver|delivery|refund|allerg\w*|gluten|nuts?|jain|vegan|custom|catering|bulk|party|complain\w*|stale|cold)\b/i;
@@ -147,7 +153,7 @@ export class HeuristicJudge implements Judge {
   async judge(ctx: TurnContext): Promise<Judgment> {
     const text = ctx.message.trim();
     const words = text.split(/\s+/).filter(Boolean).length;
-    const yes = words <= 5 && YES.test(text.replace(/[!.\s]+$/g, "")) && !BLOCKERS.test(text);
+    const yes = words <= 6 && isPlainYes(text) && !BLOCKERS.test(text);
     let label: Intent = "order";
     let prob = 0.6;
     if (HELLO.test(text) || (ALREADY.test(text) && !ctx.awaitingConfirmation)) [label, prob] = ["smalltalk", 0.85];
