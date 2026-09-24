@@ -83,7 +83,9 @@ test("combos that are switched off never reach the draft", () => {
 });
 
 test("items with no price stay in the draft with amt null", () => {
-  const s = sanitizeItems([{ id: "bagara_chicken_fry", qty: 1, pack: "single", asked_for: "bagara rice and chicken fry" }], menu);
+  const m = defaultMenu();
+  m.find((x) => x.id === "bagara_chicken_fry")!.single = null;
+  const s = sanitizeItems([{ id: "bagara_chicken_fry", qty: 1, pack: "single", asked_for: "bagara rice and chicken fry" }], m);
   assert.equal(s.items[0]!.amt, null);
 });
 

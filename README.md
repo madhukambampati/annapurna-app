@@ -15,7 +15,7 @@ Needs Node 22.5 or newer. No runtime dependencies.
 ```bash
 npm install
 cp .env.example .env        # add ANTHROPIC_API_KEY, optionally TYPESAFE_API_KEY and OWNER_TOKEN
-npm test                    # 117 tests, no network, no keys needed
+npm test                    # 119 tests, no network, no keys needed
 npm run build
 node --env-file=.env --disable-warning=ExperimentalWarning dist/src/index.js
 ```
@@ -122,5 +122,5 @@ src/menu.ts      default menu and settings
 public/index.html, app.js   customer page (installable web app)
 public/desk.html, desk.js   owner desk
 Dockerfile, DEPLOY.md       hosting
-test/            117 tests
+test/            119 tests
 ```

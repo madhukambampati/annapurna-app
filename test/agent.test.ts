@@ -58,11 +58,16 @@ test("a bare 'yes' with no read-back pending never creates an order", async () =
 
 test("regression: asked for Bagara rice and chicken fry, model wrote kheema fry", async () => {
   const t = setup({ judge: yesJudge });
+  const menu = t.store.getMenu();
+  const bagara = menu.find((m) => m.id === "bagara_chicken_fry")!;
+  bagara.single = null;
+  bagara.bogo = null;
+  t.store.putMenu(menu);
   const r = await orderAndReadBack(t, [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "Bagara rice and chicken fry" }]);
   assert.deepEqual(r.issues, ["corrected_item"]);
   assert.match(r.replies[0]!, /Bagara Rice and Chicken Fry combo/);
   assert.doesNotMatch(r.replies[0]!, /Kheema/);
-  // no price is set for this combo, so Maddy confirms it
+  // no price is set for this combo (removed from the menu here), so Maddy confirms it
   assert.match(r.replies[0]!, /price to be confirmed/);
   assert.match(r.replies[0]!, /Maddy needs to confirm this order first \(price not set\)/);
   const r2 = await t.say("yes");

@@ -1,10 +1,7 @@
 import type { MenuItem, OrderItem, Pack, Settings } from "./types.js";
 
-/**
- * Menu as read from the Annapurna Instagram page. Prices marked verify: true came from
- * screenshots and still need Maddy's OK. Weekend combos are switched on/off with `live`.
- */
-export function defaultMenu(): MenuItem[] {
+/** Combos and prices as printed on the Annapurna posters (Sept 2026). Plans are not on the posters. Switch combos on/off with `live` from the desk. */
+export function posterCombos(): MenuItem[] {
   const base = { plan: null, unit: "", verify: false, live: true, recipe: "" };
   return [
     {
@@ -13,30 +10,67 @@ export function defaultMenu(): MenuItem[] {
       aliases: ["chicken kheema fry", "kheema fry", "kheema fry combo", "chicken keema fry"],
     },
     {
-      ...base, id: "fry_piece_pulao", name: "Fry Piece Pulao combo", kind: "combo", single: 17, bogo: 25, verify: true,
-      desc: "Served with raita and onion.",
-      aliases: ["fry piece pulao", "fry piece pulav", "chicken fry piece pulao"],
+      ...base, id: "gongura_kheema_pulao", name: "Gongura Chicken Kheema Pulao", kind: "combo", single: 13, bogo: 24,
+      desc: "Gongura kheema pulao.",
+      aliases: ["gongura chicken kheema pulao", "gongura kheema pulao", "gongura pulao", "gongura chicken keema pulao"],
     },
     {
-      ...base, id: "bagara_chicken_fry", name: "Bagara Rice and Chicken Fry combo", kind: "combo", single: null, bogo: null, verify: true,
-      desc: "Weekend combo. Ask Maddy for today's price.",
+      ...base, id: "fry_piece_pulao", name: "Gongura Fry Piece Pulao combo", kind: "combo", single: 17, bogo: 25,
+      desc: "Served with raita and onion.",
+      aliases: ["gongura fry piece pulao", "fry piece pulao", "fry piece pulav", "chicken fry piece pulao"],
+    },
+    {
+      ...base, id: "bagara_chicken_fry", name: "Bagara Rice and Chicken Fry combo", kind: "combo", single: 15, bogo: 22,
+      desc: "Bagara rice with chicken fry.",
       aliases: ["bagara rice and chicken fry", "bagara rice chicken fry", "bagara chicken fry", "bagara rice with chicken fry"],
     },
     {
-      ...base, id: "chicken_pulao_salan", name: "Chicken Pulao with Mirchi Ka Salan and Raitha", kind: "combo", single: 15, bogo: 22, verify: true,
+      ...base, id: "kobbari_annam_fry", name: "Kobbari Annam with Chicken Fry combo", kind: "combo", single: 15, bogo: 22,
+      desc: "Coconut rice with chicken fry.",
+      aliases: ["kobbari annam with chicken fry", "kobbari annam chicken fry", "kobbari annam", "coconut rice with chicken fry"],
+    },
+    {
+      ...base, id: "chicken_pulao_salan", name: "Chicken Pulao with Mirchi Ka Salan and Raitha", kind: "combo", single: 10, bogo: 18,
       desc: "",
       aliases: ["chicken pulao with mirchi ka salan and raitha", "chicken pulao mirchi ka salan", "chicken pulao salan"],
     },
     {
-      ...base, id: "chicken_kheema_pulao", name: "Chicken Kheema Pulao with Raitha", kind: "combo", single: 10, bogo: 18, verify: true,
+      ...base, id: "chicken_kheema_pulao", name: "Chicken Kheema Pulao with Raitha", kind: "combo", single: 12, bogo: 22,
       desc: "",
       aliases: ["chicken kheema pulao with raitha", "chicken kheema pulao", "kheema pulao"],
     },
     {
-      ...base, id: "gongura_kheema_pulao", name: "Gongura Chicken Kheema Pulao", kind: "combo", single: null, bogo: null, verify: true,
-      desc: "New dish. Ask Maddy for the price.",
-      aliases: ["gongura chicken kheema pulao", "gongura kheema pulao", "gongura pulao"],
+      ...base, id: "sunday_bogo_special", name: "Sunday special: Fry Piece Pulao + free Chicken Kheema Pulao", kind: "combo", single: 22, bogo: null, live: false,
+      desc: "One-day offer. Buy 1 Fry Piece Pulao, get Chicken Kheema Pulao free. Available only this Sunday.",
+      aliases: ["sunday special", "sunday offer", "sunday bogo", "buy 1 fry piece pulao get chicken keema pulao free"],
     },
+  ];
+}
+
+/** Bump when the poster prices or combos change. Existing databases get the update once. */
+export const MENU_VERSION = 2;
+
+/**
+ * Brings a stored menu up to the poster version. Only names, prices, descriptions and aliases of combos
+ * are refreshed. `live` and `recipe` are kept as Maddy set them, plans are untouched, new dishes are added.
+ */
+export function upgradeMenu(stored: MenuItem[]): MenuItem[] {
+  const out = stored.map((m) => ({ ...m }));
+  for (const p of posterCombos()) {
+    const cur = out.find((m) => m.id === p.id);
+    if (!cur) {
+      out.push(p);
+      continue;
+    }
+    Object.assign(cur, { name: p.name, single: p.single, bogo: p.bogo, desc: p.desc, aliases: p.aliases, verify: false });
+  }
+  return out;
+}
+
+export function defaultMenu(): MenuItem[] {
+  const base = { plan: null, unit: "", verify: false, live: true, recipe: "" };
+  return [
+    ...posterCombos(),
     {
       ...base, id: "plan_full", name: "Full meal plan", kind: "plan", single: null, bogo: null, plan: 90, unit: "per person per week",
       desc: "Breakfast + lunch + dinner, with rice.",

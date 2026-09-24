@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { defaultMenu, defaultSettings } from "./menu.js";
+import { defaultMenu, defaultSettings, MENU_VERSION, upgradeMenu } from "./menu.js";
 import type { Alert, Customer, Draft, MenuItem, Msg, Order, OrderItem, OrderStatus, Settings } from "./types.js";
 
 type Row = Record<string, unknown>;
@@ -41,6 +41,16 @@ export class Store {
     } catch {
       /* column already there */
     }
+    this.migrateMenu();
+  }
+
+  /** One-time refresh of combo names and prices when MENU_VERSION goes up. */
+  private migrateMenu(): void {
+    const v = this.kvGet<number>("menu_version", () => 0);
+    if (v >= MENU_VERSION) return;
+    const has = this.db.prepare("SELECT 1 FROM kv WHERE key = 'menu'").get();
+    if (has) this.kvPut("menu", upgradeMenu(this.kvGet<MenuItem[]>("menu", defaultMenu)));
+    this.kvPut("menu_version", MENU_VERSION);
   }
 
   close(): void {
