@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FRI_6PM, judgment, modelReply, setup } from "./helpers.js";
+import { FRI_6PM, judgment, modelReply, setup, TZ } from "./helpers.js";
+import { localToEpoch } from "../src/time.js";
 
 const KHEEMA_BOGO = { id: "kheema_fry", qty: 2, pack: "bogo", asked_for: "chicken kheema fry combos" };
 const yesJudge = (ctx: { message: string; awaitingConfirmation: boolean }) =>
@@ -173,8 +174,8 @@ test("a yes that is only probably a yes gets a plain question, not an order", as
 });
 
 test("short notice puts the order on hold, and the read-back says so before the yes", async () => {
-  const t = setup({ judge: yesJudge });
-  const r = await orderAndReadBack(t, [KHEEMA_BOGO], "2026-09-23T13:00", "2 kheema fry combos today at 1pm"); // 1h from noon
+  const t = setup({ judge: yesJudge, now: localToEpoch("2026-09-25T12:00", TZ) }); // a Friday, combos can be picked up
+  const r = await orderAndReadBack(t, [KHEEMA_BOGO], "2026-09-25T13:00", "2 kheema fry combos today at 1pm"); // 1h from noon
   assert.match(r.replies[0]!, /needs to confirm this order first \(under 2h notice\)/);
   await t.say("yes");
   const o = t.store.listOrders()[0]!;
@@ -183,10 +184,21 @@ test("short notice puts the order on hold, and the read-back says so before the 
 
 test("a non-pickup day puts the order on hold", async () => {
   const t = setup({ judge: yesJudge });
-  await orderAndReadBack(t, [KHEEMA_BOGO], "2026-09-26T12:00", "2 kheema fry combos saturday at noon"); // Saturday
+  await orderAndReadBack(t, [KHEEMA_BOGO], "2026-09-28T12:00", "2 kheema fry combos monday at noon"); // Monday, not a combo day
   await t.say("yes");
   const o = t.store.listOrders()[0]!;
-  assert.deepEqual([o.status, o.flags], ["hold", ["Saturday is not a pickup day"]]);
+  assert.deepEqual([o.status, o.flags], ["hold", ["Monday is not a pickup day for Chicken Kheema Fry combo"]]);
+});
+
+test("weekend combos can be picked up on Saturday and Sunday, no hold", async () => {
+  const t = setup({ judge: yesJudge });
+  const r = await orderAndReadBack(t, [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "chicken kheema fry" }], "2026-09-26T12:00", "1 chicken kheema fry saturday at noon");
+  assert.doesNotMatch(r.replies[0]!, /needs to confirm/);
+  await t.say("yes");
+  const o = t.store.listOrders()[0]!;
+  assert.deepEqual([o.status, o.flags], ["cook", []]);
+  assert.match(t.llm.prompts[0]!, /never say it is impossible/);
+  assert.match(t.llm.prompts[0]!, /"pickup_days":\["Friday","Saturday","Sunday"\]/);
 });
 
 test("cancel of a placed order: alert with the order id, the order stays, nothing is claimed as cancelled, no model call", async () => {
@@ -453,4 +465,85 @@ test("customer-facing wording never names Maddy", async () => {
   const r2 = await t.say("yes");
   for (const text of [...r.replies, ...r2.replies]) assert.doesNotMatch(text, /Maddy/);
   assert.match(t.llm.prompts[0]!, /never see the name Maddy/);
+});
+
+/* ---------- duplicate orders after a confirmation ---------- */
+
+test("after an order is confirmed, thank you and a stray yes do not start or place another order", async () => {
+  const t = setup({ judge: yesJudge });
+  await orderAndReadBack(t);
+  await t.say("yes");
+  assert.equal(t.store.listOrders().length, 1);
+  const calls = t.llm.prompts.length;
+  // the model would happily re-propose the same order on these turns; the code must not let it
+  t.llm.push(modelReply({ reply: "You're welcome!", items: [KHEEMA_BOGO], pickup: FRI_6PM, name: "Asha", stage: "awaiting_confirmation" }));
+  const r1 = await t.say("Thank you");
+  assert.doesNotMatch(r1.replies[0]!, /Please check your order|Reply YES/);
+  assert.equal(t.store.getDraft("+15195550101"), null);
+  t.llm.push(modelReply({ reply: "Anything else?", items: [KHEEMA_BOGO], pickup: FRI_6PM, name: "Asha", stage: "awaiting_confirmation" }));
+  const r2 = await t.say("yes");
+  assert.doesNotMatch(r2.replies[0]!, /Please check your order|Reply YES/);
+  await t.say("yes");
+  assert.equal(t.store.listOrders().length, 1, "still exactly one order");
+  assert.ok(t.llm.prompts.length >= calls);
+});
+
+test("a double tap on yes places one order, and a second read-back of the same order cannot place another", async () => {
+  const t = setup({ judge: yesJudge });
+  await orderAndReadBack(t);
+  await Promise.all([t.say("yes"), t.say("yes")]);
+  assert.equal(t.store.listOrders().length, 1);
+  // force the worst case: a draft that matches the placed order and is awaiting a yes
+  const d = { items: t.store.listOrders()[0]!.items, pickup_local: FRI_6PM, customer_name: "Asha", notes: "", readback_hash: null as string | null, stage: "awaiting_confirmation" as const };
+  const { draftHash } = await import("../src/guards.js");
+  d.readback_hash = draftHash(d);
+  t.store.putDraft("+15195550101", d);
+  const r = await t.say("yes");
+  assert.equal(t.store.listOrders().length, 1);
+  assert.match(r.replies[0]!, /already confirmed/);
+  assert.equal(t.store.getDraft("+15195550101"), null);
+});
+
+test("asking for another order still works", async () => {
+  const t = setup({ judge: yesJudge });
+  await orderAndReadBack(t);
+  await t.say("yes");
+  t.llm.push(modelReply({ reply: "Sure", items: [KHEEMA_BOGO], pickup: FRI_6PM, name: "Asha", stage: "awaiting_confirmation" }));
+  const r = await t.say("I want another one, same again please");
+  assert.match(r.replies[0]!, /Please check your order/);
+  await t.say("yes");
+  assert.equal(t.store.listOrders().length, 2);
+});
+
+/* ---------- talk to a person ---------- */
+
+test("asking for a real person gives a clear status, the Instagram page, and one owner alert", async () => {
+  const t = setup();
+  const r = await t.say("can I talk to a real person? give me your phone number or instagram");
+  assert.equal(r.route, "handoff");
+  assert.match(r.replies[0]!, /sent your request to Annapurna Home Foods at \d{1,2}:\d{2}/);
+  assert.match(r.replies[0]!, /instagram\.com\/annapurna_hometaste/);
+  assert.doesNotMatch(r.replies[0]!, /Maddy/);
+  assert.equal(t.llm.prompts.length, 0, "answered by code, no model call");
+  assert.equal(t.store.listAlerts(true).length, 1);
+  assert.match(t.notifier.sent.at(-1)!.title, /wants to talk to you/);
+  const again = await t.say("hello? anyone there, I need a human");
+  assert.match(again.replies[0]!, /already with Annapurna Home Foods/);
+  assert.equal(t.store.listAlerts(true).length, 1, "no second alert");
+  // the owner replying closes the request
+  t.store.closeHandoffs("+15195550101");
+  assert.equal(t.store.openHandoff("+15195550101"), undefined);
+});
+
+test("a phone number in settings is shared with the customer", async () => {
+  const t = setup();
+  t.store.putSettings({ ...t.store.getSettings(), contactPhone: "519-555-0100" });
+  const r = await t.say("what is your phone number");
+  assert.match(r.replies[0]!, /Phone: 519-555-0100/);
+});
+
+test("a normal order message does not trigger the handoff", async () => {
+  const t = setup({ judge: yesJudge });
+  const r = await orderAndReadBack(t);
+  assert.notEqual(r.route, "handoff");
 });

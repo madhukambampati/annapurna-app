@@ -8,7 +8,7 @@ import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
 import { route as decideRoute, type Route } from "./router.js";
 import type { Store } from "./store.js";
 import { dayLabel, formatWhen, isLocalIso } from "./time.js";
-import type { Draft, Order, Settings, Stage } from "./types.js";
+import type { Alert, Draft, Order, Settings, Stage } from "./types.js";
 
 /**
  * The turn loop. Code owns the control flow:
@@ -49,6 +49,14 @@ export interface Outcome {
 const MAX_TEXT = 1000;
 
 const ADD_MORE = /\b(another|again|second|one more|extra|also|additional|add|more)\b/i;
+
+/** Thanks and short acknowledgements never change an order. */
+const THANKS = /^(thanks|thank you|thank u|thankyou|thx|ty|tq|many thanks|thanks a lot|thank you so much|great|perfect|awesome|cool|nice|noted|got it|super|superb|ok thanks|okay thanks|ok thank you|okay thank you)[\s!.]*$/i;
+/** A bare yes or ok. Only ignored when there is nothing in progress to say yes to. */
+const BARE_OK = /^(yes|yep|yeah|yup|y|ya|ok|okay|k|sure|done|fine|alright)[\s!.]*$/i;
+/** The customer wants a real person, a phone number or the Instagram page. */
+const HUMAN = /\b(real (person|human)|human being|a human|(talk|speak|chat) (to|with) (a |the |an )?(person|human|someone|somebody|owner|maddy|team|staff|agent)|contact (you|us|number|info|details)|phone( number)?|your number|call me|call you|instagram|insta|whatsapp|customer (service|support))\b/i;
+export const HANDOFF_NOTE = "Wants to talk to a person";
 
 /** Identity of an order for duplicate checks: what is ordered and when it is picked up. */
 function orderKey(items: Array<{ id: string; qty: number; pack: string }>, pickup: string | null): string {
@@ -93,6 +101,16 @@ export class Agent {
 
     const draft = store.getDraft(msg.from);
     const open = store.openOrdersFor(msg.from);
+
+    // Wants a real person or a contact detail: answered by code, so the customer always gets a clear status.
+    if (HUMAN.test(text) && !(draft?.stage === "awaiting_confirmation" && BARE_OK.test(text))) {
+      const who = customer.name || msg.name || "Customer";
+      const { created, alert } = await this.requestHuman(msg.from, who, text);
+      out.route = "handoff";
+      out.replies.push(this.handoffReply(created, alert, settings));
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
+    }
     const awaiting = draft?.stage === "awaiting_confirmation";
     const readbackCurrent = !!draft && !!draft.readback_hash && draft.readback_hash === draftHash(draft);
 
@@ -106,7 +124,12 @@ export class Agent {
     }
     out.judgment = judgment;
 
-    const r = decideRoute(judgment, { awaitingConfirmation: ctx.awaitingConfirmation, readbackCurrent, hasPlacedOrder: open.length > 0 }, cfg.thresholds);
+    let r = decideRoute(judgment, { awaitingConfirmation: ctx.awaitingConfirmation, readbackCurrent, hasPlacedOrder: open.length > 0 }, cfg.thresholds);
+    // A thank-you, or a bare yes when nothing is in progress, must never touch the order.
+    if (r.kind === "normal" && !r.freeze) {
+      const idle = !draft || (!draft.items.length && !draft.pickup_local);
+      if (THANKS.test(text) || (BARE_OK.test(text) && open.length > 0 && idle)) r = { kind: "normal", freeze: true };
+    }
     out.route = r.kind;
 
     // Unclear-turn streak: after a few in a row, hand the customer to Maddy.
@@ -176,6 +199,7 @@ export class Agent {
     let pickup = draft?.pickup_local ?? null;
     let notes = draft?.notes ?? "";
     let custName = draft?.customer_name ?? null;
+    let again = draft?.again ?? false;
     const issues: Issue[] = [];
 
     if (!frozen) {
@@ -184,6 +208,7 @@ export class Agent {
       issues.push(...s.issues);
       pickup = typeof rd.pickup_local === "string" && isLocalIso(rd.pickup_local) ? rd.pickup_local : null;
       notes = typeof rd.notes === "string" ? rd.notes.slice(0, 300) : "";
+      if (ADD_MORE.test(text)) again = true;
       custName = typeof rd.customer_name === "string" && rd.customer_name.trim() ? rd.customer_name.trim().slice(0, 60) : null;
       const wk = checkWeekday(text, pickup, now, settings.tz);
       if (wk) {
@@ -237,7 +262,7 @@ export class Agent {
       else if (stage === "browsing") stage = "collecting";
     }
 
-    const next: Draft = { items, pickup_local: pickup, customer_name: custName, notes, readback_hash: null, stage };
+    const next: Draft = { items, pickup_local: pickup, customer_name: custName, notes, readback_hash: null, stage, ...(again ? { again: true } : {}) };
     if (stage === "awaiting_confirmation") next.readback_hash = draftHash(next);
     // A frozen turn keeps the earlier read-back valid, since the draft did not change.
     if (frozen && draft) next.readback_hash = draft.readback_hash;
@@ -266,7 +291,7 @@ export class Agent {
   readBack(d: Draft, s: Settings, now: number): string {
     const lines = d.items.map((it) => `- ${itemLabel(it)}: ${it.amt == null ? "price to be confirmed" : money(it.amt)}`);
     const t = total(d.items);
-    const flags = checkFlags(d.items, d.pickup_local, s, now);
+    const flags = checkFlags(d.items, d.pickup_local, s, now, this.d.store.getMenu());
     const out = [
       "Please check your order:",
       ...lines,
@@ -304,7 +329,17 @@ export class Agent {
       out.replies.push(stage === "awaiting_confirmation" ? `${lead}\n${this.readBack(next, s, now)}` : `${lead} What else would you like?`);
       return;
     }
-    const flags = checkFlags(items, draft.pickup_local, s, now);
+    // Last line of defence against double orders: the same items and pickup as an order that is already
+    // open is never placed twice, unless the customer asked for another one.
+    const sameAs = draft.again ? undefined : store.openOrdersFor(waId).find((o) => orderKey(o.items, o.pickup) === orderKey(items, draft.pickup_local));
+    if (sameAs) {
+      store.clearDraft(waId);
+      out.route = "confirm_order+duplicate";
+      out.issues.push("duplicate_order");
+      out.replies.push(`Order #${sameAs.id} is already confirmed (${formatWhen(sameAs.pickup)}), so there is nothing more to confirm. If you'd like another order, just tell me what to add.`);
+      return;
+    }
+    const flags = checkFlags(items, draft.pickup_local, s, now, menu);
     const customer = store.getCustomer(waId)!;
     const name = customer.name || draft.customer_name || "Customer";
     const order = store.insertOrder({
@@ -327,6 +362,30 @@ export class Agent {
       flags.length ? `Order #${order.id} needs you` : `New order #${order.id}`,
       `${name}: ${items.map(itemLabel).join(", ")}. Pickup ${formatWhen(draft.pickup_local)}. ${money(t)}${flags.length ? `. HOLD: ${flags.join("; ")}` : ""}`,
     );
+  }
+
+  /* ---------- talk to a person ---------- */
+
+  /** Records one open request per customer and alerts the owner. Asking twice does not create a second alert. */
+  async requestHuman(waId: string, who: string, said: string): Promise<{ created: boolean; alert: Alert }> {
+    const { store } = this.d;
+    const existing = store.openHandoff(waId);
+    if (existing) return { created: false, alert: existing };
+    const alert = store.insertAlert({ waId, cust: who, note: `${HANDOFF_NOTE}. They said: "${said.slice(0, 140)}"`, orderId: null, createdAt: this.now() });
+    await this.d.notifier.notify(`${who} wants to talk to you`, `${HANDOFF_NOTE}. They said: "${said.slice(0, 140)}"`);
+    return { created: true, alert };
+  }
+
+  handoffReply(created: boolean, alert: Alert, s: Settings): string {
+    const at = new Date(alert.createdAt).toLocaleTimeString("en-US", { timeZone: s.tz, hour: "numeric", minute: "2-digit" });
+    const lines = [
+      created
+        ? `Done. I've sent your request to Annapurna Home Foods at ${at}. We'll reach out to you here in this chat.`
+        : `Your request is already with Annapurna Home Foods (sent at ${at}). We'll reach out to you here in this chat.`,
+    ];
+    if (s.contactInstagram) lines.push("You can also find us on Instagram:", `instagram.com/${s.contactInstagram}`);
+    if (s.contactPhone) lines.push(`Phone: ${s.contactPhone}`);
+    return lines.join("\n");
   }
 
   /* ---------- owner alerts ---------- */

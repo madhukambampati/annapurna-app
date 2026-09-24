@@ -251,6 +251,16 @@ export class Store {
     }));
   }
 
+  /** The customer's open "talk to a person" request, if any. */
+  openHandoff(waId: string): Alert | undefined {
+    return this.listAlerts(true).find((a) => a.waId === waId && a.note.startsWith("Wants to talk to a person"));
+  }
+
+  /** The owner has replied in the chat, so open handoff requests from this customer are answered. */
+  closeHandoffs(waId: string): void {
+    this.db.prepare("UPDATE alerts SET done = 1 WHERE wa_id = ? AND done = 0 AND note LIKE 'Wants to talk to a person%'").run(waId);
+  }
+
   markAlertDone(id: number): void {
     this.db.prepare("UPDATE alerts SET done = 1 WHERE id = ?").run(id);
   }

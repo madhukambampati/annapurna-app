@@ -106,7 +106,7 @@ test("checkFlags: notice, past, non-pickup day, missing price, missing time", ()
   assert.deepEqual(checkFlags(ok, "garbage", s, NOW), ["Pickup time unclear"]);
   assert.deepEqual(checkFlags(ok, "2026-09-23T12:59", s, NOW), ["Under 2h notice"]);
   assert.deepEqual(checkFlags(ok, "2026-09-23T11:00", s, NOW), ["Pickup in the past"]);
-  assert.deepEqual(checkFlags(ok, "2026-09-26T12:00", s, NOW), ["Saturday is not a pickup day"]);
+  assert.deepEqual(checkFlags(ok, "2026-09-26T12:00", s, NOW), ["Saturday is not a pickup day for A"]);
   assert.deepEqual(checkFlags([{ ...ok[0]!, amt: null }], FRI_6PM, s, NOW), ["Price not set"]);
   // exactly at the notice limit is fine
   assert.deepEqual(checkFlags(ok, "2026-09-23T14:00", s, NOW), []);

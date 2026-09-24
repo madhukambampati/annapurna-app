@@ -253,15 +253,15 @@ describe("web: chat and orders", () => {
   test("owner replies and status notes show up in the customer's chat", () =>
     withRig(async ({ t, start, say, call }) => {
       const token = await start("Asha");
-      // a Saturday order is outside the pickup days, so it waits on Maddy
-      t.llm.push(modelReply({ items: [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "kheema fry" }], pickup: "2026-09-26T12:00", stage: "awaiting_confirmation" }));
-      await say(token, "1 kheema fry saturday noon");
+      // a Monday combo order is outside the combo pickup days, so it waits on the owner
+      t.llm.push(modelReply({ items: [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "kheema fry" }], pickup: "2026-09-28T12:00", stage: "awaiting_confirmation" }));
+      await say(token, "1 kheema fry monday noon");
       const y = await say(token, "yes");
       const id = y.json.orderId;
       assert.equal(t.store.getOrder(id)!.status, "hold");
       const last = (await call("GET", "/web/history", { token })).json.messages.at(-1).id;
 
-      const rep = await call("POST", `/api/customers/${encodeURIComponent(t.store.listCustomers()[0]!.waId)}/reply`, { token: "secret", body: { text: "Saturday works, see you then!" } });
+      const rep = await call("POST", `/api/customers/${encodeURIComponent(t.store.listCustomers()[0]!.waId)}/reply`, { token: "secret", body: { text: "Monday works, see you then!" } });
       assert.equal(rep.status, 200);
       await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "cook" } });
       await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "ready" } });
@@ -269,7 +269,7 @@ describe("web: chat and orders", () => {
       const h = await call("GET", `/web/history?after=${last}`, { token });
       const owner = h.json.messages.filter((m: any) => m.who === "owner").map((m: any) => m.text);
       assert.equal(owner.length, 3);
-      assert.equal(owner[0], "Saturday works, see you then!");
+      assert.equal(owner[0], "Monday works, see you then!");
       assert.match(owner[1], /confirmed your order #1/);
       assert.match(owner[2], /ready for pickup/);
     }));
@@ -405,4 +405,50 @@ test("the simulator stays off unless switched on, and the desk needs the token",
     assert.deepEqual(st.json.features, { simulator: false, web: true });
   });
   assert.equal(loadConfig({}).simulator, false);
+});
+
+describe("web: menu status, pickup days and human handoff", () => {
+  test("every dish shows exactly one availability status; the Sunday special is off, and shows its date when on", () =>
+    withRig(async ({ t, call }) => {
+      const m = (await call("GET", "/web/menu")).json;
+      const by = (id: string) => m.items.find((x: any) => x.id === id);
+      assert.equal(by("sunday_bogo_special").live, false);
+      assert.equal(by("sunday_bogo_special").availability, "Not running right now");
+      assert.doesNotMatch(by("sunday_bogo_special").desc, /only this Sunday|Available only/i);
+      assert.equal(by("kheema_fry").availability, "Pickup Fri to Sun");
+      assert.equal(by("plan_full").availability, "Pickup Mon to Fri");
+      const menu = t.store.getMenu();
+      menu.find((x) => x.id === "sunday_bogo_special")!.live = true;
+      t.store.putMenu(menu);
+      const on = (await call("GET", "/web/menu")).json.items.find((x: any) => x.id === "sunday_bogo_special");
+      assert.match(on.availability, /^Sunday only · September 27$/);
+      assert.deepEqual(m.contact, { instagram: "annapurna_hometaste", phone: "" });
+    }));
+
+  test("Talk to a person: visible status in history, one alert, cleared when the owner replies", () =>
+    withRig(async ({ t, call, start }) => {
+      const token = await start("Asha");
+      assert.equal((await call("GET", "/web/history", { token })).json.handoff, null);
+      const h = await call("POST", "/web/handoff", { token });
+      assert.equal(h.status, 200);
+      assert.match(h.json.messages.at(-1).text, /sent your request to Annapurna Home Foods/);
+      assert.ok(h.json.handoff.at > 0);
+      assert.ok((await call("GET", "/web/history", { token })).json.handoff, "status stays visible");
+      await call("POST", "/web/handoff", { token });
+      assert.equal(t.store.listAlerts(true).filter((a) => a.note.startsWith("Wants to talk to a person")).length, 1);
+      const waId = t.store.listCustomers()[0]!.waId;
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "Hi Asha, this is Annapurna." } });
+      assert.equal((await call("GET", "/web/history", { token })).json.handoff, null);
+      assert.equal((await call("POST", "/web/handoff", {})).status, 401);
+    }));
+
+  test("owner can edit combo pickup days and contact details", () =>
+    withRig(async ({ t, call }) => {
+      const r = await call("PUT", "/api/settings", { token: "secret", body: { comboDays: [6, 0], contactInstagram: "@my.shop", contactPhone: "519 555 0100 <b>" } });
+      assert.equal(r.status, 200, r.text);
+      const s = t.store.getSettings();
+      assert.deepEqual(s.comboDays, [0, 6]);
+      assert.equal(s.contactInstagram, "my.shop");
+      assert.equal(s.contactPhone, "519 555 0100");
+    }));
 });

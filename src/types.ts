@@ -18,6 +18,8 @@ export interface MenuItem {
   live: boolean;
   /** Other names customers use. Used by the code-side item check. */
   aliases: string[];
+  /** Pickup days for this item only, 0 = Sunday. Empty or missing means the kind's default days from Settings. */
+  days?: number[];
   /** One ingredient per line: "Chicken | 250 | g" (per meal, or per person per week for plans). */
   recipe: string;
 }
@@ -40,6 +42,8 @@ export interface Draft {
   /** Hash of the read-back the customer was shown. Confirmation only counts against this. */
   readback_hash: string | null;
   stage: Stage;
+  /** The customer asked for another order, so a match with an open order is allowed. */
+  again?: boolean;
 }
 
 export interface Order {
@@ -74,6 +78,12 @@ export interface Settings {
   notes: string;
   /** Customer-facing weekly plan, one weekday per line, "Monday: ...". Shown in the Menu sheet. */
   weeklyMenu: string;
+  /** Pickup days for weekend combos, 0 = Sunday. */
+  comboDays: number[];
+  /** Instagram handle customers can be pointed to. Empty = none. */
+  contactInstagram: string;
+  /** Phone number customers can be pointed to. Empty = none. */
+  contactPhone: string;
 }
 
 export interface Msg {

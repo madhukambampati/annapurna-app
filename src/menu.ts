@@ -40,15 +40,15 @@ export function posterCombos(): MenuItem[] {
       aliases: ["chicken kheema pulao with raitha", "chicken kheema pulao", "kheema pulao"],
     },
     {
-      ...base, id: "sunday_bogo_special", name: "Sunday special: Fry Piece Pulao + free Chicken Kheema Pulao", kind: "combo", single: 22, bogo: null, live: false,
-      desc: "One-day offer. Buy 1 Fry Piece Pulao, get Chicken Kheema Pulao free. Available only this Sunday.",
+      ...base, id: "sunday_bogo_special", name: "Sunday special: Fry Piece Pulao + free Chicken Kheema Pulao", kind: "combo", single: 22, bogo: null, live: false, days: [0],
+      desc: "Buy 1 Fry Piece Pulao, get a Chicken Kheema Pulao free.",
       aliases: ["sunday special", "sunday offer", "sunday bogo", "buy 1 fry piece pulao get chicken keema pulao free"],
     },
   ];
 }
 
 /** Bump when the poster prices or combos change. Existing databases get the update once. */
-export const MENU_VERSION = 2;
+export const MENU_VERSION = 3;
 
 /**
  * Brings a stored menu up to the poster version. Only names, prices, descriptions and aliases of combos
@@ -63,6 +63,7 @@ export function upgradeMenu(stored: MenuItem[]): MenuItem[] {
       continue;
     }
     Object.assign(cur, { name: p.name, single: p.single, bogo: p.bogo, desc: p.desc, aliases: p.aliases, verify: false });
+    if (p.days) cur.days = p.days;
   }
   return out;
 }
@@ -120,7 +121,27 @@ export function defaultSettings(): Settings {
     tz: "America/Toronto",
     notes: DEFAULT_NOTES,
     weeklyMenu: DEFAULT_WEEKLY,
+    comboDays: [5, 6, 0],
+    contactInstagram: "annapurna_hometaste",
+    contactPhone: "",
   };
+}
+
+/** Pickup days that apply to one menu item. An item's own days win, then the combo days, then the plan days. */
+export function itemDays(m: MenuItem | undefined, s: Settings): number[] {
+  if (m?.days?.length) return m.days;
+  return m?.kind === "combo" ? s.comboDays : s.days;
+}
+
+const SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** "Mon to Fri", "Fri to Sun", "Sunday only", or a comma list. Weeks start on Monday. */
+export function dayRange(days: number[]): string {
+  const order = [...new Set(days)].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
+  if (!order.length) return "no days set";
+  if (order.length === 1) return `${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][order[0]!]} only`;
+  const run = order.every((d, i) => i === 0 || ((d + 6) % 7) - ((order[i - 1]! + 6) % 7) === 1);
+  return run && order.length >= 3 ? `${SHORT[order[0]!]} to ${SHORT[order.at(-1)!]}` : order.map((d) => SHORT[d]).join(", ");
 }
 
 export function findItem(menu: MenuItem[], id: string): MenuItem | undefined {

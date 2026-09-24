@@ -228,6 +228,7 @@ function renderMenu() {
       h("tr", {}, ["Item", "Single $", "Buy 1 Get 1 $", "Plan $", "Running", ""].map((t) => h("th", {}, t))),
       state.menu.map((m) => h("tr", {},
         h("td", {}, m.name,
+          m.days && m.days.length ? h("div", { class: "sub" }, "Pickup only: " + m.days.map((d) => DAYS[d]).join(", ")) : null,
           h("details", {}, h("summary", {}, "Ingredients per portion"),
             (() => {
               const ta = h("textarea", { "aria-label": "Ingredients for " + m.name, placeholder: "Chicken | 250 | g\nOnion | 1 | pc" }, m.recipe || "");
@@ -248,6 +249,9 @@ function renderRules() {
   const notes = h("textarea", { id: "setNotes", rows: "5", maxlength: "6000" }, s.notes || "");
   const weekly = h("textarea", { id: "setWeekly", rows: "8", maxlength: "3000" }, s.weeklyMenu || "");
   const days = h("div", { class: "days" }, DAYS.map((d, i) => h("label", {}, h("input", { type: "checkbox", value: String(i), checked: (s.days || []).includes(i) }), d)));
+  const comboDays = h("div", { class: "days" }, DAYS.map((d, i) => h("label", {}, h("input", { type: "checkbox", value: String(i), checked: (s.comboDays || []).includes(i) }), d)));
+  const insta = h("input", { type: "text", value: s.contactInstagram || "", maxlength: "40", id: "setInsta", placeholder: "annapurna_hometaste" });
+  const phone = h("input", { type: "text", value: s.contactPhone || "", maxlength: "30", id: "setPhone", placeholder: "Leave empty to show no phone number" });
   const msg = h("span", { class: "ok" });
   const ipBox = h("p", { class: "sub" }, "Checking your address...");
   api("/api/whoami").then((j) => {
@@ -255,8 +259,9 @@ function renderRules() {
   }).catch(() => { ipBox.textContent = ""; });
   const save = async () => {
     const picked = [...days.querySelectorAll("input:checked")].map((x) => Number(x.value));
+    const pickedCombo = [...comboDays.querySelectorAll("input:checked")].map((x) => Number(x.value));
     try {
-      await api("/api/settings", { method: "PUT", body: JSON.stringify({ noticeHrs: Number(notice.value), address: addr.value, days: picked, notes: notes.value, weeklyMenu: weekly.value }) });
+      await api("/api/settings", { method: "PUT", body: JSON.stringify({ noticeHrs: Number(notice.value), address: addr.value, days: picked, comboDays: pickedCombo, contactInstagram: insta.value, contactPhone: phone.value, notes: notes.value, weeklyMenu: weekly.value }) });
       msg.textContent = "Saved.";
       showErr(null);
     } catch (e) {
@@ -270,7 +275,10 @@ function renderRules() {
     h("div", { class: "card grid2" },
       h("label", {}, "Minimum notice (hours)", notice),
       h("label", {}, "Pickup address", addr),
-      h("div", {}, h("div", { class: "sub" }, "Pickup days"), days),
+      h("div", {}, h("div", { class: "sub" }, "Pickup days for weekly plans"), days),
+      h("div", {}, h("div", { class: "sub" }, "Pickup days for weekend combos"), comboDays),
+      h("label", {}, "Instagram handle shown to customers", insta),
+      h("label", {}, "Phone number shown to customers (optional)", phone),
       h("label", {}, "Weekly plan shown to customers (one day per line, like Monday: ...)", weekly),
       h("label", {}, "Notes for the assistant (box sizes, rules, anything it should know. Customers do not see this.)", notes),
       h("div", {}, h("button", { class: "pri", onclick: save }, "Save"), " ", msg)),

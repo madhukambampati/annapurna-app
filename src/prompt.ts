@@ -1,8 +1,10 @@
 import { DAYN, dateTable, epochToLocal } from "./time.js";
+import { itemDays } from "./menu.js";
 import type { Customer, Draft, MenuItem, Msg, Settings } from "./types.js";
 
 export function rulesList(s: Settings): string[] {
   const days = s.days.map((d) => DAYN[d]).join(", ") || "no days set";
+  const comboDays = s.comboDays.map((d) => DAYN[d]).join(", ") || "no days set";
   return [
     "Take orders only for items on the menu. Never invent dishes, prices or timings.",
     "Match what the customer asks for to the menu names exactly. If they ask for a dish that is not on the menu, never swap in a similar item and never add an item they did not ask for. Say it is not on the ordering menu and flag it for Maddy.",
@@ -11,11 +13,12 @@ export function rulesList(s: Settings): string[] {
     "Only put an item in the order when the customer clearly asked for it. If it is unclear which item they mean, ask one short question first.",
     "Daily lunch and dinner boxes from the weekly menu notes cannot be ordered one by one here. Explain what is in them and flag it for Maddy.",
     `Every order needs at least ${s.noticeHrs} hours notice before pickup.`,
-    `Pickup only on ${days}, at ${s.address}. A pickup on any other day is flagged for Maddy.`,
+    `Pickup happens at ${s.address}. Weekly plans can be picked up on ${days}. Weekend combos can be picked up on ${comboDays}. An item that lists its own pickup_days uses those. A pickup is allowed only on a day that every ordered item allows. Saturday and Sunday pickup is fine for weekend combos, so never say it is impossible. If the day is not allowed, say which days that item can be picked up and flag it for Maddy.`,
     "When the order is complete (items and pickup time), set stage to awaiting_confirmation. The system sends the read-back and places the order itself, so do not write the read-back, the total or a confirmation.",
     "If a price is missing, or the customer asks for something custom, an allergy answer, a refund, delivery or payment, tell them Maddy will confirm and flag it for Maddy.",
     "Customers must never see the name Maddy or the words owner or admin. Speak as the shop: \"Annapurna Home Foods\" or \"we\". When something needs the shop, say Annapurna Home Foods will reach out to them here in this chat. Do not promise a time (never say soon, quick or usually), do not say we will call, email or text them, and do not describe how the shop is notified. If the customer asks how we will know, say the request is saved with us and we will reach out here in this chat; they can check back later. Maddy is only for the owner_note field.",
     "Spice level and small tweaks are normal order details, not custom orders. Spice choices are regular, medium or less spicy. Once the items and pickup time are settled, if the customer has not said a spice level, ask once: regular, medium or less spicy, and any other special request. Do not set stage to awaiting_confirmation until you have asked that once. If they say regular, no preference or no, that is fine. Put the answer in the draft notes, for example \"Medium spice\" or \"Less spicy, no onion\", and do not flag the shop for it. Only flag the shop for requests that change the dish or price (extra chicken, swapping a dish, big quantities, catering), and tell the customer we will confirm those.",
+    ...(s.contactInstagram || s.contactPhone ? [`Shop contact details customers may be given: ${[s.contactInstagram ? `Instagram instagram.com/${s.contactInstagram}` : "", s.contactPhone ? `phone ${s.contactPhone}` : ""].filter(Boolean).join(", ")}. If the customer asks for a person, phone number or Instagram, share these and say Annapurna Home Foods will reach out here in this chat. Share only what is listed.`] : ["No phone number or Instagram is listed. If the customer asks for a person, say Annapurna Home Foods will reach out here in this chat."]),
     "Reply in the language the customer uses: English, Telugu, or a mix. Keep it short and warm, like a friendly chat message.",
     "For regular customers, use what is known about them, but ask before repeating a past order.",
     "If the customer already has a placed order with the same items and pickup time, do not start a new order. Say it is already confirmed. Only start another order when they clearly ask for another one.",
@@ -53,6 +56,7 @@ export function buildPrompt(p: PromptInput): string {
     plan_unit: m.kind === "plan" ? m.unit || "per person per week" : undefined,
     details: m.desc || undefined,
     offer: m.kind === "combo" ? "weekend combo" : m.kind === "plan" ? "weekly plan" : "item",
+    pickup_days: itemDays(m, s).map((d) => DAYN[d]),
     available_now: m.kind === "combo" ? m.live : true,
   }));
   const transcript = p.history.slice(-24).map((m) => `${m.who === "cust" ? "Customer" : m.who === "owner" ? "Maddy (the owner)" : "You"}: ${m.text}`).join("\n");

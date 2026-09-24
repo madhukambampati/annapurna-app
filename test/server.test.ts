@@ -75,8 +75,8 @@ describe("http server", () => {
   });
 
   test("accepting a held order clears its flags", async () => {
-    t.llm.push(modelReply({ items: [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "kheema fry" }], pickup: "2026-09-26T12:00", stage: "awaiting_confirmation" }));
-    await post("/sim/message", { from: "+1416", text: "1 kheema fry saturday noon" });
+    t.llm.push(modelReply({ items: [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "kheema fry" }], pickup: "2026-09-28T12:00", stage: "awaiting_confirmation" }));
+    await post("/sim/message", { from: "+1416", text: "1 kheema fry monday noon" });
     const y = await post("/sim/message", { from: "+1416", text: "yes" });
     const id = y.json.orderId;
     assert.equal(t.store.getOrder(id)!.status, "hold");
@@ -87,8 +87,8 @@ describe("http server", () => {
   test("cook and buy summary", async () => {
     const c = await call("/api/cook", { token: "secret" });
     assert.equal(c.status, 200);
-    assert.equal(c.json.days.length, 1); // only the accepted Saturday order is still 'cook'
-    assert.equal(c.json.days[0].date, "2026-09-26");
+    assert.equal(c.json.days.length, 1); // only the accepted Monday order is still 'cook'
+    assert.equal(c.json.days[0].date, "2026-09-28");
   });
 
   test("menu edits: switch a combo off, set a price, reject bad numbers", async () => {

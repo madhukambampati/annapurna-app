@@ -15,7 +15,7 @@ Needs Node 22.5 or newer. No runtime dependencies.
 ```bash
 npm install
 cp .env.example .env        # add ANTHROPIC_API_KEY, optionally TYPESAFE_API_KEY and OWNER_TOKEN
-npm test                    # 119 tests, no network, no keys needed
+npm test                    # 132 tests, no network, no keys needed
 npm run build
 node --env-file=.env --disable-warning=ExperimentalWarning dist/src/index.js
 ```
@@ -54,6 +54,9 @@ customer message
 | Wrong dish (asked Bagara rice and chicken fry, got kheema fry) | Each item carries `asked_for`. Code scores it against menu names and aliases, fixes clear mix-ups, and asks the customer when it is ambiguous. Unknown dishes are never swapped. | `guards.test.ts`, `agent.test.ts` |
 | Wrong weekday | The prompt has a calendar table. If the customer names a weekday and the model's date is on another weekday, the pickup is cleared and the customer is asked. | `guards.test.ts`, `agent.test.ts` |
 | Weekend combo not running | `live` switch per combo. Switched-off combos never reach the draft, also checked again at the moment of yes. | `agent.test.ts` |
+| Double order after a confirmation | Thanks and a stray yes never touch the order, and code refuses to place an order that matches an open one unless the customer asked for another. | `agent.test.ts` |
+| Pickup day vs menu | Weekly plans use the plan days, weekend combos use the combo days (Fri to Sun by default), a dish can have its own days (the Sunday special). Prompt, flags and menu labels all read the same rules. | `agent.test.ts`, `web.test.ts` |
+| Customer wants a person | Answered by code: one owner alert, a visible "request sent" status in the app, Instagram and phone from the Rules tab. Cleared when you reply. | `agent.test.ts`, `web.test.ts` |
 | Price shown vs price charged | Prices come from the menu, never from the model. If a price changes between read-back and yes, the customer sees a fresh read-back first. | `agent.test.ts` |
 | Short notice, non-pickup day, missing price | The order is placed on hold with a flag. Maddy accepts or declines. The read-back warns the customer up front. | `guards.test.ts`, `agent.test.ts` |
 | A yes from one customer confirming another's order | Drafts, read-backs and locks are per customer. Messages from one customer are processed one at a time. | `agent.test.ts` |
@@ -122,5 +125,5 @@ src/menu.ts      default menu and settings
 public/index.html, app.js   customer page (installable web app)
 public/desk.html, desk.js   owner desk
 Dockerfile, DEPLOY.md       hosting
-test/            119 tests
+test/            132 tests
 ```

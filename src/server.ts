@@ -5,9 +5,9 @@ import type { Agent } from "./agent.js";
 import type { Config } from "./config.js";
 import { cookSummary } from "./cook.js";
 import { RateLimiter } from "./limiter.js";
-import { itemLabel, total } from "./menu.js";
+import { dayRange, itemDays, itemLabel, total } from "./menu.js";
 import type { Store } from "./store.js";
-import { DAYN, formatWhen } from "./time.js";
+import { DAYN, dayLabel, formatWhen, nextDateForDow } from "./time.js";
 import type { MenuItem, Order, OrderStatus, Settings } from "./types.js";
 
 const MAX_BODY = 100_000;
@@ -216,12 +216,23 @@ export function createServer(d: ServerDeps): Server {
         if (m === "GET" && path === "/web/menu") {
           limit(`menu:${ip}`, 60, 60_000);
           const s = store.getSettings();
-          const items = store.getMenu().map((x) => ({
-            id: x.id, name: x.name, kind: x.kind, single: x.single, bogo: x.bogo, plan: x.plan, unit: x.unit,
-            desc: /price not set yet|please add/i.test(x.desc ?? "") ? "" : x.desc,
-            live: x.kind === "combo" ? x.live : true,
-          }));
-          return send(req, res, 200, { items, weekly: s.weeklyMenu.split("\n").map((l) => l.trim()).filter(Boolean), pickupDays: s.days.map((n) => DAYN[n]), noticeHrs: s.noticeHrs });
+          const items = store.getMenu().map((x) => {
+            const live = x.kind === "combo" ? x.live : true;
+            const days = itemDays(x, s);
+            // One availability status per dish. A single-day offer also shows its next date.
+            let label = days.length === 1 ? dayRange(days) : `Pickup ${dayRange(days)}`;
+            if (days.length === 1) label += ` · ${dayLabel(nextDateForDow(now(), s.tz, days[0]!)).replace(/^\w+, /, "")}`;
+            if (!live) label = "Not running right now";
+            return {
+              id: x.id, name: x.name, kind: x.kind, single: x.single, bogo: x.bogo, plan: x.plan, unit: x.unit,
+              desc: /price not set yet|please add/i.test(x.desc ?? "") ? "" : x.desc,
+              live, availability: label,
+            };
+          });
+          return send(req, res, 200, {
+            items, weekly: s.weeklyMenu.split("\n").map((l) => l.trim()).filter(Boolean), pickupDays: s.days.map((n) => DAYN[n]), noticeHrs: s.noticeHrs,
+            address: s.address, contact: { instagram: s.contactInstagram, phone: s.contactPhone },
+          });
         }
 
         if (m === "POST" && path === "/web/session") {
@@ -261,7 +272,20 @@ export function createServer(d: ServerDeps): Server {
           limit(`poll:${waId}`, 60, 60_000);
           const after = Math.max(0, Math.floor(Number(url.searchParams.get("after") ?? 0)) || 0);
           const c = store.getCustomer(waId);
-          return send(req, res, 200, { messages: store.getMessagesAfter(waId, after), name: c?.name ?? "" });
+          const h = store.openHandoff(waId);
+          return send(req, res, 200, { messages: store.getMessagesAfter(waId, after), name: c?.name ?? "", handoff: h ? { at: h.createdAt } : null });
+        }
+
+        if (m === "POST" && path === "/web/handoff") {
+          const waId = webSession(req);
+          limit(`ip:${ip}`, 120, 60_000);
+          limit(`handoff:${waId}`, 5, HOUR);
+          const c = store.getCustomer(waId)!;
+          const s = store.getSettings();
+          const before = store.lastMessage(waId)?.id ?? 0;
+          const { created, alert } = await agent.requestHuman(waId, c.name || "Customer", "Pressed the Talk to a person button");
+          store.addMessage(waId, "agent", agent.handoffReply(created, alert, s), now());
+          return send(req, res, 200, { messages: store.getMessagesAfter(waId, before), handoff: { at: alert.createdAt } });
         }
 
         if (m === "GET" && path === "/web/orders") {
@@ -347,6 +371,7 @@ export function createServer(d: ServerDeps): Server {
             const text = cleanText((await readJson(req)).text, MAX_TEXT);
             if (!text) throw new HttpError(400, "Reply is empty");
             const id = store.addMessage(waId, "owner", text, now());
+            store.closeHandoffs(waId);
             return send(req, res, 200, { message: { id, who: "owner", text, ts: now() } });
           }
         }
@@ -384,6 +409,11 @@ export function createServer(d: ServerDeps): Server {
           if (typeof b.verify === "boolean") it.verify = b.verify;
           if (typeof b.desc === "string") it.desc = b.desc.slice(0, 500);
           if (typeof b.recipe === "string") it.recipe = b.recipe.slice(0, 2000);
+          if (Array.isArray(b.days)) {
+            const d = [...new Set(b.days.map(Number).filter((x) => Number.isInteger(x) && x >= 0 && x <= 6))].sort();
+            if (d.length) it.days = d;
+            else delete it.days;
+          }
           if (Array.isArray(b.aliases)) it.aliases = b.aliases.filter((x): x is string => typeof x === "string").slice(0, 12);
           store.putMenu(menu as MenuItem[]);
           return send(req, res, 200, { item: it });
@@ -397,6 +427,9 @@ export function createServer(d: ServerDeps): Server {
           if (Array.isArray(b.days)) s.days = [...new Set(b.days.map(Number).filter((x) => Number.isInteger(x) && x >= 0 && x <= 6))].sort();
           if (typeof b.notes === "string") s.notes = b.notes.slice(0, 6000);
           if (typeof b.weeklyMenu === "string") s.weeklyMenu = b.weeklyMenu.slice(0, 3000);
+          if (Array.isArray(b.comboDays)) s.comboDays = [...new Set(b.comboDays.map(Number).filter((x) => Number.isInteger(x) && x >= 0 && x <= 6))].sort();
+          if (typeof b.contactInstagram === "string") s.contactInstagram = b.contactInstagram.trim().replace(/^@/, "").replace(/[^\w.]/g, "").slice(0, 40);
+          if (typeof b.contactPhone === "string") s.contactPhone = b.contactPhone.replace(/[^\d+()\-\s.]/g, "").trim().slice(0, 30);
           store.putSettings(s);
           return send(req, res, 200, { settings: s });
         }

@@ -28,6 +28,9 @@ test("an old stored menu is upgraded once and keeps live/recipe choices", () => 
   const old = defaultMenu().filter((x) => x.id !== "kobbari_annam_fry");
   const salan = old.find((x) => x.id === "chicken_pulao_salan")!;
   salan.single = 15; salan.bogo = 22; salan.live = false; salan.recipe = "my recipe";
+  const sun = old.find((x) => x.id === "sunday_bogo_special")!;
+  delete sun.days;
+  sun.desc = "One-day offer. Available only this Sunday.";
   a.putMenu(old);
   (a as unknown as { db: { exec(s: string): void } }).db.exec("DELETE FROM kv WHERE key = 'menu_version'");
   a.close();
@@ -39,6 +42,8 @@ test("an old stored menu is upgraded once and keeps live/recipe choices", () => 
   assert.equal(s.live, false);
   assert.equal(s.recipe, "my recipe");
   assert.ok(menu.find((x) => x.id === "kobbari_annam_fry"));
+  assert.deepEqual(menu.find((x) => x.id === "sunday_bogo_special")!.days, [0], "the Sunday special is Sunday-only after the upgrade");
+  assert.doesNotMatch(menu.find((x) => x.id === "sunday_bogo_special")!.desc, /only this Sunday/i);
 
   // desk edit after the upgrade must survive the next start
   s.single = 11;

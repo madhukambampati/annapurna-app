@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { DAYN, dowOfLocal, isLocalIso, localToEpoch, nextDateForDow } from "./time.js";
-import { findItem, lineAmt } from "./menu.js";
+import { findItem, itemDays, lineAmt } from "./menu.js";
 import type { Draft, MenuItem, OrderItem, Pack, Settings } from "./types.js";
 
 /* ---------- item matching: the model may not swap dishes ---------- */
@@ -174,7 +174,7 @@ export function checkWeekday(text: string, pickupLocal: string | null, now: numb
 
 /* ---------- flags ---------- */
 
-export function checkFlags(items: OrderItem[], pickupLocal: string | null, s: Settings, now: number): string[] {
+export function checkFlags(items: OrderItem[], pickupLocal: string | null, s: Settings, now: number, menu: MenuItem[] = []): string[] {
   const f: string[] = [];
   if (!pickupLocal) {
     f.push("No pickup time");
@@ -187,7 +187,9 @@ export function checkFlags(items: OrderItem[], pickupLocal: string | null, s: Se
   const mins = (localToEpoch(pickupLocal, s.tz) - now) / 60000;
   if (mins < s.noticeHrs * 60) f.push(mins < 0 ? "Pickup in the past" : `Under ${s.noticeHrs}h notice`);
   const dow = dowOfLocal(pickupLocal);
-  if (!s.days.includes(dow)) f.push(`${DAYN[dow]} is not a pickup day`);
+  const bad = items.filter((it) => !itemDays(findItem(menu, it.id), s).includes(dow));
+  if (bad.length) f.push(`${DAYN[dow]} is not a pickup day for ${bad.map((b) => b.name).join(", ")}`);
+  else if (!items.length && !s.days.includes(dow)) f.push(`${DAYN[dow]} is not a pickup day`);
   if (items.some((it) => it.amt == null)) f.push("Price not set");
   return f;
 }
