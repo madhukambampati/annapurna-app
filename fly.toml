@@ -1,0 +1,30 @@
+# Fly.io settings. Change the app name (must be unique on Fly) before the first deploy.
+app = "annapurna-CHANGE-ME"
+# iad (Ashburn) is the region whose base prices I checked. yyz is Toronto: check its price first.
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "3000"
+  DB_PATH = "/data/annapurna.db"
+  # Behind Fly's proxy the last X-Forwarded-For entry is your app's own address, so the customer is 1 further in.
+  # Start with 2 and confirm in the desk's Rules tab ("Rate-limit check"). Set 1 if it shows Fly's address instead.
+  PROXY_HOPS = "2"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[mounts]]
+  source = "annapurna_data"
+  destination = "/data"
+  initial_size = "1gb"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
