@@ -72,6 +72,50 @@
   function money(n) { return n == null ? "Ask us" : "$" + (Math.round(n * 100) / 100); }
   function clock(ts) { try { return new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); } catch (e) { return ""; } }
 
+
+  /* ---------- Annu, the tiffin mascot ---------- */
+  var REDUCED = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function mascot(cls) {
+    var tpl = $("tplMascot");
+    if (!tpl || !tpl.content || !tpl.content.firstElementChild) return h("span");
+    var n = tpl.content.firstElementChild.cloneNode(true);
+    n.setAttribute("class", "mascot" + (cls ? " " + cls : ""));
+    return n;
+  }
+  function hop(m) {
+    if (!m) return;
+    m.classList.remove("jump"); void m.getBoundingClientRect(); m.classList.add("jump");
+    setTimeout(function () { m.classList.remove("jump"); }, 900);
+  }
+  var GREETS = ["Namaste! I'm Annu.", "Hungry? Let's get you some food.", "Fresh from our Kitchener kitchen.", "Tell me what you'd like. I'll do the rest."];
+  var TAPS = ["Hehe, that tickles!", "Ready when you are!", "Pulao or kheema today?", "Psst, ask me about weekend combos."];
+  function initHero() {
+    var slot = $("heroMascot"), bub = $("bubble");
+    if (!slot || slot.firstChild) return;
+    var m = mascot("pop");
+    slot.append(m);
+    var gi = 0, ti = 0;
+    function say(t) {
+      if (REDUCED) { bub.textContent = t; return; }
+      bub.classList.add("swap");
+      setTimeout(function () { bub.textContent = t; bub.classList.remove("swap"); }, 250);
+    }
+    if (!REDUCED) setInterval(function () {
+      if ($("onboard").hidden || document.hidden) return;
+      gi = (gi + 1) % GREETS.length; say(GREETS[gi]);
+    }, 4200);
+    slot.addEventListener("click", function () { hop(m); ti = (ti + 1) % TAPS.length; say(TAPS[ti]); });
+    /* the pupils follow the finger or mouse */
+    if (!REDUCED) document.addEventListener("pointermove", function (e) {
+      if ($("onboard").hidden) return;
+      var r = m.getBoundingClientRect();
+      var dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height * 0.6);
+      var d = Math.max(1, Math.hypot(dx, dy)), k = Math.min(1, d / 160) * 3.2;
+      var tx = (dx / d) * k, ty = (dy / d) * k;
+      Array.prototype.forEach.call(m.querySelectorAll(".pupil"), function (p) { p.style.transform = "translate(" + tx.toFixed(1) + "px," + ty.toFixed(1) + "px)"; });
+    }, { passive: true });
+  }
+
   /* ---------- screens ---------- */
   function show(which) {
     $("onboard").hidden = which !== "onboard";
@@ -125,7 +169,7 @@
       else if (/^(Total|Pickup): /.test(l)) { var j = l.indexOf(": "); rows.push([l.slice(0, j), l.slice(j + 2)]); }
     });
     return h("div", { class: "b agent sum", "data-id": m.id || "" },
-      h("h3", {}, "Order " + (num ? "#" + num[1] + " " : "") + "confirmed"),
+      h("div", { class: "cfhead" }, mascot("sm jump"), h("h3", {}, "Order " + (num ? "#" + num[1] + " " : "") + "confirmed")),
       h("ul", {}, items.map(function (it) { return h("li", {}, h("span", {}, it)); })),
       rows.map(function (r) { return h("div", { class: "row" + (r[0] === "Total" ? " total" : "") }, h("span", {}, r[0]), h("span", {}, r[1])); }),
       h("time", {}, m.ts ? clock(m.ts) : ""));
@@ -153,7 +197,7 @@
     if (msgsEl.children.length) return;
     var nm = store(NAME_KEY);
     msgsEl.append(h("div", { class: "hello", id: "hello" },
-      h("div", { class: "plate" }, icon("bowl")),
+      mascot("pop"),
       h("b", {}, "Namaste" + (nm ? ", " + nm : "") + "!"),
       "Ask about the menu, or tell me what you'd like. I'll check everything with you before we cook."));
   }
@@ -178,7 +222,7 @@
     busy = b;
     $("sendBtn").disabled = b;
     var t = $("typing");
-    if (b && !t) { msgsEl.append(h("div", { class: "typing", id: "typing", "aria-label": "Assistant is typing" }, h("i"), h("i"), h("i"))); scrollDown(); }
+    if (b && !t) { msgsEl.append(h("div", { class: "typing", id: "typing", "aria-label": "Assistant is typing" }, mascot("sm busy"), h("i"), h("i"), h("i"))); scrollDown(); }
     if (!b && t) t.remove();
     refreshActions();
   }
@@ -470,5 +514,6 @@
 
   /* ---------- start ---------- */
   token = store(TOKEN_KEY) || "";
+  initHero();
   if (token) openChat(); else show("onboard");
 })();
