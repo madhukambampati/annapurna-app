@@ -707,6 +707,28 @@
     api("DELETE", "/web/me").then(function () { store(NAME_KEY, null); closeSheet(); toBoarding("Your chat was deleted."); }).catch(function (e) { confirmingDelete = false; renderHelp(); toast(errText(e)); });
   }
 
+  /* ---------- customer quick actions (presentation only) ---------- */
+  function addCustomerActions() {
+    document.body.classList.add("customer-mode");
+    var chat = $("chat");
+    if (!chat || document.getElementById("customerActions")) return;
+    var bar = h("div", { class: "customer-actions", id: "customerActions", "aria-label": "Quick actions" });
+    var actions = [
+      ["bowl", "Order food", true, function () { fillComposer("I'd like to order "); $("text").focus(); }],
+      ["sun", "Weekend combos", false, function () { if (!busy) send("What weekend combos are running?"); }],
+      ["clock", "Weekly plans", false, function () { if (!busy) send("Tell me about the weekly plans"); }],
+      ["bag", "My orders", false, function (e) { showOrders({ currentTarget: e.currentTarget }); }]
+    ];
+    actions.forEach(function (a, i) {
+      bar.append(h("button", {
+        type: "button", class: "customer-action", style: "--i:" + i,
+        "data-accent": a[2] ? "true" : "false",
+        onclick: a[3]
+      }, icon(a[0]), a[1]));
+    });
+    chat.insertBefore(bar, $("msgs"));
+  }
+
   /* ---------- wiring ---------- */
   CHIPS.forEach(function (c) { $("chips").append(h("button", { type: "button", onclick: function () { send(c); } }, c)); });
 
@@ -742,5 +764,6 @@
   /* ---------- start ---------- */
   token = store(TOKEN_KEY) || "";
   initHero();
+  addCustomerActions();
   if (token) openChat(); else show("onboard");
 })();
