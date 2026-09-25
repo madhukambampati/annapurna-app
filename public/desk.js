@@ -4,7 +4,7 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const CHIPS = ["What's on the menu?", "2 chicken kheema fry combos, buy 1 get 1, pickup Friday 6pm", "Full meal plan for 2 people, pickup Monday 5pm", "yes", "I want to cancel my order"];
 
 let state = { orders: [], alerts: [], menu: [], settings: {}, customers: [], features: {} };
-let tab = "orders";
+let tab = "dashboard";
 let cook = null;
 let chat = { waId: "", messages: [], customer: null };
 let sim = { from: "+15195550101", name: "", msgs: [] };
@@ -116,10 +116,60 @@ function cancelOrder(o, after) {
   ta.focus();
 }
 
+/* ---------- dashboard ---------- */
+function renderDashboard() {
+  const activeAlerts = state.alerts.filter((a) => !a.done).length;
+  const held = state.orders.filter((o) => o.status === "hold").length;
+  const cooking = state.orders.filter((o) => o.status === "cook").length;
+  const ready = state.orders.filter((o) => o.status === "ready").length;
+  const done = state.orders.filter((o) => o.status === "done").length;
+  const active = state.orders.filter((o) => ["hold","cook","ready"].includes(o.status));
+  const sales = state.orders
+    .filter((o) => o.status !== "cancelled")
+    .reduce((sum, o) => {
+      const t = totalOf(o.items);
+      return sum + (t == null ? 0 : t);
+    }, 0);
+
+  const kpis = h("section", { class: "owner-kpis", "aria-label": "Kitchen overview" },
+    h("div", { class: "owner-kpi", style: "--tone:#1d6b4d" }, h("small", {}, "To cook"), h("strong", {}, cooking), h("span", {}, "Confirmed orders")),
+    h("div", { class: "owner-kpi", style: "--tone:#2f8fb0" }, h("small", {}, "Ready"), h("strong", {}, ready), h("span", {}, "Waiting for pickup")),
+    h("div", { class: "owner-kpi", style: "--tone:#e7882b" }, h("small", {}, "Needs attention"), h("strong", {}, activeAlerts + held), h("span", {}, "Alerts + held orders")),
+    h("div", { class: "owner-kpi", style: "--tone:#6d5537" }, h("small", {}, "Order value"), h("strong", {}, money(sales)), h("span", {}, done + " picked up"))
+  );
+
+  const out = [
+    h("div", {}, h("h2", {}, "Kitchen overview"), h("p", { class: "sub" }, "What needs your attention right now.")),
+    kpis
+  ];
+
+  if (activeAlerts + held) {
+    out.push(h("div", { class: "owner-callout" },
+      h("div", {}, h("strong", {}, (activeAlerts + held) + " item" + (activeAlerts + held === 1 ? "" : "s") + " need you"), h("span", {}, "Review held orders or customer requests before cooking.")),
+      h("button", { class: "pri", onclick: () => { tab = "orders"; render(); } }, "Review now")));
+  }
+
+  out.push(h("h2", {}, "Active orders"));
+  if (!active.length) out.push(h("div", { class: "empty" }, "No active orders right now."));
+  else out.push(h("div", { class: "cols" }, active
+    .sort((a, b) => String(a.pickup || "9").localeCompare(String(b.pickup || "9")))
+    .slice(0, 6)
+    .map(ticket)));
+
+  out.push(h("h2", {}, "Quick actions"),
+    h("div", { class: "card", style: "display:flex;gap:8px;flex-wrap:wrap" },
+      h("button", { class: "pri", onclick: () => { tab = "orders"; render(); } }, "Manage orders"),
+      h("button", { onclick: () => { tab = "cook"; cook = null; render(); } }, "Open kitchen list"),
+      h("button", { onclick: () => { tab = "chats"; render(); } }, "Customer chats"),
+      h("button", { onclick: () => { tab = "menu"; render(); } }, "Update menu")));
+  return out;
+}
+
 /* ---------- orders ---------- */
 function ticket(o) {
   const b = (to, txt, ghost) => h("button", { class: ghost ? "ghost" : "", onclick: () => (to === "cancelled" ? cancelOrder(o) : act(`/api/orders/${o.id}/status`, { status: to })) }, txt);
-  return h("article", { class: "ticket" },
+  const tones = { hold: "#e7882b", cook: "#1d6b4d", ready: "#2f8fb0", done: "#6f7c73", cancelled: "#c94f45" };
+  return h("article", { class: "ticket", style: "--ticket-tone:" + (tones[o.status] || "#1d6b4d") },
     h("div", {}, h("b", {}, o.name), " #" + o.id),
     o.contact ? h("div", { class: "contact" }, o.contact) : null,
     h("div", { class: "when" }, when(o.pickup)),
@@ -349,13 +399,13 @@ function renderSim() {
 /* ---------- shell ---------- */
 function renderTabs() {
   const need = state.orders.filter((o) => o.status === "hold").length + state.alerts.filter((a) => !a.done).length;
-  const tabs = [["orders", "Orders"], ["chats", "Chats"], ["cook", "Cook and buy"], ["menu", "Menu"], ["rules", "Rules"]];
+  const tabs = [["dashboard", "Dashboard"], ["orders", "Orders"], ["cook", "Kitchen"], ["chats", "Chats"], ["menu", "Menu"], ["rules", "More"]];
   if (state.features && state.features.simulator) tabs.push(["sim", "Test chat"]);
   $("tabs").replaceChildren(...tabs.map(([k, t]) => h("button", { role: "tab", "aria-selected": String(tab === k), onclick: () => { tab = k; cook = null; render(); } }, t, k === "orders" && need ? h("span", { class: "badge" }, need) : null)));
 }
 function render() {
   renderTabs();
-  const body = tab === "orders" ? renderOrders() : tab === "chats" ? renderChats() : tab === "cook" ? renderCook() : tab === "menu" ? renderMenu() : tab === "rules" ? renderRules() : renderSim();
+  const body = tab === "dashboard" ? renderDashboard() : tab === "orders" ? renderOrders() : tab === "chats" ? renderChats() : tab === "cook" ? renderCook() : tab === "menu" ? renderMenu() : tab === "rules" ? renderRules() : renderSim();
   $("panel").replaceChildren(...[body].flat());
   const box = $("thread");
   if (box) box.scrollTop = box.scrollHeight;
