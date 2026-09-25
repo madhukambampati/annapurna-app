@@ -377,8 +377,8 @@ export class Agent {
       else if (stage === "awaiting_confirmation" && (!pickup || fixes.length)) stage = "collecting";
       else if (stage === "browsing") stage = "collecting";
     }
-    // Custom orders never enter the normal menu-order confirmation path. They wait for explicit
-    // owner approval + price, then the customer's explicit YES is handled by placeCustomOrder().
+    // Custom orders never enter the normal menu-order confirmation path. Once the owner has quoted
+    // the custom price and pickup is known, the customer's explicit confirmation is handled by placeCustomOrder().
     if (custom) stage = "collecting";
 
     const next: Draft = { items, pickup_local: pickup, customer_name: custName, notes, readback_hash: null, stage, ...(again ? { again: true } : {}), ...(custom ? { custom } : {}) };
