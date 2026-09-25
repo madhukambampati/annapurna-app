@@ -169,8 +169,9 @@ function renderDashboard() {
 function ticket(o) {
   const b = (to, txt, ghost) => h("button", { class: ghost ? "ghost" : "", onclick: () => (to === "cancelled" ? cancelOrder(o) : act(`/api/orders/${o.id}/status`, { status: to })) }, txt);
   const tones = { hold: "#e7882b", cook: "#1d6b4d", ready: "#2f8fb0", done: "#6f7c73", cancelled: "#c94f45" };
-  return h("article", { class: "ticket", style: "--ticket-tone:" + (tones[o.status] || "#1d6b4d") },
-    h("div", {}, h("b", {}, o.name), " #" + o.id),
+  const isCustom = o.items.some((i) => String(i.id || "").startsWith("custom:"));
+  return h("article", { class: "ticket" + (isCustom ? " custom-ticket" : ""), style: "--ticket-tone:" + (tones[o.status] || "#1d6b4d") },
+    h("div", { class: "ticket-title" }, h("b", {}, o.name), " #" + o.id, isCustom ? h("span", { class: "flag custom-flag" }, "Custom") : null),
     o.contact ? h("div", { class: "contact" }, o.contact) : null,
     h("div", { class: "when" }, when(o.pickup)),
     h("ul", {}, o.items.map((i) => h("li", {}, label(i))), o.notes ? h("li", {}, "Note: " + o.notes) : null),
