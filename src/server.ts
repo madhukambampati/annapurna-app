@@ -115,6 +115,19 @@ function cleanText(v: unknown, max: number): string {
   return typeof v === "string" ? v.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "").trim().slice(0, max) : "";
 }
 
+/** Price explicitly typed by the owner, e.g. "$120", "120$" or "120 CAD". */
+function ownerQuotedPrice(text: string): number | null {
+  const m = /(?:\$\s*(\d{1,5}(?:\.\d{1,2})?)|(\d{1,5}(?:\.\d{1,2})?)\s*(?:\$|cad\b))/i.exec(text);
+  if (!m) return null;
+  const n = Number(m[1] ?? m[2]);
+  return Number.isFinite(n) && n > 0 && n < 100_000 ? Math.round(n * 100) / 100 : null;
+}
+
+/** Owner wording that explicitly approves a custom order, not merely quotes a price. */
+function ownerApprovesCustom(text: string): boolean {
+  return /\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\b.*\border\b|\border\b.*\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\b/i.test(text);
+}
+
 /** A phone number (7+ digits) or something that looks like an email. */
 export function validContact(c: string): boolean {
   if (c.length < 5 || c.length > 80) return false;
@@ -382,6 +395,25 @@ export function createServer(d: ServerDeps): Server {
             const text = cleanText((await readJson(req)).text, MAX_TEXT);
             if (!text) throw new HttpError(400, "Reply is empty");
             const id = store.addMessage(waId, "owner", text, now());
+
+            // Custom/catering orders keep the owner's quoted total and explicit approval in the draft.
+            // This makes the customer's later YES a real order event instead of just another AI reply.
+            const draft = store.getDraft(waId);
+            if (draft?.custom) {
+              const quoted = ownerQuotedPrice(text);
+              const approved = ownerApprovesCustom(text);
+              if (quoted != null || approved) {
+                store.putDraft(waId, {
+                  ...draft,
+                  custom: {
+                    ...draft.custom,
+                    ...(quoted != null ? { price: quoted } : {}),
+                    ...(approved ? { approved: true } : {}),
+                  },
+                });
+              }
+            }
+
             store.closeHandoffs(waId);
             return send(req, res, 200, { message: { id, who: "owner", text, ts: now() } });
           }
