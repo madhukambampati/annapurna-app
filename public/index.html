@@ -845,6 +845,133 @@ body.customer-mode{
   .brand-home{gap:7px}
 }
 </style>
+
+<style id="homeMotionVisibilityFix">
+/* HOME MOTION VISIBILITY FIX — keep Annu fully visible and make the motion intentional */
+.customer-home{scroll-behavior:smooth}
+.home-hero{
+  overflow:hidden;
+  padding-top:38px;
+}
+.home-annuwrap{
+  overflow:visible;
+  min-height:300px;
+  padding-top:8px;
+}
+.home-motion-stage{
+  position:relative;
+  width:250px;height:250px;
+  display:grid;place-items:center;
+  overflow:visible;
+}
+.home-motion-stage #homeMascot{
+  position:relative;z-index:5;
+  display:grid;place-items:center;
+  width:210px;height:230px;
+}
+.home-motion-stage #homeMascot .mascot{
+  width:190px!important;
+  max-height:225px;
+  overflow:visible;
+  animation:homeMascotFloat 3s ease-in-out infinite;
+}
+.home-motion-stage .home-glow{
+  z-index:1;
+  width:230px;height:230px;
+  animation:homeGlow 3.2s ease-in-out infinite, homeGlowDrift 7s ease-in-out infinite;
+}
+.home-orbit{
+  position:absolute;z-index:3;
+  width:18px;height:10px;border-radius:100% 0 100% 0;
+  background:#7bc58f;
+  box-shadow:0 4px 12px rgba(0,0,0,.12);
+  transform-origin:50% 50%;
+}
+.orbit-1{left:10px;top:58px;animation:leafDriftOne 5.4s ease-in-out infinite}
+.orbit-2{right:5px;top:92px;width:14px;height:9px;background:#f1a824;animation:leafDriftTwo 4.8s ease-in-out infinite .4s}
+.orbit-3{left:32px;bottom:38px;width:13px;height:8px;background:#f08a7c;animation:leafDriftThree 5.8s ease-in-out infinite .8s}
+.home-spark{
+  position:absolute;z-index:4;
+  color:#ffe4a2;font-size:18px;line-height:1;
+  text-shadow:0 4px 12px rgba(0,0,0,.18);
+  opacity:.8;
+}
+.spark-1{right:24px;top:28px;animation:sparkTwinkle 2.5s ease-in-out infinite}
+.spark-2{left:18px;top:112px;font-size:13px;animation:sparkTwinkle 2.2s ease-in-out infinite .5s}
+.spark-3{right:38px;bottom:30px;font-size:11px;animation:sparkTwinkle 2.8s ease-in-out infinite 1s}
+.home-bubble{
+  margin-top:-12px;
+  animation:homeBubbleFloat 3.4s ease-in-out infinite;
+}
+@keyframes homeMascotFloat{
+  0%,100%{transform:translateY(0) rotate(0deg)}
+  50%{transform:translateY(-10px) rotate(-1.5deg)}
+}
+@keyframes homeGlowDrift{
+  0%,100%{transform:translate(-5px,2px) scale(.96)}
+  50%{transform:translate(7px,-4px) scale(1.04)}
+}
+@keyframes leafDriftOne{
+  0%,100%{transform:translate(0,0) rotate(-24deg);opacity:.55}
+  45%{transform:translate(20px,-14px) rotate(22deg);opacity:1}
+  70%{transform:translate(8px,7px) rotate(56deg);opacity:.78}
+}
+@keyframes leafDriftTwo{
+  0%,100%{transform:translate(0,0) rotate(25deg);opacity:.55}
+  50%{transform:translate(-18px,13px) rotate(-22deg);opacity:1}
+}
+@keyframes leafDriftThree{
+  0%,100%{transform:translate(0,0) rotate(10deg);opacity:.48}
+  50%{transform:translate(22px,-12px) rotate(58deg);opacity:.95}
+}
+@keyframes sparkTwinkle{
+  0%,100%{transform:scale(.7) rotate(0);opacity:.25}
+  45%{transform:scale(1.2) rotate(20deg);opacity:1}
+}
+@keyframes homeBubbleFloat{
+  0%,100%{transform:translateY(0)}
+  50%{transform:translateY(-4px)}
+}
+@media(max-width:680px){
+  .home-hero{
+    min-height:420px;
+    padding-top:28px;
+    padding-right:20px;
+  }
+  .home-copy{
+    position:relative;z-index:4;
+    padding-right:0;
+  }
+  .home-copy>p{max-width:95%}
+  .home-annuwrap{
+    position:relative;
+    right:auto;top:auto;
+    min-height:210px;
+    width:100%;
+    margin-top:8px;
+    opacity:1;
+    pointer-events:none;
+  }
+  .home-motion-stage{width:210px;height:205px}
+  .home-motion-stage #homeMascot{width:180px;height:190px}
+  .home-motion-stage #homeMascot .mascot{width:156px!important;max-height:190px}
+  .home-motion-stage .home-glow{width:190px;height:190px}
+  .home-annuwrap .home-bubble{
+    display:block;
+    margin-top:-18px;
+    font-size:11px;
+  }
+}
+@media(max-width:430px){
+  .home-hero{min-height:440px}
+  .home-motion-stage{transform:scale(.94)}
+}
+@media(prefers-reduced-motion:reduce){
+  .home-motion-stage #homeMascot .mascot,
+  .home-motion-stage .home-glow,
+  .home-orbit,.home-spark,.home-bubble{animation:none!important}
+}
+</style>
 </head>
 <body>
 <template id="tplMascot">
@@ -909,9 +1036,17 @@ body.customer-mode{
           <button class="home-secondary" id="homeContinue" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 3z"/></svg>Continue chat</button>
         </div>
       </div>
-      <div class="home-annuwrap">
-        <div class="home-glow"></div>
-        <div id="homeMascot" aria-hidden="true"></div>
+      <div class="home-annuwrap" aria-hidden="true">
+        <div class="home-motion-stage">
+          <span class="home-orbit orbit-1"></span>
+          <span class="home-orbit orbit-2"></span>
+          <span class="home-orbit orbit-3"></span>
+          <span class="home-spark spark-1">✦</span>
+          <span class="home-spark spark-2">✦</span>
+          <span class="home-spark spark-3">✦</span>
+          <div class="home-glow"></div>
+          <div id="homeMascot"></div>
+        </div>
         <div class="home-bubble">Freshly cooked, never complicated.</div>
       </div>
     </section>
