@@ -58,6 +58,23 @@ const BARE_OK = /^(yes|yep|yeah|yup|y|ya|ok|okay|k|sure|done|fine|alright)[\s!.]
 const HUMAN = /\b(real (person|human)|human being|a human|(talk|speak|chat) (to|with) (a |the |an )?(person|human|someone|somebody|owner|maddy|team|staff|agent)|contact (you|us|number|info|details)|phone( number)?|your number|call me|call you|instagram|insta|whatsapp|customer (service|support))\b/i;
 /** Text sent by the web app's "Yes, place order" button. */
 const CONFIRM_BUTTON = /^yes, confirm$/i;
+/** Owner-managed catering/bulk orders. A headcount alone counts as custom only at 8+ people. */
+const CUSTOM_WORDS = /\b(cater(?:ing)?|bulk|party order|large order|full tray|half tray|medium tray|large tray)\b/i;
+const CUSTOM_HEADCOUNT = /\b(\d{1,3})\s*(?:people|persons|pax|members|guests)\b/i;
+const CUSTOM_CONFIRM = /^(?:yes\b.*|yep\b.*|yeah\b.*|ok(?:ay)?\b.*|sure\b.*|please\s+confirm\b.*|confirm\b.*|go\s+ahead\b.*|sounds\s+good\b.*)$/i;
+
+function looksCustom(text: string): boolean {
+  if (CUSTOM_WORDS.test(text)) return true;
+  const m = CUSTOM_HEADCOUNT.exec(text);
+  return !!m && Number(m[1]) >= 8;
+}
+
+function customHeadcount(text: string): number | null {
+  const m = CUSTOM_HEADCOUNT.exec(text);
+  const n = m ? Number(m[1]) : 0;
+  return n > 0 && n < 500 ? n : null;
+}
+
 export const HANDOFF_NOTE = "Wants to talk to a person";
 
 /** Identity of an order for duplicate checks: what is ordered and when it is picked up. */
@@ -103,6 +120,23 @@ export class Agent {
 
     const draft = store.getDraft(msg.from);
     const open = store.openOrdersFor(msg.from);
+
+    // Custom/catering orders are different from menu orders: the owner sets the final price in chat,
+    // then the customer confirms. Only code creates the real order and confirmation badge.
+    if (draft?.custom && CUSTOM_CONFIRM.test(text)) {
+      if (draft.custom.approved && draft.custom.price != null && draft.pickup_local) {
+        out.route = "confirm_custom_order";
+        await this.placeCustomOrder(msg.from, draft, settings, out);
+        for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+        return out;
+      }
+      if (draft.custom.approved && draft.custom.price != null && !draft.pickup_local) {
+        out.route = "confirm_custom_order+missing_pickup";
+        out.replies.push("I have the custom price and Annapurna's approval. Please tell me the pickup day and time before I place the order.");
+        for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+        return out;
+      }
+    }
 
     // Wants a real person or a contact detail: answered by code, so the customer always gets a clear status.
     if (HUMAN.test(text) && !(draft?.stage === "awaiting_confirmation" && BARE_OK.test(text))) {
@@ -214,6 +248,7 @@ export class Agent {
     let notes = draft?.notes ?? "";
     let custName = draft?.customer_name ?? null;
     let again = draft?.again ?? false;
+    let custom = draft?.custom;
     const issues: Issue[] = [];
 
     if (!frozen) {
@@ -224,6 +259,7 @@ export class Agent {
       notes = typeof rd.notes === "string" ? rd.notes.slice(0, 300) : "";
       if (ADD_MORE.test(text)) again = true;
       custName = typeof rd.customer_name === "string" && rd.customer_name.trim() ? rd.customer_name.trim().slice(0, 60) : null;
+      if (!custom && looksCustom(text)) custom = { request: text.slice(0, 300), price: null, approved: false };
       const wk = checkWeekday(text, pickup, now, settings.tz);
       if (wk) {
         issues.push(wk);
@@ -276,19 +312,24 @@ export class Agent {
       else if (stage === "browsing") stage = "collecting";
     }
 
-    const next: Draft = { items, pickup_local: pickup, customer_name: custName, notes, readback_hash: null, stage, ...(again ? { again: true } : {}) };
+    const next: Draft = { items, pickup_local: pickup, customer_name: custName, notes, readback_hash: null, stage, ...(again ? { again: true } : {}), ...(custom ? { custom } : {}) };
     if (stage === "awaiting_confirmation") next.readback_hash = draftHash(next);
     // A frozen turn keeps the earlier read-back valid, since the draft did not change.
     if (frozen && draft) next.readback_hash = draft.readback_hash;
 
-    if (!items.length && !pickup && !custName && !notes) store.clearDraft(msg.from);
+    if (!items.length && !pickup && !custName && !notes && !custom) store.clearDraft(msg.from);
     else store.putDraft(msg.from, next);
     if (custName && !customer.name) store.updateCustomer(msg.from, { name: custName });
 
     let reply: string;
     if (fixes.length) reply = fixes.join("\n");
-    else if (stage === "awaiting_confirmation" && !frozen) reply = this.readBack(next, settings, now, open);
+    else if (stage === "awaiting_confirmation" && !frozen && !custom) reply = this.readBack(next, settings, now, open);
     else reply = modelReply || "Sorry, could you say that again?";
+    if (custom && /\b(?:order\s+)?(?:is\s+)?confirmed\b/i.test(reply)) {
+      reply = custom.approved && custom.price != null
+        ? "Annapurna Home Foods has approved the custom order details. Reply YES to confirm and place the order."
+        : "I've saved your custom order request. Annapurna Home Foods will confirm the final price and details here in this chat.";
+    }
     out.replies.push(reply);
 
     const ownerNote = typeof raw.owner_note === "string" ? raw.owner_note.trim() : "";
@@ -321,6 +362,66 @@ export class Agent {
   }
 
   /* ---------- placing an order (code only) ---------- */
+
+  private async placeCustomOrder(waId: string, draft: Draft, s: Settings, out: Outcome): Promise<void> {
+    const { store } = this.d;
+    const now = this.now();
+    const custom = draft.custom;
+    if (!custom || !custom.approved || custom.price == null || !draft.pickup_local) return;
+
+    const already = store.openOrdersFor(waId).find((o) =>
+      o.pickup === draft.pickup_local &&
+      o.items.some((it) => it.id.startsWith("custom:")) &&
+      total(o.items) === custom.price
+    );
+    if (already) {
+      store.clearDraft(waId);
+      out.orderId = already.id;
+      out.route = "confirm_custom_order+duplicate";
+      out.replies.push(`Order #${already.id} is already confirmed for ${formatWhen(already.pickup)}. There is nothing more to confirm.`);
+      return;
+    }
+
+    const people = customHeadcount(custom.request);
+    const menuNames = [...new Set(draft.items.map((it) => it.name))];
+    const requestName = custom.request
+      .replace(/^\s*(?:hi\s+)?(?:i\s+(?:would\s+like|want|need)\s+to\s+order\s*)/i, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120);
+    const baseName = menuNames.length ? menuNames.join(" + ") : (requestName || "Custom catering order");
+    const item = {
+      id: `custom:${now}`,
+      name: `${baseName} · custom catering`,
+      qty: people ?? 1,
+      pack: "single" as const,
+      amt: custom.price,
+    };
+    const customer = store.getCustomer(waId)!;
+    const name = customer.name || draft.customer_name || "Customer";
+    const notes = [
+      "Custom order approved by Annapurna in chat",
+      custom.request ? `Request: ${custom.request}` : "",
+      draft.notes,
+    ].filter(Boolean).join(". ").slice(0, 300);
+
+    const order = store.insertOrder({
+      waId, name, items: [item], pickup: draft.pickup_local, flags: [], status: "cook", notes, createdAt: now,
+    });
+    store.clearDraft(waId);
+    if (!customer.name && draft.customer_name) store.updateCustomer(waId, { name: draft.customer_name });
+    store.updateCustomer(waId, { profile: `Has ordered before. Last order: ${itemLabel(item)}, pickup ${formatWhen(draft.pickup_local)}.` });
+    out.orderId = order.id;
+
+    const who = friendlyName(name);
+    out.replies.push(
+      `Thank you${who ? ` ${who}` : ""}! Order #${order.id} is confirmed:\n- ${itemLabel(item)}\nTotal: ${money(custom.price)}\nPickup: ${formatWhen(draft.pickup_local)} at ${s.address}`
+    );
+    await this.d.notifier.notify(
+      `Custom order #${order.id} confirmed`,
+      `${name}: ${itemLabel(item)}. Pickup ${formatWhen(draft.pickup_local)}. ${money(custom.price)}`,
+    );
+  }
 
   private async placeOrder(waId: string, draft: Draft, s: Settings, out: Outcome): Promise<void> {
     const { store } = this.d;
