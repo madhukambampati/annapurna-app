@@ -472,5 +472,13 @@ function render() {
   if (box) box.scrollTop = box.scrollHeight;
 }
 
+const ownerBrandHome = $("ownerBrandHome");
+if (ownerBrandHome) ownerBrandHome.addEventListener("click", () => {
+  tab = "dashboard";
+  cook = null;
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+
 refresh();
 setInterval(refresh, 8000);
