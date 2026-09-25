@@ -31,7 +31,7 @@
   };
 
   var token = "", lastId = 0, busy = false, seen = {}, orders = [], pollTimer = 0;
-  var sheetOpen = "", lastFocus = null, menuData = null, handoff = null, confirmingDelete = false;
+  var sheetOpen = "", lastFocus = null, menuData = null, handoff = null, confirmingDelete = false, confirmingEndSession = false;
 
   function store(k, v) { try { if (v === null) localStorage.removeItem(k); else if (v !== undefined) localStorage.setItem(k, v); else return localStorage.getItem(k); } catch (e) { /* private mode */ } return null; }
 
@@ -640,7 +640,7 @@
   }
   function closeSheet() {
     if (!sheetOpen) return;
-    sheetOpen = ""; confirmingDelete = false;
+    sheetOpen = ""; confirmingDelete = false; confirmingEndSession = false;
     $("sheet").removeAttribute("data-kind");
     $("veil").hidden = true;
     $("app").removeAttribute("inert");
@@ -770,6 +770,16 @@
     if (links.length) body.append(h("section", { class: "card2" }, h("h3", {}, "Find us"), h("div", { class: "links" }, links)));
     if (token) {
       body.append(h("section", { class: "card2" },
+        h("h3", {}, "Session"),
+        h("p", {}, "Finished for now? End this session to return to the welcome screen. Your placed orders stay with Annapurna Home Foods."),
+        confirmingEndSession
+          ? h("div", { class: "links" },
+              h("button", { class: "btn warn", type: "button", onclick: endSession }, "Yes, end session"),
+              h("button", { class: "btn ghost", type: "button", onclick: function () { confirmingEndSession = false; renderHelp(); } }, "Stay signed in"))
+          : h("button", { class: "btn ghost", type: "button", onclick: function () { confirmingEndSession = true; renderHelp(); var b = $("sheetBody").querySelector(".btn.warn"); if (b) b.focus(); } }, "End session")));
+    }
+    if (token) {
+      body.append(h("section", { class: "card2" },
         h("h3", {}, "Your data"),
         h("p", {}, "You can remove this chat from our system. Orders that were already placed stay so we can cook them."),
         confirmingDelete
@@ -794,6 +804,28 @@
       setHandoff(j.handoff || null);
       var again = $("handoffBtn"); if (again) again.focus();
     }).catch(function (e) { if (e.status === 401) { closeSheet(); toBoarding(e.message); return; } if (b) b.disabled = false; toast(errText(e)); });
+  }
+
+  function endSession() {
+    confirmingEndSession = false;
+    stopPolling();
+    token = "";
+    store(TOKEN_KEY, null);
+    store(NAME_KEY, null);
+    lastId = 0;
+    seen = {};
+    orders = [];
+    handoff = null;
+    busy = false;
+    if ($("msgs")) $("msgs").replaceChildren();
+    if ($("homeActive")) { $("homeActive").hidden = true; $("homeActive").replaceChildren(); }
+    if ($("fName")) $("fName").value = "";
+    if ($("fContact")) $("fContact").value = "";
+    if ($("fConsent")) $("fConsent").checked = false;
+    closeSheet();
+    show("onboard");
+    $("startErr").textContent = "Session ended. Start a new chat whenever you're ready.";
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function deleteChat() {
