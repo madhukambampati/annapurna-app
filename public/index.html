@@ -828,6 +828,23 @@ body.customer-mode{
   .home-glow{animation:none}
 }
 </style>
+
+<style id="brandHomeNavigation">
+/* BRAND HOME NAVIGATION */
+.brand-home{
+  flex:1;min-width:0;display:flex;align-items:center;gap:10px;
+  padding:0;border:0;background:transparent;color:inherit;text-align:left;
+  border-radius:15px;cursor:pointer;
+}
+.brand-home:hover{background:color-mix(in srgb,var(--brand-soft) 42%,transparent)}
+.brand-home:active{transform:scale(.985)}
+.brand-home:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.brand-home .brand{display:block;flex:1;min-width:0}
+.brand-home .seal{flex:none}
+@media(max-width:680px){
+  .brand-home{gap:7px}
+}
+</style>
 </head>
 <body>
 <template id="tplMascot">
@@ -865,8 +882,10 @@ body.customer-mode{
 </template>
 <div class="app" id="app">
   <header class="top">
-    <img class="seal" src="/icon.svg" alt="" width="40" height="40">
-    <div class="brand"><h1>Annapurna</h1><small>Home Foods</small></div>
+    <button class="brand-home" id="brandHome" type="button" aria-label="Go to Annapurna Home">
+      <img class="seal" src="/icon.svg" alt="" width="40" height="40">
+      <span class="brand"><h1>Annapurna</h1><small>Home Foods</small></span>
+    </button>
     <nav class="tabs" aria-label="Sections">
       <button class="tab" id="btnHome" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5M9.5 20v-6h5v6"/></svg>Home</button>
       <button class="tab" id="btnMenu" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H19v15H5.5A1.5 1.5 0 0 0 4 20.5z"/><path d="M8 8h7M8 11.5h5"/></svg>Menu</button>
