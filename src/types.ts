@@ -38,7 +38,7 @@ export interface CustomOrderDraft {
   request: string;
   /** Price explicitly quoted by Annapurna in the owner chat. */
   price: number | null;
-  /** True only after Annapurna explicitly confirms/approves the custom order in owner chat. */
+  /** Owner has supplied/finalized custom terms. A quoted price sets this true. */
   approved: boolean;
 }
 
