@@ -61,7 +61,7 @@ const CONFIRM_BUTTON = /^yes, confirm$/i;
 /** Owner-managed catering/bulk orders. A headcount alone counts as custom only at 8+ people. */
 const CUSTOM_WORDS = /\b(cater(?:ing)?|bulk|party order|large order|full tray|half tray|medium tray|large tray)\b/i;
 const CUSTOM_HEADCOUNT = /\b(\d{1,3})\s*(?:people|persons|pax|members|guests)\b/i;
-const CUSTOM_CONFIRM = /^(?:yes\b.*|please\s+confirm\b.*|confirm\b.*|go\s+ahead\b.*)$/i;
+const CUSTOM_CONFIRM = /(?:^yes\b|^go\s+ahead\b|\b(?:confirm|place)\s+(?:the\s+)?order\b)/i;
 
 function looksCustom(text: string): boolean {
   if (CUSTOM_WORDS.test(text)) return true;
@@ -159,20 +159,32 @@ export class Agent {
     }
 
     // Custom/catering orders are different from menu orders: the owner sets the final price in chat,
-    // then the customer confirms. Only code creates the real order and confirmation badge.
+    // then the customer confirms. Handle confirmation/acknowledgements deterministically so the model
+    // can never invent a custom-order confirmation or lose the pending terms.
     if (draft?.custom && CUSTOM_CONFIRM.test(text)) {
       if (draft.custom.approved && draft.custom.price != null && draft.pickup_local) {
         out.route = "confirm_custom_order";
         await this.placeCustomOrder(msg.from, draft, settings, out);
-        for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
-        return out;
+      } else {
+        const missing = [
+          draft.custom.price == null ? "the final price" : "",
+          !draft.custom.approved ? "Annapurna's approval" : "",
+          !draft.pickup_local ? "the pickup day and time" : "",
+        ].filter(Boolean);
+        out.route = "confirm_custom_order+waiting";
+        out.replies.push(`Your custom order is saved, but I still need ${missing.join(", ").replace(/, ([^,]*)$/, " and $1")} before I can place it. Annapurna Home Foods will finalize that here in this chat.`);
       }
-      if (draft.custom.approved && draft.custom.price != null && !draft.pickup_local) {
-        out.route = "confirm_custom_order+missing_pickup";
-        out.replies.push("I have the custom price and Annapurna's approval. Please tell me the pickup day and time before I place the order.");
-        for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
-        return out;
-      }
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
+    }
+    if (draft?.custom && THANKS.test(text)) {
+      out.route = "custom_ack";
+      const ready = draft.custom.approved && draft.custom.price != null && !!draft.pickup_local;
+      out.replies.push(ready
+        ? "You're welcome! Your custom order details are ready. Reply CONFIRM THE ORDER when you want me to place it."
+        : "You're welcome! Your custom order request is saved. Annapurna Home Foods will finalize the remaining details here.");
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
     }
 
     // Wants a real person or a contact detail: answered by code, so the customer always gets a clear status.
@@ -289,14 +301,29 @@ export class Agent {
     const issues: Issue[] = [];
 
     if (!frozen) {
-      const s = sanitizeItems(rd.items, menu);
-      items = s.items;
-      issues.push(...s.issues);
-      pickup = typeof rd.pickup_local === "string" && isLocalIso(rd.pickup_local) ? rd.pickup_local : null;
-      notes = typeof rd.notes === "string" ? rd.notes.slice(0, 300) : "";
+      const startsCustom = !custom && looksCustom(text);
+      if (custom || startsCustom) {
+        // Custom orders are owner-managed. Preserve the structured draft we already have and do not
+        // run normal menu-item ambiguity checks on phrases such as "15-person medium tray".
+        custom = custom ?? { request: text.slice(0, 300), price: null, approved: false };
+        if (Array.isArray(rd.items) && rd.items.length) {
+          const s = sanitizeItems(rd.items, menu);
+          // Keep any clearly resolved menu items for a useful label, but ambiguity must not block catering.
+          if (s.items.length) items = s.items;
+          issues.push(...s.issues.filter((i) => i.kind === "not_live" || i.kind === "weekday_mismatch"));
+        }
+        if (typeof rd.pickup_local === "string" && isLocalIso(rd.pickup_local)) pickup = rd.pickup_local;
+        if (typeof rd.notes === "string" && rd.notes.trim()) notes = rd.notes.slice(0, 300);
+        if (typeof rd.customer_name === "string" && rd.customer_name.trim()) custName = rd.customer_name.trim().slice(0, 60);
+      } else {
+        const s = sanitizeItems(rd.items, menu);
+        items = s.items;
+        issues.push(...s.issues);
+        pickup = typeof rd.pickup_local === "string" && isLocalIso(rd.pickup_local) ? rd.pickup_local : null;
+        notes = typeof rd.notes === "string" ? rd.notes.slice(0, 300) : "";
+        custName = typeof rd.customer_name === "string" && rd.customer_name.trim() ? rd.customer_name.trim().slice(0, 60) : null;
+      }
       if (ADD_MORE.test(text)) again = true;
-      custName = typeof rd.customer_name === "string" && rd.customer_name.trim() ? rd.customer_name.trim().slice(0, 60) : null;
-      if (!custom && looksCustom(text)) custom = { request: text.slice(0, 300), price: null, approved: false };
       const wk = checkWeekday(text, pickup, now, settings.tz);
       if (wk) {
         issues.push(wk);
