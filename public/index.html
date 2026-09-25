@@ -972,6 +972,64 @@ body.customer-mode{
   .home-orbit,.home-spark,.home-bubble{animation:none!important}
 }
 </style>
+
+<style id="menuCategoryNavFix">
+/* MENU CATEGORY NAV FIX — replace the clipped/blank-looking strip with clear section buttons */
+.customer-mode .menu-seg{
+  position:relative!important;
+  top:auto!important;
+  z-index:2;
+  width:100%;
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:7px;
+  overflow:visible!important;
+  padding:7px!important;
+  min-height:58px;
+  border:1px solid var(--line)!important;
+  border-radius:18px!important;
+  background:color-mix(in srgb,var(--surface2) 90%,var(--surface))!important;
+  box-shadow:0 8px 22px rgba(22,48,33,.06);
+}
+.customer-mode .menu-seg button{
+  min-width:0!important;
+  min-height:42px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:8px 10px!important;
+  border:1px solid transparent!important;
+  border-radius:12px!important;
+  background:transparent!important;
+  color:var(--muted)!important;
+  font-size:12.5px!important;
+  font-weight:800!important;
+  line-height:1.15!important;
+  text-align:center;
+  white-space:normal!important;
+  opacity:1!important;
+}
+.customer-mode .menu-seg button[aria-selected=true]{
+  background:var(--brand)!important;
+  color:var(--on-brand)!important;
+  border-color:var(--brand)!important;
+  box-shadow:0 7px 18px color-mix(in srgb,var(--brand) 22%,transparent)!important;
+}
+.customer-mode .menu-section-label{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin:2px 2px -2px;
+}
+.customer-mode .menu-section-label span{
+  color:var(--brand2);font-size:10px;font-weight:900;letter-spacing:.11em;text-transform:uppercase;
+}
+.customer-mode .menu-section-label b{
+  font:700 20px/1.15 var(--f-display);color:var(--ink);
+}
+@media(max-width:600px){
+  .customer-mode .menu-seg{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .customer-mode .menu-seg button{min-height:44px;font-size:12px!important}
+}
+</style>
 </head>
 <body>
 <template id="tplMascot">
