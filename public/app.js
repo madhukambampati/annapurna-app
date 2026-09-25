@@ -820,6 +820,7 @@
   /* ---------- wiring ---------- */
   CHIPS.forEach(function (c) { $("chips").append(h("button", { type: "button", onclick: function () { send(c); } }, c)); });
 
+  $("brandHome").addEventListener("click", function () { if (token) openHome(); else show("onboard"); });
   $("btnHome").addEventListener("click", openHome);
   $("btnMenu").addEventListener("click", showMenu);
   $("btnOrders").addEventListener("click", showOrders);
