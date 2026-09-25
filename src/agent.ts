@@ -141,22 +141,23 @@ export class Agent {
     let draft = store.getDraft(msg.from);
     const open = store.openOrdersFor(msg.from);
 
-    // Recover custom terms for conversations that began before this feature was deployed.
-    // Existing drafts already contain the structured pickup; owner chat contains the quoted price/approval.
-    if (draft && !draft.custom) {
-      const request = [...before].reverse().find((m) => m.who === "cust" && looksCustom(m.text))?.text;
+    // Recover/reconcile custom terms from chat history. This also repairs conversations that were
+    // already in progress while an older build was deployed (for example, price/approval was typed
+    // by the owner before those fields were persisted in the draft).
+    if (draft) {
+      const request = draft.custom?.request ?? [...before].reverse().find((m) => m.who === "cust" && looksCustom(m.text))?.text;
       if (request) {
-        draft = {
-          ...draft,
-          stage: "collecting",
-          readback_hash: null,
-          custom: {
-            request: request.slice(0, 300),
-            price: ownerPriceFromHistory(before),
-            approved: ownerApprovedFromHistory(before),
-          },
+        const historyPrice = ownerPriceFromHistory(before);
+        const historyApproved = ownerApprovedFromHistory(before);
+        const custom = {
+          request: request.slice(0, 300),
+          price: draft.custom?.price ?? historyPrice,
+          approved: draft.custom?.approved === true || historyApproved,
         };
-        store.putDraft(msg.from, draft);
+        if (!draft.custom || draft.custom.price !== custom.price || draft.custom.approved !== custom.approved) {
+          draft = { ...draft, stage: "collecting", readback_hash: null, custom };
+          store.putDraft(msg.from, draft);
+        }
       }
     }
 
