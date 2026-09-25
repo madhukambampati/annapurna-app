@@ -208,7 +208,7 @@ function renderOrders() {
           h("span", { class: "need-actions" },
             isWeb(a.waId) ? h("button", { onclick: () => openChat(a.waId) }, "Open chat") : null,
             o && ["hold", "cook", "ready"].includes(o.status) ? h("button", { class: "bad", onclick: () => cancelOrder(o, () => act(`/api/alerts/${a.id}/done`)) }, "Cancel #" + o.id) : null,
-            h("button", { onclick: () => act(`/api/alerts/${a.id}/done`) }, "Done"));
+            h("button", { onclick: () => act(`/api/alerts/${a.id}/done`) }, "Done")));
       }),
       held.length ? h("div", { class: "held-wrap" },
         h("p", { class: "sub" }, "Held orders need approval before they enter the kitchen."),
