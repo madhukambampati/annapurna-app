@@ -1,5 +1,5 @@
 # Fly.io settings. Change the app name (must be unique on Fly) before the first deploy.
-app = "annapurna-CHANGE-ME"
+app = "annapurna-maddy-kw"
 # iad (Ashburn) is the region whose base prices I checked. yyz is Toronto: check its price first.
 primary_region = "iad"
 
