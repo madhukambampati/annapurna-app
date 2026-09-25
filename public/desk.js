@@ -316,7 +316,7 @@ function renderCook() {
   if (cook.buy.length) {
     out.push(h("div", { class: "card buy-card" },
       h("div", { class: "table-wrap" }, h("table", {}, cook.buy.map((r) => h("tr", {}, h("td", {}, h("b", {}, r.name)), h("td", {}, r.text.split(": ").slice(1).join(": "))))),
-      h("div", { class: "buy-actions" }, h("button", { class: "pri", onclick: () => navigator.clipboard && navigator.clipboard.writeText(cook.buy.map((r) => r.text).join("\n")) }, "Copy buy list"))));
+      h("div", { class: "buy-actions" }, h("button", { class: "pri", onclick: () => navigator.clipboard && navigator.clipboard.writeText(cook.buy.map((r) => r.text).join("\n")) }, "Copy buy list")))));
   }
   if (cook.missingRecipe.length) out.push(h("div", { class: "owner-note" }, "Ingredients are not set for: " + cook.missingRecipe.join(", ") + ". Add them in Menu."));
   if (!cook.buy.length && cook.days.length) out.push(h("div", { class: "empty" }, "Set ingredients per dish in Menu to automatically build the buy list."));
