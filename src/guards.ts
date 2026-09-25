@@ -174,6 +174,19 @@ export function checkWeekday(text: string, pickupLocal: string | null, now: numb
 
 /* ---------- flags ---------- */
 
+/**
+ * The first name to greet a customer with, or "" when the typed name does not look like a name
+ * ("sd", "abc", "x", "123"). Owner-facing screens still show exactly what was typed.
+ */
+export function friendlyName(name: string | null | undefined): string {
+  const first = String(name ?? "").trim().split(/\s+/)[0] ?? "";
+  if (!/^\p{L}[\p{L}\p{M}'.-]{1,29}$/u.test(first)) return "";
+  const letters = first.toLowerCase().replace(/[^\p{L}\p{M}]/gu, "");
+  if (letters.length < 2 || /^(.)\1+$/.test(letters)) return "";
+  if (/^[a-z]+$/.test(letters) && (!/[aeiouy]/.test(letters) || /^(abc|asd|asdf|qwe|qwerty|test|xyz|aaa|na|no|none|customer|user|name)$/.test(letters))) return "";
+  return first.charAt(0).toUpperCase() + first.slice(1);
+}
+
 /** Extras only, with no main dish in this order. */
 export function extrasOnly(items: OrderItem[], menu: MenuItem[]): boolean {
   return items.length > 0 && items.every((it) => findItem(menu, it.id)?.kind === "addon");

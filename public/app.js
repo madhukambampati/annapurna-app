@@ -23,6 +23,9 @@
     person: ["M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M4 21a8 8 0 0 1 16 0"],
     trash: ["M5 7h14M10 11v6M14 11v6", "M6 7l1 13h10l1-13", "M9 7V4h6v3"],
     plus: ["M12 5v14M5 12h14"],
+    bag: ["M6 8h12l-1 12H7z", "M9 8V7a3 3 0 0 1 6 0v1"],
+    pin: ["M12 21s-7-6.1-7-11a7 7 0 0 1 14 0c0 4.9-7 11-7 11z", "M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"],
+    heart: ["M12 20s-7.5-4.6-9.3-9.3C1.5 7.4 3.7 4.5 6.9 4.5c2 0 3.4 1.1 5.1 3 1.7-1.9 3.1-3 5.1-3 3.2 0 5.4 2.9 4.2 6.2C19.5 15.4 12 20 12 20z"],
     sun: ["M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"],
     chili: ["M5.5 8.5c2.6-.8 5 .4 6.4 2.8 1.6 2.8 3.6 5.2 7.6 6.2.6.2.5 1-.1 1.2C13.6 21 7 18.6 5 13.2c-.6-1.7-.6-3.6.5-4.7z", "M5.5 8.5C5 6.5 6 4.5 8.5 4"]
   };
@@ -162,6 +165,41 @@
     return card;
   }
 
+  function isFresh(m) { return m.ts && Date.now() - new Date(m.ts).getTime() < 90000; }
+  /* A small burst of turmeric, chilli and curry-leaf colours over a new confirmation. */
+  function confetti() {
+    var box = h("div", { class: "confetti", "aria-hidden": "true" });
+    var cols = ["#f1a824", "#e0582f", "#2f9a68", "#f6d27a", "#b83527", "#7cc49b"];
+    for (var i = 0; i < 22; i++) {
+      var x = (Math.random() * 2 - 1) * 160, y = -60 - Math.random() * 120, r = Math.random() * 540 - 270;
+      box.append(h("i", { style: "--x:" + x.toFixed(0) + "px;--y:" + y.toFixed(0) + "px;--r:" + r.toFixed(0) + "deg;--d:" + (Math.random() * 0.25).toFixed(2) + "s;background:" + cols[i % cols.length] + (i % 3 ? "" : ";border-radius:50%") }));
+    }
+    setTimeout(function () { box.remove(); }, 2600);
+    return box;
+  }
+
+  /* "Your order #N is ready for pickup at ..." from the kitchen, as a card with directions. */
+  function readyCard(m) {
+    var r = /^Your order #(\d+) is ready for pickup at (.+?)\.?$/.exec(m.text.trim());
+    if (m.who !== "owner" || !r) return null;
+    return h("div", { class: "b owner ready" + (isFresh(m) ? " fresh" : ""), "data-id": m.id || "" },
+      h("div", { class: "rhead" }, h("span", { class: "rbag" }, icon("bag")), h("div", {}, h("span", { class: "who" }, "Annapurna"), h("b", {}, "Order #" + r[1] + " is ready!"))),
+      h("p", {}, "Come pick it up at " + r[2] + "."),
+      h("a", { class: "btn sm", href: "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(r[2]), target: "_blank", rel: "noopener noreferrer" }, icon("pin"), "Directions"),
+      h("time", {}, m.ts ? clock(m.ts) : ""));
+  }
+
+  /* The thank-you after pickup: Annu waves, a few hearts float up. */
+  function thanksCard(m) {
+    if (m.who !== "agent" || !/^Thank you for your order/.test(m.text)) return null;
+    var hearts = h("div", { class: "hearts", "aria-hidden": "true" });
+    for (var i = 0; i < 5; i++) hearts.append(h("span", { style: "--i:" + i }, icon("heart")));
+    return h("div", { class: "b agent thanks", "data-id": m.id || "" },
+      h("div", { class: "thead" }, mascot("sm"), hearts),
+      linkify(m.text),
+      h("time", {}, m.ts ? clock(m.ts) : ""));
+  }
+
   /* A placed order is drawn as a receipt card. */
   function confirmed(m) {
     var lines = m.text.split("\n");
@@ -171,11 +209,13 @@
       if (/^- /.test(l)) items.push(l.slice(2));
       else if (/^(Total|Pickup): /.test(l)) { var j = l.indexOf(": "); rows.push([l.slice(0, j), l.slice(j + 2)]); }
     });
-    return h("div", { class: "b agent sum", "data-id": m.id || "" },
+    var card = h("div", { class: "b agent sum", "data-id": m.id || "" },
       h("div", { class: "cfhead" }, mascot("sm jump"), h("h3", {}, "Order " + (num ? "#" + num[1] + " " : "") + "confirmed" + (/extras for order #(\d+)/.test(lines[0]) ? " \u00b7 extras for #" + /extras for order #(\d+)/.exec(lines[0])[1] : ""))),
       h("ul", {}, items.map(function (it) { return h("li", {}, h("span", {}, it)); })),
       rows.map(function (r) { return h("div", { class: "row" + (r[0] === "Total" ? " total" : "") }, h("span", {}, r[0]), h("span", {}, r[1])); }),
       h("time", {}, m.ts ? clock(m.ts) : ""));
+    if (isFresh(m) && !REDUCED) card.append(confetti());
+    return card;
   }
 
 
@@ -336,7 +376,7 @@
   function bubble(m, pending) {
     if (m.who === "agent" && /^Please check your (order|extras)/.test(m.text)) return summary(m);
     if (m.who === "agent" && /^[^\n]*Order #\d+(?: \([^)]*\))? is confirmed:/.test(m.text)) return confirmed(m);
-    var card = dishes(m) || weekCard(m); if (card) return card;
+    var card = dishes(m) || weekCard(m) || readyCard(m) || thanksCard(m); if (card) return card;
     var kids = [];
     if (m.who === "owner") kids.push(h("span", { class: "who" }, "Annapurna"));
     kids.push.apply(kids, linkify(m.text));

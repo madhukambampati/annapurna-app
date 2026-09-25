@@ -6,6 +6,7 @@ import type { Config } from "./config.js";
 import { cookSummary } from "./cook.js";
 import { RateLimiter } from "./limiter.js";
 import { dayRange, itemDays, itemLabel, total } from "./menu.js";
+import { friendlyName } from "./guards.js";
 import type { Store } from "./store.js";
 import { DAYN, dayLabel, formatWhen, nextDateForDow } from "./time.js";
 import type { MenuItem, Order, OrderStatus, Settings } from "./types.js";
@@ -192,8 +193,8 @@ export function createServer(d: ServerDeps): Server {
   };
 
   const thanksNote = (o: Order, s: Settings): string => {
-    const first = (o.name || "").trim().split(/\s+/)[0];
-    const lines = [`Thank you for your order${first && first !== "Customer" ? `, ${first}` : ""}! Enjoy your food.`];
+    const first = friendlyName(o.name);
+    const lines = [`Thank you for your order${first ? `, ${first}` : ""}! Enjoy your food.`];
     if (s.contactInstagram) lines.push("We'd love your feedback on Instagram. Please follow our page too:", `instagram.com/${s.contactInstagram}`);
     else lines.push("We'd love to hear how you liked it. Just reply here.");
     return lines.join("\n");

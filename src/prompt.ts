@@ -1,5 +1,6 @@
 import { DAYN, dateTable, epochToLocal } from "./time.js";
 import { itemDays } from "./menu.js";
+import { friendlyName } from "./guards.js";
 import type { Customer, Draft, MenuItem, Msg, Settings } from "./types.js";
 
 export function rulesList(s: Settings): string[] {
@@ -85,7 +86,7 @@ export function buildPrompt(p: PromptInput): string {
     "",
     `MENU NOTES FROM MADDY: ${s.notes}`,
     "",
-    `CUSTOMER NAME ON FILE: ${p.customer.name || "unknown"}`,
+    `CUSTOMER NAME ON FILE: ${friendlyName(p.customer.name) || "unknown (do not greet them by a name)"}`,
     `KNOWN ABOUT THIS CUSTOMER: ${p.customer.profile || "New customer, nothing known yet."}`,
     `ORDERS ALREADY PLACED BY THIS CUSTOMER: ${p.placed.length ? p.placed.join("; ") : "none"}`,
     `CURRENT DRAFT ORDER (JSON, carry it forward and update it): ${JSON.stringify(draft)}`,

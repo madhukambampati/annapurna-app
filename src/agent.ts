@@ -1,5 +1,5 @@
 import type { Config } from "./config.js";
-import { checkFlags, checkWeekday, draftHash, extrasOnly, mainOrderFor, sanitizeItems, type Issue } from "./guards.js";
+import { checkFlags, checkWeekday, draftHash, extrasOnly, friendlyName, mainOrderFor, sanitizeItems, type Issue } from "./guards.js";
 import { HeuristicJudge, type Judge, type Judgment } from "./judge.js";
 import type { Llm } from "./llm.js";
 import { findItem, itemLabel, lineAmt, money, total, optionPicks } from "./menu.js";
@@ -371,7 +371,7 @@ export class Agent {
     out.orderId = order.id;
 
     const t = total(items);
-    const who = customer.name || draft.customer_name;
+    const who = friendlyName(customer.name || draft.customer_name);
     const listing = items.map((it) => `- ${itemLabel(it)}`).join("\n");
     if (flags.length) {
       out.replies.push(`Thank you${who ? ` ${who}` : ""}! I've noted order #${order.id}:\n${listing}\nWe need to confirm it first (${flags.join("; ").toLowerCase()}). Annapurna Home Foods will reach out to you here in this chat.`);

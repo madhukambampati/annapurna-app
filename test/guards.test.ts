@@ -129,3 +129,10 @@ test("draftHash changes when items, time or notes change, not when item order ch
   assert.notEqual(draftHash(base), draftHash({ ...base, pickup_local: "2026-09-25T19:00" }));
   assert.notEqual(draftHash(base), draftHash({ ...base, notes: "less spicy" }));
 });
+
+import { friendlyName } from "../src/guards.js";
+
+test("friendlyName: greet real names only", () => {
+  for (const [inp, out] of [["Kiran", "Kiran"], ["kiran kumar", "Kiran"], ["Sri", "Sri"], ["Asha", "Asha"], ["Lakshmi", "Lakshmi"], ["Madhubabu K", "Madhubabu"], ["సాయి", "సాయి"], ["O'Neil", "O'Neil"], ["Ty", "Ty"]] as const) assert.equal(friendlyName(inp), out, inp);
+  for (const bad of ["sd", "x", "abc", "asdf", "123", "aaaa", "test", "Customer", "", null, "@@", "qwerty", "bcd"]) assert.equal(friendlyName(bad as string), "", String(bad));
+});
