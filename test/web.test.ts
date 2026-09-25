@@ -261,6 +261,63 @@ describe("web: chat and orders", () => {
       assert.equal(t.store.getDraft(waId), null);
     }));
 
+  test("custom catering transcript: price first, later natural owner approval, then customer confirm", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("KM", "5195550101");
+
+      t.llm.push(modelReply({
+        reply: "A 15-person tray order is a custom/catering request, so we'll save the details here and Annapurna Home Foods will finalize the price and pickup with you in this chat.",
+        items: [{ id: "chicken_kheema_pulao", qty: 15, pack: "single", asked_for: "Chicken Kheema Pulao" }],
+        pickup: null,
+        stage: "collecting",
+        needs_owner: true,
+        owner_note: "Custom tray order for 15 people: Chicken Kheema Pulao",
+      }));
+      await say(token, "I want to order the tray order for 15 people chicken Kheema pulao");
+
+      const waId = t.store.listCustomers()[0]!.waId;
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "Sure when do you want and at what time" } });
+
+      t.llm.push(modelReply({
+        reply: "Got it, tomorrow 7:00 pm pickup for the 15-person Chicken Kheema Pulao tray. This is saved and Annapurna Home Foods will finalize the details and pricing with you here.",
+        items: [{ id: "chicken_kheema_pulao", qty: 15, pack: "single", asked_for: "Chicken Kheema Pulao" }],
+        pickup: FRI_6PM,
+        stage: "collecting",
+        needs_owner: true,
+        owner_note: "Custom tray pickup set",
+      }));
+      await say(token, "Tomorrow 7:00 pm est");
+
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "120$ is the price, that's a medium size tray" } });
+
+      // Customer tries to confirm before the owner has approved it: this must not call the model
+      // or produce menu-item ambiguity.
+      const promptsBefore = t.llm.prompts.length;
+      const waiting = await say(token, "Ok got it, you can confirm the order");
+      assert.equal(t.llm.prompts.length, promptsBefore);
+      assert.equal(waiting.json.orderId, null);
+      assert.ok(waiting.json.messages.some((m: any) => /still need Annapurna's approval/i.test(m.text)));
+
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "Sure we can make the order for tomorrow" } });
+
+      const thanks = await say(token, "Got it thank you");
+      assert.equal(t.llm.prompts.length, promptsBefore, "custom acknowledgement should not invoke the model");
+      assert.ok(thanks.json.messages.some((m: any) => /Reply CONFIRM THE ORDER/i.test(m.text)));
+
+      const confirmed = await say(token, "Confirm the order");
+      assert.equal(confirmed.json.orderId, 1);
+      assert.ok(confirmed.json.messages.some((m: any) => /Order #1 is confirmed:/.test(m.text)));
+
+      const orders = (await call("GET", "/web/orders", { token })).json.orders;
+      assert.equal(orders.length, 1);
+      assert.deepEqual([orders[0].status, orders[0].total], ["cook", 120]);
+      assert.match(orders[0].items[0], /Chicken Kheema Pulao.*custom catering/i);
+
+      const owner = await call("GET", "/api/state", { token: "secret" });
+      assert.equal(owner.json.orders.length, 1);
+      assert.match(t.notifier.sent.at(-1)!.title, /Custom order #1 confirmed/);
+    }));
+
   test("customers cannot see each other's chats or orders", () =>
     withRig(async ({ t, start, say, call }) => {
       const a = await start("Asha", "5195550101");
