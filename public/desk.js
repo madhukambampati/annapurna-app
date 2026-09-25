@@ -185,30 +185,57 @@ function ticket(o) {
 function renderOrders() {
   const open = state.alerts.filter((a) => !a.done);
   const held = state.orders.filter((o) => o.status === "hold");
-  const out = [];
+  const cooking = state.orders.filter((o) => o.status === "cook").sort((a, b) => String(a.pickup || "9").localeCompare(String(b.pickup || "9")));
+  const ready = state.orders.filter((o) => o.status === "ready").sort((a, b) => String(a.pickup || "9").localeCompare(String(b.pickup || "9")));
+  const done = state.orders.filter((o) => o.status === "done").slice(-12).reverse();
+  const cancelled = state.orders.filter((o) => o.status === "cancelled").slice(-8).reverse();
+  const out = [
+    h("div", { class: "owner-page-title" },
+      h("div", {}, h("h2", {}, "Orders"), h("p", { class: "sub" }, "Accept, prepare and hand off customer orders.")),
+      h("div", { class: "owner-mini-counts" },
+        h("span", {}, cooking.length + " cooking"),
+        h("span", {}, ready.length + " ready"),
+        (open.length + held.length) ? h("span", { class: "hot" }, (open.length + held.length) + " need you") : null))
+  ];
+
   if (open.length || held.length) {
-    out.push(h("h2", {}, "Needs you"));
-    for (const a of open) {
-      const o = a.orderId ? state.orders.find((x) => x.id === a.orderId) : null;
-      out.push(h("div", { class: "need" },
-        h("span", {}, h("b", {}, a.cust + (a.contact ? " (" + a.contact + ")" : "") + ": "), a.note),
-        h("span", {},
-          isWeb(a.waId) ? h("button", { onclick: () => openChat(a.waId) }, "Open chat") : null, " ",
-          o && ["hold", "cook", "ready"].includes(o.status) ? h("button", { class: "bad", onclick: () => cancelOrder(o, () => act(`/api/alerts/${a.id}/done`)) }, "Cancel order #" + o.id) : null, " ",
-          h("button", { onclick: () => act(`/api/alerts/${a.id}/done`) }, "Done"))));
-    }
-    if (held.length) out.push(h("p", { class: "sub" }, "These orders broke a rule or wait for you. Accept them to send to the kitchen."), h("div", { class: "cols" }, held.map(ticket)));
+    out.push(h("section", { class: "owner-attention" },
+      h("div", { class: "owner-section-head" }, h("div", {}, h("h2", {}, "Needs you"), h("p", { class: "sub" }, "Customer requests and orders waiting for your approval."))),
+      open.map((a) => {
+        const o = a.orderId ? state.orders.find((x) => x.id === a.orderId) : null;
+        return h("div", { class: "need" },
+          h("span", {}, h("b", {}, a.cust + (a.contact ? " · " + a.contact : "")), h("small", {}, a.note)),
+          h("span", { class: "need-actions" },
+            isWeb(a.waId) ? h("button", { onclick: () => openChat(a.waId) }, "Open chat") : null,
+            o && ["hold", "cook", "ready"].includes(o.status) ? h("button", { class: "bad", onclick: () => cancelOrder(o, () => act(`/api/alerts/${a.id}/done`)) }, "Cancel #" + o.id) : null,
+            h("button", { onclick: () => act(`/api/alerts/${a.id}/done`) }, "Done"));
+      }),
+      held.length ? h("div", { class: "held-wrap" },
+        h("p", { class: "sub" }, "Held orders need approval before they enter the kitchen."),
+        h("div", { class: "cols" }, held.map(ticket))) : null));
   }
+
   if (!state.orders.length) {
-    out.push(h("div", { class: "empty" }, "No orders yet. Orders customers place will show up here."));
+    out.push(h("div", { class: "empty owner-empty-large" }, h("b", {}, "No orders yet"), h("span", {}, "Customer orders will appear here as soon as they are confirmed.")));
     return out;
   }
-  const cols = [["cook", "To cook"], ["ready", "Ready for pickup"], ["done", "Picked up"]];
-  out.push(h("div", { class: "cols" }, cols.map(([s, t]) => {
-    let list = state.orders.filter((o) => o.status === s).sort((a, b) => String(a.pickup || "9").localeCompare(String(b.pickup || "9")));
-    if (s === "done") list = list.slice(-8).reverse();
-    return h("div", {}, h("h2", {}, t + " (" + list.length + ")"), list.length ? list.map(ticket) : h("div", { class: "empty" }, "Nothing here"));
-  })));
+
+  const lane = (title, note, list, cls) => h("section", { class: "owner-lane " + cls },
+    h("div", { class: "owner-section-head" },
+      h("div", {}, h("h2", {}, title), h("p", { class: "sub" }, note)),
+      h("span", { class: "lane-count" }, String(list.length))),
+    list.length ? h("div", { class: "cols" }, list.map(ticket)) : h("div", { class: "empty" }, "Nothing here"));
+
+  out.push(h("div", { class: "order-lanes" },
+    lane("To cook", "Confirmed and waiting to be prepared.", cooking, "lane-cook"),
+    lane("Ready for pickup", "Packed and waiting for the customer.", ready, "lane-ready")));
+
+  if (done.length || cancelled.length) {
+    out.push(h("details", { class: "history" },
+      h("summary", {}, "Order history · " + (done.length + cancelled.length) + " recent"),
+      done.length ? h("section", {}, h("h3", {}, "Picked up"), h("div", { class: "cols" }, done.map(ticket))) : null,
+      cancelled.length ? h("section", {}, h("h3", {}, "Cancelled"), h("div", { class: "cols" }, cancelled.map(ticket))) : null));
+  }
   return out;
 }
 
@@ -247,6 +274,9 @@ async function sendReply(text) {
   if (box) box.scrollTop = box.scrollHeight;
 }
 function renderChats() {
+  const title = h("div", { class: "owner-page-title chat-title" },
+    h("div", {}, h("h2", {}, "Customer chats"), h("p", { class: "sub" }, "Read conversations and reply as Annapurna.")),
+    h("span", { class: "lane-count" }, String(state.customers.length)));
   const list = h("div", { class: "clist" },
     state.customers.length ? state.customers.map((c) => h("button", { class: "crow", "aria-current": String(c.waId === chat.waId), onclick: () => openChat(c.waId) },
       h("b", {}, c.name || "Customer"), h("small", {}, (c.contact || c.waId) + " · " + (c.last ? c.last.text : "")))) : h("div", { class: "empty" }, "No chats yet."));
@@ -261,29 +291,35 @@ function renderChats() {
       h("div", { class: "msgs", id: "thread" }, chat.messages.map((m) => h("div", { class: "b " + m.who }, h("small", {}, (m.who === "cust" ? "Customer" : m.who === "agent" ? "Assistant" : "You") + " · " + timeOf(m.ts)), m.text))),
       isWeb(chat.waId) ? [h("p", { class: "sub" }, "Your reply appears in the customer's chat on the website."), form] : h("p", { class: "sub" }, "This is a test customer, replies are not delivered anywhere."));
   }
-  return h("div", { class: "chatgrid" }, list, right);
+  return [title, h("div", { class: "chatgrid" }, list, right)];
 }
 
 /* ---------- cook ---------- */
 function renderCook() {
   if (!cook) {
     api("/api/cook").then((c) => { cook = c; render(); }).catch(showErr);
-    return h("div", { class: "empty" }, "Loading...");
+    return h("div", { class: "empty owner-loading" }, "Preparing kitchen list...");
   }
-  const out = [h("h2", {}, "Cook list"), h("p", { class: "sub" }, "From orders in To cook.")];
-  if (!cook.days.length) out.push(h("div", { class: "empty" }, "Nothing to cook yet."));
+  const out = [
+    h("div", { class: "owner-page-title" },
+      h("div", {}, h("h2", {}, "Kitchen"), h("p", { class: "sub" }, "Everything currently in To cook, grouped for prep.")),
+      h("span", { class: "owner-kitchen-mark", "aria-hidden": "true" }, "♨"))
+  ];
+  if (!cook.days.length) out.push(h("div", { class: "empty owner-empty-large" }, h("b", {}, "Kitchen is clear"), h("span", {}, "Accepted orders will appear here.")));
   for (const d of cook.days) {
-    out.push(h("div", { class: "card" }, h("h2", {}, d.label),
-      h("table", {}, h("tr", {}, h("th", {}, "Dish"), h("th", {}, "Qty"), h("th", {}, "For")),
-        d.dishes.map((x) => h("tr", {}, h("td", {}, x.name), h("td", {}, x.qty + (x.plan ? (x.qty === 1 ? " person" : " people") : (x.qty === 1 ? " meal" : " meals"))), h("td", {}, x.who.join(", ")))))));
+    out.push(h("section", { class: "card kitchen-day" },
+      h("div", { class: "owner-section-head" }, h("div", {}, h("h2", {}, d.label), h("p", { class: "sub" }, d.dishes.length + " dish" + (d.dishes.length === 1 ? "" : "es") + " to prepare"))),
+      h("div", { class: "table-wrap" }, h("table", {}, h("tr", {}, h("th", {}, "Dish"), h("th", {}, "Qty"), h("th", {}, "For")),
+        d.dishes.map((x) => h("tr", {}, h("td", {}, h("b", {}, x.name)), h("td", {}, x.qty + (x.plan ? (x.qty === 1 ? " person" : " people") : (x.qty === 1 ? " meal" : " meals"))), h("td", {}, x.who.join(", "))))))));
   }
-  out.push(h("h2", {}, "Buy list"));
+  out.push(h("div", { class: "owner-section-head buy-head" }, h("div", {}, h("h2", {}, "Buy list"), h("p", { class: "sub" }, "Calculated from ingredient recipes on active cook orders."))));
   if (cook.buy.length) {
-    out.push(h("div", { class: "card" }, h("table", {}, cook.buy.map((r) => h("tr", {}, h("td", {}, r.name), h("td", {}, r.text.split(": ").slice(1).join(": "))))),
-      h("p", {}, h("button", { onclick: () => navigator.clipboard && navigator.clipboard.writeText(cook.buy.map((r) => r.text).join("\n")) }, "Copy list"))));
+    out.push(h("div", { class: "card buy-card" },
+      h("div", { class: "table-wrap" }, h("table", {}, cook.buy.map((r) => h("tr", {}, h("td", {}, h("b", {}, r.name)), h("td", {}, r.text.split(": ").slice(1).join(": "))))),
+      h("div", { class: "buy-actions" }, h("button", { class: "pri", onclick: () => navigator.clipboard && navigator.clipboard.writeText(cook.buy.map((r) => r.text).join("\n")) }, "Copy buy list"))));
   }
-  if (cook.missingRecipe.length) out.push(h("p", { class: "sub" }, "No ingredients set for: " + cook.missingRecipe.join(", ") + ". Add them in the Menu tab."));
-  if (!cook.buy.length && cook.days.length) out.push(h("div", { class: "empty" }, "Set ingredients per dish (Menu tab) to get a buy list."));
+  if (cook.missingRecipe.length) out.push(h("div", { class: "owner-note" }, "Ingredients are not set for: " + cook.missingRecipe.join(", ") + ". Add them in Menu."));
+  if (!cook.buy.length && cook.days.length) out.push(h("div", { class: "empty" }, "Set ingredients per dish in Menu to automatically build the buy list."));
   return out;
 }
 
@@ -299,8 +335,9 @@ function priceCell(m, f) {
 }
 function renderMenu() {
   return [
-    h("h2", {}, "Menu"),
-    h("p", { class: "sub" }, "The assistant quotes only what is here. Switch a weekend combo off when it is not running. Dishes with no price are sent to you to confirm."),
+    h("div", { class: "owner-page-title" },
+      h("div", {}, h("button", { class: "owner-back", onclick: () => { tab = "more"; render(); } }, "← More"), h("h2", {}, "Menu"), h("p", { class: "sub" }, "Prices, availability and ingredients used by the ordering assistant."))),
+    h("p", { class: "owner-note" }, "The assistant quotes only what is here. Switch a weekend combo off when it is not running. Dishes with no price are sent to you to confirm."),
     h("div", { class: "card", style: "overflow-x:auto" }, h("table", {},
       h("tr", {}, ["Item", "Single $", "Buy 1 Get 1 $", "Plan $", "Running", ""].map((t) => h("th", {}, t))),
       state.menu.map((m) => h("tr", {},
@@ -347,8 +384,9 @@ function renderRules() {
     }
   };
   return [
-    h("h2", {}, "Rules"),
-    h("p", { class: "sub" }, "Time zone: " + s.tz + ". The assistant and the checks in code both use these."),
+    h("div", { class: "owner-page-title" },
+      h("div", {}, h("button", { class: "owner-back", onclick: () => { tab = "more"; render(); } }, "← More"), h("h2", {}, "Business rules"), h("p", { class: "sub" }, "Pickup, contact and assistant settings."))),
+    h("p", { class: "owner-note" }, "Time zone: " + s.tz + ". The assistant and the checks in code both use these."),
     h("div", { class: "card grid2" },
       h("label", {}, "Minimum notice (hours)", notice),
       h("label", {}, "Pickup address", addr),
@@ -361,6 +399,27 @@ function renderRules() {
       h("div", {}, h("button", { class: "pri", onclick: save }, "Save"), " ", msg)),
     h("h2", {}, "Rate-limit check"),
     ipBox,
+  ];
+}
+
+/* ---------- more / settings hub ---------- */
+function renderMore() {
+  const cards = [
+    h("button", { class: "more-card", onclick: () => { tab = "menu"; render(); } },
+      h("span", { class: "more-icon", "aria-hidden": "true" }, "☰"),
+      h("span", {}, h("b", {}, "Menu management"), h("small", {}, "Prices, availability and ingredients"))),
+    h("button", { class: "more-card", onclick: () => { tab = "rules"; render(); } },
+      h("span", { class: "more-icon", "aria-hidden": "true" }, "⚙"),
+      h("span", {}, h("b", {}, "Business rules"), h("small", {}, "Pickup days, notice, address and contact")))
+  ];
+  if (state.features && state.features.simulator) {
+    cards.push(h("button", { class: "more-card", onclick: () => { tab = "sim"; render(); } },
+      h("span", { class: "more-icon", "aria-hidden": "true" }, "◉"),
+      h("span", {}, h("b", {}, "Test chat"), h("small", {}, "Run simulator messages without a customer"))));
+  }
+  return [
+    h("div", { class: "owner-page-title" }, h("div", {}, h("h2", {}, "More"), h("p", { class: "sub" }, "Menu, business rules and testing tools."))),
+    h("div", { class: "more-grid" }, cards)
   ];
 }
 
@@ -389,23 +448,25 @@ function renderSim() {
   const ta = h("textarea", { "aria-label": "Message as the test customer", placeholder: "Message as the customer..." });
   const form = h("form", { class: "reply", onsubmit: (e) => { e.preventDefault(); const t = ta.value; ta.value = ""; simSend(t); } }, ta, h("button", { class: "pri", type: "submit" }, "Send"));
   ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
-  return h("div", { class: "card thread" },
+  return [
+    h("div", { class: "owner-page-title" }, h("div", {}, h("button", { class: "owner-back", onclick: () => { tab = "more"; render(); } }, "← More"), h("h2", {}, "Test chat"), h("p", { class: "sub" }, "Simulator only — no customer receives these messages."))),
+    h("div", { class: "card thread" },
     h("div", { style: "display:flex;gap:6px" }, from, name),
     h("div", { class: "msgs" }, sim.msgs.map((m) => h("div", { class: m.cls === "meta" ? "meta" : "b " + m.cls }, m.text))),
     h("div", { style: "display:flex;gap:6px;overflow-x:auto;padding:6px 0" }, CHIPS.map((c) => h("button", { type: "button", onclick: () => simSend(c) }, c))),
-    form);
+    form)];
 }
 
 /* ---------- shell ---------- */
 function renderTabs() {
   const need = state.orders.filter((o) => o.status === "hold").length + state.alerts.filter((a) => !a.done).length;
-  const tabs = [["dashboard", "Dashboard"], ["orders", "Orders"], ["cook", "Kitchen"], ["chats", "Chats"], ["menu", "Menu"], ["rules", "More"]];
-  if (state.features && state.features.simulator) tabs.push(["sim", "Test chat"]);
-  $("tabs").replaceChildren(...tabs.map(([k, t]) => h("button", { role: "tab", "aria-selected": String(tab === k), onclick: () => { tab = k; cook = null; render(); } }, t, k === "orders" && need ? h("span", { class: "badge" }, need) : null)));
+  const tabs = [["dashboard", "Dashboard"], ["orders", "Orders"], ["cook", "Kitchen"], ["chats", "Chats"], ["more", "More"]];
+  const selected = (k) => k === tab || (k === "more" && ["menu", "rules", "sim"].includes(tab));
+  $("tabs").replaceChildren(...tabs.map(([k, t]) => h("button", { role: "tab", "aria-selected": String(selected(k)), onclick: () => { tab = k; cook = null; render(); } }, t, k === "orders" && need ? h("span", { class: "badge" }, need) : null)));
 }
 function render() {
   renderTabs();
-  const body = tab === "dashboard" ? renderDashboard() : tab === "orders" ? renderOrders() : tab === "chats" ? renderChats() : tab === "cook" ? renderCook() : tab === "menu" ? renderMenu() : tab === "rules" ? renderRules() : renderSim();
+  const body = tab === "dashboard" ? renderDashboard() : tab === "orders" ? renderOrders() : tab === "chats" ? renderChats() : tab === "cook" ? renderCook() : tab === "menu" ? renderMenu() : tab === "rules" ? renderRules() : tab === "more" ? renderMore() : renderSim();
   $("panel").replaceChildren(...[body].flat());
   const box = $("thread");
   if (box) box.scrollTop = box.scrollHeight;
