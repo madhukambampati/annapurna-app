@@ -556,7 +556,7 @@
       if (o.status === "ready" && o.address) {
         actions.push(h("a", { class: "btn sm", href: "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(o.address), target: "_blank", rel: "noopener noreferrer" }, icon("pin"), "Directions"));
       }
-      actions.push(h("button", { class: "btn ghost sm", type: "button", onclick: function () { closeSheet(); $("text").focus(); } }, "Ask about this order"));
+      actions.push(h("button", { class: "btn ghost sm", type: "button", onclick: function () { closeSheet(); fillComposer("Question about order #" + o.id + ": "); } }, "Ask about this order"));
       body.append(h("article", { class: "ord ord-" + st[1], "data-status": o.status },
         head,
         h("p", { class: "ord-copy" }, copy[o.status] || ""),
