@@ -156,7 +156,7 @@
     var active = orders.filter(function (o) { return o.status === "hold" || o.status === "cook" || o.status === "ready"; })
       .sort(function (a, b) {
         var p = { ready: 0, cook: 1, hold: 2 };
-        return (p[a.status] || 9) - (p[b.status] || 9) || b.id - a.id;
+        return (p[a.status] == null ? 9 : p[a.status]) - (p[b.status] == null ? 9 : p[b.status]) || b.id - a.id;
       })[0];
     if (!active) { box.hidden = true; box.replaceChildren(); return; }
     var st = STATUS[active.status] || [active.status, active.status];
