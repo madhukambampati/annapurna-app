@@ -146,15 +146,16 @@ export class Agent {
     // For an active custom order, parse common pickup replies in code so a transient model failure
     // cannot lose "tomorrow 6 PM". The kitchen timezone remains the source of truth.
     if (draft?.custom) {
+      const custom = draft.custom;
       const parsedPickup = simpleCustomPickup(text, now, settings.tz);
       if (parsedPickup && parsedPickup !== draft.pickup_local) {
-        draft = { ...draft, pickup_local: parsedPickup, stage: "collecting", readback_hash: null };
+        draft = { ...draft, custom, pickup_local: parsedPickup, stage: "collecting", readback_hash: null };
         store.putDraft(msg.from, draft);
         if (!CUSTOM_CONFIRM.test(text)) {
           out.route = "custom_pickup";
-          out.replies.push(draft.custom.price == null
+          out.replies.push(custom.price == null
             ? `Got it — pickup is ${formatWhen(parsedPickup)}. Annapurna Home Foods will confirm the final price here.`
-            : `Got it — pickup is ${formatWhen(parsedPickup)} and the quoted price is ${money(draft.custom.price)}. Reply CONFIRM THE ORDER when you're ready.`);
+            : `Got it — pickup is ${formatWhen(parsedPickup)} and the quoted price is ${money(custom.price)}. Reply CONFIRM THE ORDER when you're ready.`);
           for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
           return out;
         }
