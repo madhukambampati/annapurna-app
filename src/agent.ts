@@ -63,7 +63,7 @@ const CONFIRM_BUTTON = /^yes, confirm$/i;
 /** Owner-managed catering/bulk orders. A headcount alone counts as custom only at 8+ people. */
 const CUSTOM_WORDS = /\b(cater(?:ing)?|bulk|party order|large order|full tray|half tray|medium tray|large tray)\b/i;
 const CUSTOM_HEADCOUNT = /\b(\d{1,3})\s*(?:people|persons|pax|members|guests)\b/i;
-const CUSTOM_CONFIRM = /(?:^yes\b|^go\s+ahead\b|\b(?:confirm|place)\s+(?:the\s+)?order\b)/i;
+const CUSTOM_CONFIRM = /(?:^yes\b|^go\s+ahead\b|\bconfirm(?:ing|ed)?\s+(?:(?:the|my)\s+)?order\b|\bplace\s+(?:(?:the|my)\s+)?order\b)/i;
 
 function looksCustom(text: string): boolean {
   if (CUSTOM_WORDS.test(text)) return true;
