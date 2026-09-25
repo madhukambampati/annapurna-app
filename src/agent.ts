@@ -7,7 +7,7 @@ import type { Notifier } from "./notify.js";
 import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
 import { route as decideRoute, type Route } from "./router.js";
 import type { Store } from "./store.js";
-import { dayLabel, formatWhen, isLocalIso } from "./time.js";
+import { dayLabel, formatWhen, isLocalIso, pad, zonedParts } from "./time.js";
 import type { Alert, Draft, Order, Settings, Stage } from "./types.js";
 
 /**
@@ -77,6 +77,22 @@ function customHeadcount(text: string): number | null {
   return n > 0 && n < 500 ? n : null;
 }
 
+/** Common catering pickup replies should not depend on an LLM call. */
+function simpleCustomPickup(text: string, now: number, tz: string): string | null {
+  const m = /\b(today|tomorrow)\b[^\d]{0,24}(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i.exec(text);
+  if (!m) return null;
+  let h = Number(m[2]);
+  const mi = Number(m[3] ?? "0");
+  if (h < 1 || h > 12 || mi < 0 || mi > 59) return null;
+  const ap = m[4]!.toLowerCase();
+  if (ap === "pm" && h !== 12) h += 12;
+  if (ap === "am" && h === 12) h = 0;
+  const p = zonedParts(now, tz);
+  const add = m[1]!.toLowerCase() === "tomorrow" ? 1 : 0;
+  const d = new Date(Date.UTC(p.y, p.m - 1, p.d + add));
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(h)}:${pad(mi)}`;
+}
+
 export const HANDOFF_NOTE = "Wants to talk to a person";
 
 /** Identity of an order for duplicate checks: what is ordered and when it is picked up. */
@@ -120,24 +136,41 @@ export class Agent {
     const lastShop = [...before].reverse().find((m) => m.who === "agent" || m.who === "owner")?.text ?? null;
     store.addMessage(msg.from, "cust", text, now);
 
-    const draft = store.getDraft(msg.from);
+    let draft = store.getDraft(msg.from);
     const open = store.openOrdersFor(msg.from);
 
     // Important: only the active draft decides whether an order is custom.
     // Do not infer custom/catering state from older chat history: customers often place a normal
     // menu order after a catering order in the same conversation.
 
+    // For an active custom order, parse common pickup replies in code so a transient model failure
+    // cannot lose "tomorrow 6 PM". The kitchen timezone remains the source of truth.
+    if (draft?.custom) {
+      const parsedPickup = simpleCustomPickup(text, now, settings.tz);
+      if (parsedPickup && parsedPickup !== draft.pickup_local) {
+        draft = { ...draft, pickup_local: parsedPickup, stage: "collecting", readback_hash: null };
+        store.putDraft(msg.from, draft);
+        if (!CUSTOM_CONFIRM.test(text)) {
+          out.route = "custom_pickup";
+          out.replies.push(draft.custom.price == null
+            ? `Got it — pickup is ${formatWhen(parsedPickup)}. Annapurna Home Foods will confirm the final price here.`
+            : `Got it — pickup is ${formatWhen(parsedPickup)} and the quoted price is ${money(draft.custom.price)}. Reply CONFIRM THE ORDER when you're ready.`);
+          for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+          return out;
+        }
+      }
+    }
+
     // Custom/catering orders are different from menu orders: the owner sets the final price in chat,
     // then the customer confirms. Handle confirmation/acknowledgements deterministically so the model
     // can never invent a custom-order confirmation or lose the pending terms.
     if (draft?.custom && CUSTOM_CONFIRM.test(text)) {
-      if (draft.custom.approved && draft.custom.price != null && draft.pickup_local) {
+      if (draft.custom.price != null && draft.pickup_local) {
         out.route = "confirm_custom_order";
         await this.placeCustomOrder(msg.from, draft, settings, out);
       } else {
         const missing = [
           draft.custom.price == null ? "the final price" : "",
-          !draft.custom.approved ? "Annapurna's approval" : "",
           !draft.pickup_local ? "the pickup day and time" : "",
         ].filter(Boolean);
         out.route = "confirm_custom_order+waiting";
@@ -148,7 +181,7 @@ export class Agent {
     }
     if (draft?.custom && (THANKS.test(text) || CUSTOM_ACK.test(text))) {
       out.route = "custom_ack";
-      const ready = draft.custom.approved && draft.custom.price != null && !!draft.pickup_local;
+      const ready = draft.custom.price != null && !!draft.pickup_local;
       out.replies.push(ready
         ? "You're welcome! Your custom order details are ready. Reply CONFIRM THE ORDER when you want me to place it."
         : "You're welcome! Your custom order request is saved. Annapurna Home Foods will finalize the remaining details here.");
@@ -362,8 +395,8 @@ export class Agent {
     else if (stage === "awaiting_confirmation" && !frozen && !custom) reply = this.readBack(next, settings, now, open);
     else reply = modelReply || "Sorry, could you say that again?";
     if (custom && /(?:\bis\s+confirmed\b|\bhas\s+been\s+confirmed\b|\border\b[^.!?\n]{0,80}\bconfirmed\b)/i.test(reply)) {
-      reply = custom.approved && custom.price != null
-        ? "Annapurna Home Foods has approved the custom order details. Reply YES to confirm and place the order."
+      reply = custom.price != null && pickup
+        ? "The custom order details are ready. Reply CONFIRM THE ORDER to place it."
         : "I've saved your custom order request. Annapurna Home Foods will confirm the final price and details here in this chat.";
     }
     out.replies.push(reply);
@@ -403,7 +436,7 @@ export class Agent {
     const { store } = this.d;
     const now = this.now();
     const custom = draft.custom;
-    if (!custom || !custom.approved || custom.price == null || !draft.pickup_local) return;
+    if (!custom || custom.price == null || !draft.pickup_local) return;
 
     const already = store.openOrdersFor(waId).find((o) =>
       o.pickup === draft.pickup_local &&
@@ -436,7 +469,7 @@ export class Agent {
     const customer = store.getCustomer(waId)!;
     const name = customer.name || draft.customer_name || "Customer";
     const notes = [
-      "Custom order approved by Annapurna in chat",
+      "Custom order price quoted by Annapurna and confirmed by customer",
       custom.request ? `Request: ${custom.request}` : "",
       draft.notes,
     ].filter(Boolean).join(". ").slice(0, 300);
