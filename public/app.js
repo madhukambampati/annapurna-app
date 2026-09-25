@@ -528,16 +528,48 @@
 
   function renderOrders() {
     var body = $("sheetBody"); body.replaceChildren();
-    if (!orders.length) { body.append(h("div", { class: "card2" }, h("h3", {}, "No orders yet"), h("p", {}, "Once you confirm an order in the chat, you can follow it here."))); return; }
-    orders.forEach(function (o) {
+    if (!orders.length) {
+      body.append(h("div", { class: "orders-empty card2" },
+        h("div", { class: "empty-icon", "aria-hidden": "true" }, icon("bag")),
+        h("h3", {}, "No orders yet"),
+        h("p", {}, "Once you confirm an order in the chat, you can follow every step here."),
+        h("button", { class: "btn", type: "button", onclick: function () { closeSheet(); $("text").focus(); } }, "Start an order")));
+      return;
+    }
+    var copy = {
+      hold: "We received it and Annapurna needs to review it.",
+      cook: "Confirmed — your food is being prepared.",
+      ready: "Ready! Come pick it up from the kitchen.",
+      done: "Picked up. Thank you for ordering with us.",
+      cancelled: "This order was cancelled."
+    };
+    var rank = { ready: 0, cook: 1, hold: 2, done: 3, cancelled: 4 };
+    orders.slice().sort(function (a, b) {
+      return (rank[a.status] == null ? 9 : rank[a.status]) - (rank[b.status] == null ? 9 : rank[b.status]) || b.id - a.id;
+    }).forEach(function (o) {
       var st = STATUS[o.status] || [o.status, ""];
       var step = STEP_OF[o.status];
-      body.append(h("article", { class: "ord" },
-        h("div", {}, h("b", {}, "Order #" + o.id + " "), h("span", { class: "st " + st[1] }, st[0])),
-        step == null ? null : h("ol", { class: "steps4", "aria-label": "Progress" }, STEPS.map(function (s, i) { return h("li", { class: i <= step ? "on" : "" }, s); })),
-        h("ul", {}, o.items.map(function (x) { return h("li", {}, x); })),
-        h("div", { class: "tiny" }, "Pickup: " + o.pickupText + (o.status === "ready" || o.status === "cook" ? " at " + o.address : "")),
-        h("div", { class: "tot" }, o.total == null ? "Total to be confirmed by Annapurna Home Foods" : "Total: " + money(o.total))
+      var head = h("div", { class: "ord-head" },
+        h("div", {}, h("span", { class: "ord-kicker" }, "Order"), h("b", {}, "#" + o.id)),
+        h("span", { class: "st " + st[1] }, st[0]));
+      var actions = [];
+      if (o.status === "ready" && o.address) {
+        actions.push(h("a", { class: "btn sm", href: "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(o.address), target: "_blank", rel: "noopener noreferrer" }, icon("pin"), "Directions"));
+      }
+      actions.push(h("button", { class: "btn ghost sm", type: "button", onclick: function () { closeSheet(); $("text").focus(); } }, "Ask about this order"));
+      body.append(h("article", { class: "ord ord-" + st[1], "data-status": o.status },
+        head,
+        h("p", { class: "ord-copy" }, copy[o.status] || ""),
+        step == null ? null : h("ol", { class: "steps4", "aria-label": "Order progress" }, STEPS.map(function (s, i) {
+          return h("li", { class: i < step ? "on done-step" : i === step ? "on current-step" : "" }, h("span", {}, s));
+        })),
+        h("div", { class: "ord-items" }, h("ul", {}, o.items.map(function (x) { return h("li", {}, x); }))),
+        h("div", { class: "ord-meta" },
+          h("div", {}, h("span", {}, "Pickup"), h("b", {}, o.pickupText)),
+          (o.status === "ready" || o.status === "cook") && o.address ? h("div", {}, h("span", {}, "Location"), h("b", {}, o.address)) : null),
+        h("div", { class: "ord-foot" },
+          h("div", { class: "tot" }, o.total == null ? "Total to be confirmed" : "Total " + money(o.total)),
+          h("div", { class: "ord-actions" }, actions))
       ));
     });
   }
@@ -547,6 +579,7 @@
     lastFocus = opener || document.activeElement;
     sheetOpen = kind;
     $("sheetTitle").textContent = title;
+    $("sheet").setAttribute("data-kind", kind);
     $("veil").hidden = false;
     $("app").setAttribute("inert", "");
     document.body.classList.add("noscroll");
@@ -555,6 +588,7 @@
   function closeSheet() {
     if (!sheetOpen) return;
     sheetOpen = ""; confirmingDelete = false;
+    $("sheet").removeAttribute("data-kind");
     $("veil").hidden = true;
     $("app").removeAttribute("inert");
     document.body.classList.remove("noscroll");
