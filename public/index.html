@@ -1030,6 +1030,37 @@ body.customer-mode{
   .customer-mode .menu-seg button{min-height:44px;font-size:12px!important}
 }
 </style>
+
+<style id="orderCardFlexClipFix">
+/* ORDER CARD FLEX CLIP FIX — order cards must grow with their content inside the scrolling sheet */
+.customer-mode .sheet[data-kind="orders"] .body > *{
+  flex:0 0 auto;
+}
+.customer-mode .sheet[data-kind="orders"] .ord{
+  flex:none;
+  min-height:max-content;
+}
+.customer-mode .sheet[data-kind="orders"] .ord-head,
+.customer-mode .sheet[data-kind="orders"] .ord-copy,
+.customer-mode .sheet[data-kind="orders"] .steps4,
+.customer-mode .sheet[data-kind="orders"] .ord-items,
+.customer-mode .sheet[data-kind="orders"] .ord-meta,
+.customer-mode .sheet[data-kind="orders"] .ord-foot{
+  flex:none;
+}
+.customer-mode .sheet[data-kind="orders"] .ord-meta>div{
+  min-height:68px;
+}
+.customer-mode .sheet[data-kind="orders"] .ord-meta b{
+  line-height:1.35;
+  white-space:normal;
+}
+@media(max-width:640px){
+  .customer-mode .sheet[data-kind="orders"] .ord-meta{
+    grid-template-columns:1fr;
+  }
+}
+</style>
 </head>
 <body>
 <template id="tplMascot">
