@@ -503,6 +503,137 @@ body.customer-mode{
   .customer-action{animation:none}
 }
 </style>
+
+<style id="customerFlowPolishV1">
+/* CUSTOMER FLOW POLISH V1 — completes onboarding, menu, order tracking and help surfaces */
+.customer-mode .handoff{
+  position:relative;z-index:18;
+  padding:10px 14px;
+  background:linear-gradient(90deg,var(--accent-soft),color-mix(in srgb,var(--accent-soft) 72%,var(--surface)));
+  box-shadow:0 7px 18px rgba(79,55,8,.05);
+}
+.customer-mode .hello{
+  width:min(100%,360px);max-width:360px;margin:auto;
+  padding:20px 18px;border:1px solid var(--line);border-radius:24px;
+  background:linear-gradient(180deg,var(--surface),color-mix(in srgb,var(--surface2) 65%,var(--surface)));
+  box-shadow:0 14px 32px rgba(20,50,32,.07);
+}
+.customer-mode .hello .mascot{width:112px}
+.customer-mode .chips{padding-top:9px;padding-bottom:9px}
+.customer-mode .chips button{
+  min-height:38px;border-radius:14px;
+  box-shadow:0 5px 14px rgba(20,50,32,.04);
+  transition:transform .16s ease,border-color .16s ease,background .16s ease;
+}
+.customer-mode .chips button:active{transform:scale(.96)}
+.customer-mode .sheet>header{
+  min-height:64px;padding:15px 18px 12px;
+  background:color-mix(in srgb,var(--surface) 94%,transparent);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+}
+.customer-mode .sheet>header h2{font-size:23px}
+.customer-mode .sheet .body{padding:16px 16px calc(24px + env(safe-area-inset-bottom));gap:14px}
+.customer-mode .seg{
+  position:sticky;top:0;z-index:3;
+  overflow-x:auto;scrollbar-width:none;
+  border-radius:16px;padding:4px;
+  box-shadow:0 8px 22px rgba(22,48,33,.06);
+}
+.customer-mode .seg::-webkit-scrollbar{display:none}
+.customer-mode .seg button{min-width:max-content;padding:9px 12px;border-radius:12px}
+.customer-mode .dish{
+  border-radius:22px;padding:15px;
+  box-shadow:0 9px 24px rgba(20,50,32,.06);
+  transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;
+}
+.customer-mode .dish:not(.off):active{transform:scale(.99)}
+.customer-mode .dprice .btn{min-height:38px;padding:8px 12px;border-radius:12px}
+.customer-mode .day{border-radius:18px;padding:13px 14px}
+.customer-mode .card2{
+  border-radius:22px;padding:16px;
+  box-shadow:0 10px 26px rgba(20,50,32,.05);
+}
+.customer-mode .status{border-radius:16px}
+.customer-mode .links .btn{min-height:44px}
+.customer-mode .ord{
+  position:relative;overflow:hidden;
+  padding:0;border-radius:24px;
+  box-shadow:0 14px 34px rgba(20,50,32,.08);
+}
+.customer-mode .ord::before{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--brand);
+}
+.customer-mode .ord-ready::before{background:var(--accent)}
+.customer-mode .ord-cancelled::before{background:var(--chilli)}
+.customer-mode .ord-done::before{background:var(--dim)}
+.customer-mode .ord-head{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:15px 16px 8px 18px;
+}
+.customer-mode .ord-head>div{display:flex;align-items:baseline;gap:7px}
+.customer-mode .ord-head b{font:800 22px/1 var(--f-display)}
+.customer-mode .ord-kicker{
+  color:var(--muted);font-size:11px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;
+}
+.customer-mode .ord-copy{margin:0;padding:0 16px 12px 18px;color:var(--muted);font-size:14px}
+.customer-mode .ord .steps4{padding:0 16px 15px 18px;gap:6px}
+.customer-mode .ord .steps4 li{padding-top:19px;font-size:10.5px}
+.customer-mode .ord .steps4 li::before{height:7px;border-radius:999px}
+.customer-mode .ord .steps4 li.current-step::after{
+  content:"";position:absolute;top:-3px;left:50%;width:13px;height:13px;margin-left:-6px;
+  border-radius:50%;background:var(--brand);box-shadow:0 0 0 5px color-mix(in srgb,var(--brand) 18%,transparent);
+  animation:orderPulse 1.7s ease-in-out infinite;
+}
+.customer-mode .ord-ready .steps4 li.current-step::after{background:var(--accent);box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 20%,transparent)}
+.customer-mode .ord-items{
+  margin:0 14px 0 18px;padding:12px 14px;border-radius:16px;
+  background:var(--surface2);border:1px solid var(--line);
+}
+.customer-mode .ord-items ul{padding-left:18px}
+.customer-mode .ord-meta{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;
+  padding:12px 16px 0 18px;
+}
+.customer-mode .ord-meta>div{
+  min-width:0;padding:10px 11px;border:1px solid var(--line);border-radius:14px;background:var(--surface);
+}
+.customer-mode .ord-meta span{display:block;color:var(--muted);font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+.customer-mode .ord-meta b{display:block;margin-top:2px;font-size:13px;overflow-wrap:anywhere}
+.customer-mode .ord-foot{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:13px 16px 16px 18px;flex-wrap:wrap;
+}
+.customer-mode .ord-foot .tot{font-size:16px}
+.customer-mode .ord-actions{display:flex;gap:7px;flex-wrap:wrap}
+.customer-mode .ord-actions .btn{min-height:38px}
+.customer-mode .orders-empty{text-align:center;align-items:center;padding:26px 20px}
+.customer-mode .orders-empty .empty-icon{
+  display:grid;place-items:center;width:64px;height:64px;border-radius:20px;
+  background:var(--brand-soft);color:var(--brand2);
+}
+.customer-mode .orders-empty .empty-icon .ic{width:30px;height:30px}
+.customer-mode .orders-empty .btn{width:100%}
+.customer-mode .st{
+  border:1px solid color-mix(in srgb,currentColor 18%,transparent);
+  padding:4px 9px;
+}
+.customer-mode .sheet[data-kind="orders"] .body{background:linear-gradient(180deg,color-mix(in srgb,var(--brand-soft) 22%,var(--page)),var(--page) 180px)}
+.customer-mode .sheet[data-kind="menu"] .body{background:linear-gradient(180deg,color-mix(in srgb,var(--accent-soft) 18%,var(--page)),var(--page) 190px)}
+.customer-mode .sheet[data-kind="help"] .body{background:linear-gradient(180deg,color-mix(in srgb,var(--brand-soft) 15%,var(--page)),var(--page) 170px)}
+@keyframes orderPulse{0%,100%{transform:scale(.82);opacity:.7}50%{transform:scale(1.08);opacity:1}}
+@media(max-width:520px){
+  .customer-mode .ord-meta{grid-template-columns:1fr}
+  .customer-mode .ord-foot{align-items:stretch}
+  .customer-mode .ord-actions{width:100%}
+  .customer-mode .ord-actions .btn{flex:1}
+  .customer-mode .dish{flex-direction:column}
+  .customer-mode .dprice{align-items:flex-start;text-align:left;display:grid;grid-template-columns:auto auto;gap:4px 10px}
+  .customer-mode .dprice .btn{grid-column:1/-1;width:100%;margin-top:8px}
+}
+@media(prefers-reduced-motion:reduce){
+  .customer-mode .ord .steps4 li.current-step::after{animation:none}
+}
+</style>
 </head>
 <body>
 <template id="tplMascot">
