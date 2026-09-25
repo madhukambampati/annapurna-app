@@ -77,24 +77,6 @@ function customHeadcount(text: string): number | null {
   return n > 0 && n < 500 ? n : null;
 }
 
-function ownerPriceFromHistory(messages: Array<{ who: string; text: string }>): number | null {
-  for (const m of [...messages].reverse()) {
-    if (m.who !== "owner") continue;
-    const hit = /(?:\$\s*(\d{1,5}(?:\.\d{1,2})?)|(\d{1,5}(?:\.\d{1,2})?)\s*(?:\$|cad\b))/i.exec(m.text);
-    if (!hit) continue;
-    const n = Number(hit[1] ?? hit[2]);
-    if (Number.isFinite(n) && n > 0 && n < 100_000) return Math.round(n * 100) / 100;
-  }
-  return null;
-}
-
-function ownerApprovedFromHistory(messages: Array<{ who: string; text: string }>): boolean {
-  return messages.some((m) =>
-    m.who === "owner" &&
-    (/\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\b.*\border\b|\border\b.*\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\b/i.test(m.text))
-  );
-}
-
 export const HANDOFF_NOTE = "Wants to talk to a person";
 
 /** Identity of an order for duplicate checks: what is ordered and when it is picked up. */
@@ -138,28 +120,12 @@ export class Agent {
     const lastShop = [...before].reverse().find((m) => m.who === "agent" || m.who === "owner")?.text ?? null;
     store.addMessage(msg.from, "cust", text, now);
 
-    let draft = store.getDraft(msg.from);
+    const draft = store.getDraft(msg.from);
     const open = store.openOrdersFor(msg.from);
 
-    // Recover/reconcile custom terms from chat history. This also repairs conversations that were
-    // already in progress while an older build was deployed (for example, price/approval was typed
-    // by the owner before those fields were persisted in the draft).
-    if (draft) {
-      const request = draft.custom?.request ?? [...before].reverse().find((m) => m.who === "cust" && looksCustom(m.text))?.text;
-      if (request) {
-        const historyPrice = ownerPriceFromHistory(before);
-        const historyApproved = ownerApprovedFromHistory(before);
-        const custom = {
-          request: request.slice(0, 300),
-          price: draft.custom?.price ?? historyPrice,
-          approved: draft.custom?.approved === true || historyApproved,
-        };
-        if (!draft.custom || draft.custom.price !== custom.price || draft.custom.approved !== custom.approved) {
-          draft = { ...draft, stage: "collecting", readback_hash: null, custom };
-          store.putDraft(msg.from, draft);
-        }
-      }
-    }
+    // Important: only the active draft decides whether an order is custom.
+    // Do not infer custom/catering state from older chat history: customers often place a normal
+    // menu order after a catering order in the same conversation.
 
     // Custom/catering orders are different from menu orders: the owner sets the final price in chat,
     // then the customer confirms. Handle confirmation/acknowledgements deterministically so the model
