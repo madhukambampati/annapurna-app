@@ -125,7 +125,7 @@ function ownerQuotedPrice(text: string): number | null {
 
 /** Owner wording that explicitly approves a custom order, not merely quotes a price. */
 function ownerApprovesCustom(text: string): boolean {
-  return /\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\b.*\border\b|\border\b.*\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\b/i.test(text);
+  return /\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\b.*\border\b|\border\b.*\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\b|\b(?:sure\s+)?we\s+can\s+(?:make|prepare|do)\b|\bwe(?:'|’)ll\s+(?:make|prepare)\b|\bwill\s+(?:make|prepare)\s+(?:the\s+)?order\b/i.test(text);
 }
 
 /** A phone number (7+ digits) or something that looks like an email. */
