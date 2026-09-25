@@ -212,6 +212,162 @@ body.owner-mode dialog.cancel{border-radius:22px}
   body.owner-mode .ticket,body.owner-mode .tabs button{transition:none}
 }
 </style>
+
+<style id="ownerFlowPolishV1">
+/* OWNER FLOW POLISH V1 — dashboard, orders, kitchen, chats and settings */
+body.owner-mode #panel{animation:ownerPanelIn .24s ease both}
+.owner-page-title{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  margin:2px 0 12px;
+}
+.owner-page-title h2{margin:0 0 4px!important;font-size:24px!important}
+.owner-page-title .sub{margin:0}
+.owner-mini-counts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.owner-mini-counts span,.lane-count{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:30px;padding:5px 10px;border-radius:999px;
+  background:var(--panel2);border:1px solid var(--line);
+  color:var(--muted);font-size:11px;font-weight:800;white-space:nowrap;
+}
+.owner-mini-counts .hot{background:color-mix(in srgb,var(--owner-orange) 13%,var(--panel));color:var(--owner-orange);border-color:color-mix(in srgb,var(--owner-orange) 35%,var(--line))}
+.owner-attention{
+  margin:0 0 18px;padding:14px;border-radius:20px;
+  background:color-mix(in srgb,var(--owner-orange) 7%,var(--panel));
+  border:1px solid color-mix(in srgb,var(--owner-orange) 26%,var(--line));
+}
+.owner-section-head{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  margin:0 0 10px;
+}
+.owner-section-head h2{margin:0 0 3px!important}
+.owner-section-head .sub{margin:0}
+.need{background:var(--panel);box-shadow:0 7px 18px rgba(40,45,38,.05)}
+.need>span:first-child{display:flex;flex-direction:column;gap:2px;min-width:0}
+.need small{display:block;color:var(--muted);font-size:12px}
+.need-actions{display:flex;gap:6px;flex-wrap:wrap}
+.held-wrap{margin-top:12px;padding-top:12px;border-top:1px dashed color-mix(in srgb,var(--owner-orange) 38%,var(--line))}
+.order-lanes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+.owner-lane{
+  min-width:0;padding:14px;border:1px solid var(--line);border-radius:20px;background:color-mix(in srgb,var(--panel) 88%,transparent);
+}
+.owner-lane .cols{grid-template-columns:1fr}
+.lane-cook{box-shadow:inset 0 3px 0 #1d6b4d}
+.lane-ready{box-shadow:inset 0 3px 0 #2f8fb0}
+.history{
+  margin-top:18px;border:1px solid var(--line);border-radius:18px;background:var(--panel);
+  overflow:hidden;
+}
+.history>summary{
+  cursor:pointer;padding:13px 15px;font-weight:800;color:var(--muted);
+  background:var(--panel2);list-style:none;
+}
+.history>summary::-webkit-details-marker{display:none}
+.history>summary::after{content:"⌄";float:right}
+.history[open]>summary::after{content:"⌃"}
+.history>section{padding:12px 14px}
+.history h3{margin:4px 0 10px}
+.history .ticket{opacity:.84}
+.owner-empty-large{display:flex;flex-direction:column;gap:4px;padding:28px 18px}
+.owner-empty-large b{font:700 18px/1.2 var(--f-display);color:var(--cream)}
+.owner-empty-large span{font-size:13px}
+.owner-kitchen-mark{
+  display:grid;place-items:center;width:42px;height:42px;border-radius:14px;
+  background:color-mix(in srgb,var(--owner-orange) 14%,var(--panel));
+  color:var(--owner-orange);font-size:22px;
+  animation:kitchenSteam 2s ease-in-out infinite;
+}
+.kitchen-day{padding:0!important;overflow:hidden}
+.kitchen-day>.owner-section-head{padding:14px 14px 4px;margin:0}
+.table-wrap{overflow-x:auto}
+.kitchen-day table,.buy-card table{min-width:520px}
+.kitchen-day th,.buy-card th{background:var(--panel2)}
+.kitchen-day tr:last-child td,.buy-card tr:last-child td{border-bottom:0}
+.buy-head{margin-top:18px}
+.buy-card{padding:0!important;overflow:hidden}
+.buy-actions{padding:12px 14px;border-top:1px solid var(--line);display:flex;justify-content:flex-end}
+.owner-note{
+  padding:11px 13px;border-radius:14px;background:var(--panel2);
+  border:1px solid var(--line);color:var(--muted);font-size:13px;
+}
+.chat-title{margin-bottom:12px}
+body.owner-mode .chatgrid{
+  grid-template-columns:minmax(240px,320px) minmax(0,1fr);
+  padding:12px;border:1px solid var(--line);border-radius:20px;background:var(--panel);
+  box-shadow:0 12px 30px rgba(30,45,35,.06);
+}
+body.owner-mode .clist{
+  padding-right:8px;border-right:1px solid var(--line);
+}
+body.owner-mode .crow{
+  border:1px solid transparent;background:transparent;min-height:54px;
+  transition:background .15s ease,border-color .15s ease,transform .15s ease;
+}
+body.owner-mode .crow:hover{background:var(--panel2)}
+body.owner-mode .crow[aria-current=true]{border-color:color-mix(in srgb,var(--owner-green-2) 35%,var(--line));background:var(--me)}
+body.owner-mode .thread{margin:0;box-shadow:none;border:0;background:transparent}
+body.owner-mode .thread>.msgs{padding:8px 4px}
+body.owner-mode .thread .b{box-shadow:0 5px 14px rgba(30,45,35,.04)}
+body.owner-mode form.reply{padding-top:8px;border-top:1px solid var(--line)}
+.more-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.more-card{
+  min-height:112px;text-align:left;display:flex;align-items:center;gap:14px;
+  padding:16px;border-radius:18px;background:var(--panel);border:1px solid var(--line);
+  box-shadow:0 10px 26px rgba(30,45,35,.05);
+  transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;
+}
+.more-card:hover{border-color:color-mix(in srgb,var(--owner-green-2) 35%,var(--line));box-shadow:0 14px 30px rgba(30,45,35,.08)}
+.more-card:active{transform:scale(.985)}
+.more-card>span:last-child{display:flex;flex-direction:column;gap:4px;min-width:0}
+.more-card b{font:700 18px/1.15 var(--f-display)}
+.more-card small{color:var(--muted);font-size:12px;font-weight:500}
+.more-icon{
+  display:grid;place-items:center;width:48px;height:48px;flex:none;border-radius:15px;
+  background:var(--me);color:var(--owner-green-2);font-size:22px;font-weight:800;
+}
+.owner-back{
+  margin:0 0 10px;padding:5px 8px;border-radius:9px;
+  background:transparent!important;border:0!important;color:var(--muted)!important;
+}
+.owner-back:hover{background:var(--panel2)!important;color:var(--cream)!important}
+body.owner-mode table{background:var(--panel)}
+body.owner-mode th{background:color-mix(in srgb,var(--panel2) 82%,var(--panel))}
+body.owner-mode td{padding-top:9px;padding-bottom:9px}
+body.owner-mode details textarea{border-radius:12px}
+body.owner-mode .grid2{
+  max-width:none;grid-template-columns:repeat(2,minmax(0,1fr));
+}
+body.owner-mode .grid2>label:has(textarea),
+body.owner-mode .grid2>div:has(.days){grid-column:1/-1}
+body.owner-mode .grid2 textarea{min-height:120px}
+body.owner-mode .badge{animation:ownerBadgePulse 1.8s ease-in-out infinite}
+body.owner-mode .ticket{animation:ticketIn .3s cubic-bezier(.2,.8,.3,1.1) both}
+@keyframes ticketIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+@keyframes ownerPanelIn{from{opacity:.35;transform:translateY(3px)}to{opacity:1;transform:none}}
+@keyframes ownerBadgePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+@keyframes kitchenSteam{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+@media(max-width:760px){
+  .order-lanes{grid-template-columns:1fr}
+  body.owner-mode .chatgrid{grid-template-columns:1fr;padding:10px}
+  body.owner-mode .clist{border-right:0;border-bottom:1px solid var(--line);padding:0 0 10px;max-height:220px}
+  body.owner-mode .thread{height:min(62vh,560px)}
+  body.owner-mode .grid2{grid-template-columns:1fr}
+  body.owner-mode .grid2>*{grid-column:auto!important}
+}
+@media(max-width:620px){
+  .owner-page-title{align-items:flex-start}
+  .owner-mini-counts{justify-content:flex-start}
+  .owner-page-title{flex-direction:column}
+  .more-grid{grid-template-columns:1fr}
+  body.owner-mode .tabs{overflow:visible}
+  body.owner-mode .tabs button{flex:1 1 0;font-size:10.5px}
+  body.owner-mode .tabs button:nth-child(n+6){display:block}
+  .owner-lane{padding:11px}
+  .owner-attention{padding:11px}
+}
+@media(prefers-reduced-motion:reduce){
+  body.owner-mode #panel,.owner-kitchen-mark,body.owner-mode .badge,body.owner-mode .ticket{animation:none}
+}
+</style>
 </head>
 <body class="owner-mode">
 <header class="owner-head">
