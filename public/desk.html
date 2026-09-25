@@ -368,13 +368,27 @@ body.owner-mode .ticket{animation:ticketIn .3s cubic-bezier(.2,.8,.3,1.1) both}
   body.owner-mode #panel,.owner-kitchen-mark,body.owner-mode .badge,body.owner-mode .ticket{animation:none}
 }
 </style>
+
+<style id="ownerBrandHomeNavigation">
+/* OWNER BRAND HOME NAVIGATION */
+.owner-brand-home{
+  min-width:0;display:flex;align-items:center;gap:12px;
+  padding:4px 6px 4px 4px;margin:-4px 0;border:0;background:transparent;
+  color:inherit;text-align:left;border-radius:16px;cursor:pointer;
+}
+.owner-brand-home:hover{background:rgba(255,255,255,.08)}
+.owner-brand-home:active{transform:scale(.99)}
+.owner-brand-home:focus-visible{outline:3px solid #f1a824;outline-offset:3px}
+.owner-brand-home>span{display:block;min-width:0}
+.owner-brand-home h1,.owner-brand-home .sub{pointer-events:none}
+</style>
 </head>
 <body class="owner-mode">
 <header class="owner-head">
-  <div class="owner-brand">
+  <button class="owner-brand owner-brand-home" id="ownerBrandHome" type="button" aria-label="Go to owner dashboard">
     <img src="/icon.svg" alt="" width="48" height="48">
-    <div><h1>Annapurna Kitchen</h1><p class="sub" id="sub">Order desk · only you see this page</p></div>
-  </div>
+    <span><h1>Annapurna Kitchen</h1><p class="sub" id="sub">Order desk · only you see this page</p></span>
+  </button>
   <div class="owner-pill">Owner console</div>
 </header>
 <div id="err" class="err" role="alert" hidden></div>
