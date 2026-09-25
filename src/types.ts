@@ -33,6 +33,15 @@ export interface OrderItem {
   amt: number | null;
 }
 
+export interface CustomOrderDraft {
+  /** Original customer wording for the catering / bulk request. */
+  request: string;
+  /** Price explicitly quoted by Annapurna in the owner chat. */
+  price: number | null;
+  /** True only after Annapurna explicitly confirms/approves the custom order in owner chat. */
+  approved: boolean;
+}
+
 export interface Draft {
   items: OrderItem[];
   /** Wall-clock time in the kitchen timezone, "YYYY-MM-DDTHH:mm". */
@@ -44,6 +53,8 @@ export interface Draft {
   stage: Stage;
   /** The customer asked for another order, so a match with an open order is allowed. */
   again?: boolean;
+  /** Owner-approved custom/catering terms. Kept separate from normal menu pricing. */
+  custom?: CustomOrderDraft;
 }
 
 export interface Order {
