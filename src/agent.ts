@@ -75,6 +75,24 @@ function customHeadcount(text: string): number | null {
   return n > 0 && n < 500 ? n : null;
 }
 
+function ownerPriceFromHistory(messages: Array<{ who: string; text: string }>): number | null {
+  for (const m of [...messages].reverse()) {
+    if (m.who !== "owner") continue;
+    const hit = /(?:\$\s*(\d{1,5}(?:\.\d{1,2})?)|(\d{1,5}(?:\.\d{1,2})?)\s*(?:\$|cad\b))/i.exec(m.text);
+    if (!hit) continue;
+    const n = Number(hit[1] ?? hit[2]);
+    if (Number.isFinite(n) && n > 0 && n < 100_000) return Math.round(n * 100) / 100;
+  }
+  return null;
+}
+
+function ownerApprovedFromHistory(messages: Array<{ who: string; text: string }>): boolean {
+  return messages.some((m) =>
+    m.who === "owner" &&
+    (/\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\b.*\border\b|\border\b.*\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\b/i.test(m.text))
+  );
+}
+
 export const HANDOFF_NOTE = "Wants to talk to a person";
 
 /** Identity of an order for duplicate checks: what is ordered and when it is picked up. */
@@ -118,8 +136,27 @@ export class Agent {
     const lastShop = [...before].reverse().find((m) => m.who === "agent" || m.who === "owner")?.text ?? null;
     store.addMessage(msg.from, "cust", text, now);
 
-    const draft = store.getDraft(msg.from);
+    let draft = store.getDraft(msg.from);
     const open = store.openOrdersFor(msg.from);
+
+    // Recover custom terms for conversations that began before this feature was deployed.
+    // Existing drafts already contain the structured pickup; owner chat contains the quoted price/approval.
+    if (draft && !draft.custom) {
+      const request = [...before].reverse().find((m) => m.who === "cust" && looksCustom(m.text))?.text;
+      if (request) {
+        draft = {
+          ...draft,
+          stage: "collecting",
+          readback_hash: null,
+          custom: {
+            request: request.slice(0, 300),
+            price: ownerPriceFromHistory(before),
+            approved: ownerApprovedFromHistory(before),
+          },
+        };
+        store.putDraft(msg.from, draft);
+      }
+    }
 
     // Custom/catering orders are different from menu orders: the owner sets the final price in chat,
     // then the customer confirms. Only code creates the real order and confirmation badge.
@@ -328,7 +365,7 @@ export class Agent {
     if (fixes.length) reply = fixes.join("\n");
     else if (stage === "awaiting_confirmation" && !frozen && !custom) reply = this.readBack(next, settings, now, open);
     else reply = modelReply || "Sorry, could you say that again?";
-    if (custom && /\b(?:order\s+)?(?:is\s+)?confirmed\b/i.test(reply)) {
+    if (custom && /(?:\bis\s+confirmed\b|\bhas\s+been\s+confirmed\b|\border\b[^.!?\n]{0,80}\bconfirmed\b)/i.test(reply)) {
       reply = custom.approved && custom.price != null
         ? "Annapurna Home Foods has approved the custom order details. Reply YES to confirm and place the order."
         : "I've saved your custom order request. Annapurna Home Foods will confirm the final price and details here in this chat.";
