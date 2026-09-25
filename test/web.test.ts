@@ -318,6 +318,58 @@ describe("web: chat and orders", () => {
       assert.match(t.notifier.sent.at(-1)!.title, /Custom order #1 confirmed/);
     }));
 
+  test("a normal menu order after a custom order stays normal and uses menu pricing", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("KM", "5195550101");
+
+      // First place a real custom order for 15 people.
+      t.llm.push(modelReply({
+        reply: "Saved as a custom order.",
+        items: [{ id: "bagara_chicken_fry", qty: 15, pack: "single", asked_for: "Bagara rice and chicken fry for 15 people" }],
+        pickup: FRI_6PM,
+        stage: "collecting",
+        needs_owner: true,
+        owner_note: "Custom catering for 15 people",
+      }));
+      await say(token, "Bagara rice and chicken fry tray order for 15 people Friday 6 PM");
+      const waId = t.store.listCustomers()[0]!.waId;
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "$120" } });
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "I am confirming the order" } });
+      const custom = await say(token, "Confirm the order");
+      assert.equal(custom.json.orderId, 1);
+      assert.equal(t.store.getDraft(waId), null);
+
+      // Same customer now places an ordinary BOGO menu order.
+      t.llm.push(modelReply({
+        reply: "Perfect.",
+        items: [{ id: "bagara_chicken_fry", qty: 1, pack: "bogo", asked_for: "Bagara Rice and Chicken Fry combo" }],
+        pickup: "2026-09-26T11:00",
+        notes: "Spicy, no extras",
+        stage: "awaiting_confirmation",
+      }));
+      const rb = await say(token, "I'd like Bagara Rice and Chicken Fry combo BOGO, spicy, no extras, Saturday 11 AM");
+      const readback = rb.json.messages.map((m: any) => m.text).join("\n");
+      assert.match(readback, /1 x Bagara Rice and Chicken Fry combo \(Buy 1 Get 1\): \$22/);
+      assert.doesNotMatch(readback, /custom catering/i);
+
+      const normal = await say(token, "yes confirm");
+      assert.equal(normal.json.orderId, 2);
+
+      const orders = (await call("GET", "/web/orders", { token })).json.orders;
+      const latest = orders.find((o: any) => o.id === 2);
+      assert.ok(latest);
+      assert.equal(latest.total, 22);
+      assert.deepEqual(latest.items, ["1 x Bagara Rice and Chicken Fry combo (Buy 1 Get 1)"]);
+
+      const owner = await call("GET", "/api/state", { token: "secret" });
+      const stored = owner.json.orders.find((o: any) => o.id === 2);
+      assert.deepEqual(
+        [stored.items[0].id, stored.items[0].qty, stored.items[0].pack, stored.items[0].amt],
+        ["bagara_chicken_fry", 1, "bogo", 22],
+      );
+      assert.doesNotMatch(stored.notes, /Custom order/i);
+    }));
+
   test("customers cannot see each other's chats or orders", () =>
     withRig(async ({ t, start, say, call }) => {
       const a = await start("Asha", "5195550101");
