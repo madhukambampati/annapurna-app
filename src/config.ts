@@ -65,7 +65,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       enabled: env.WEB !== "off",
       proxyHops: num(env.PROXY_HOPS, 0),
       sessionsPerIpHour: num(env.WEB_SESSIONS_PER_IP_HOUR, 6),
-      msgPerMinute: num(env.WEB_MSG_PER_MINUTE, 8),
+      msgPerMinute: num(env.WEB_MSG_PER_MINUTE, 12),
       msgPerDay: num(env.WEB_MSG_PER_DAY, 80),
       globalPerDay: num(env.WEB_GLOBAL_PER_DAY, 1500),
       sessionDays: num(env.WEB_SESSION_DAYS, 60),

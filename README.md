@@ -88,7 +88,7 @@ Set `NOTIFY_URL=https://ntfy.sh/<secret-topic>` and install the ntfy app. New or
 
 - **No account or password.** A customer gives a name, a phone or email, and ticks a consent box. The server hands back a random token, kept in that phone's browser and stored on the server only as a hash. Lose the phone or clear the browser and they start a new chat (their placed orders still reach you).
 - **Isolation.** Every call is tied to the token's own customer. There is no way to name another customer's id.
-- **Limits.** 6 new chats per IP per hour, 8 messages per minute and 80 per day per customer, 1500 per day for everyone (`WEB_*` in `.env.example`). Wrong owner tokens lock that IP out for 15 minutes after 10 tries. Request bodies over 100 KB are refused.
+- **Limits.** 6 new chats per IP per hour, 12 messages per minute and 80 per day per customer, 1500 per day for everyone (`WEB_*` in `.env.example`). Wrong owner tokens lock that IP out for 15 minutes after 10 tries. Request bodies over 100 KB are refused.
 - **Hardening.** Strict Content-Security-Policy with no inline scripts, fixed list of files that can be served, no cookies (so no CSRF), all text rendered as text.
 - **Your replies.** What you type in Chats, and the notes sent when you accept, cancel or mark ready, show up in the customer's chat within about 7 seconds. There are no push notifications to customers yet, they see updates when they open the app.
 - **Delete my chat.** Removes messages, draft and login. Placed orders stay so you can cook them.
