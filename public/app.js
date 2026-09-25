@@ -713,19 +713,22 @@
   }
 
   function showMenu(e, preferred) {
-    openSheet("menu", "Menu", e && e.currentTarget);
+    openSheet("menu", preferred || "Menu", e && e.currentTarget);
     var body = $("sheetBody"); body.replaceChildren(h("p", { class: "tiny" }, "Loading..."));
     fetch("/web/menu").then(function (r) { return r.json(); }).then(function (m) {
       menuData = m;
       if (sheetOpen !== "menu") return;
       body.replaceChildren();
       var panels = menuPanels(m);
-      var seg = h("div", { class: "seg", role: "tablist", "aria-label": "Menu sections" });
+      var seg = h("div", { class: "seg menu-seg", role: "tablist", "aria-label": "Menu sections" });
+      var sectionLabel = h("div", { class: "menu-section-label" }, h("span", {}, "MENU SECTION"), h("b", { id: "menuSectionName" }, ""));
       var holder = h("div", { class: "panels" });
       var tabs = [];
       var select = function (i, focus) {
         tabs.forEach(function (t, k) { t.setAttribute("aria-selected", k === i ? "true" : "false"); t.tabIndex = k === i ? 0 : -1; });
+        sectionLabel.querySelector("#menuSectionName").textContent = panels[i][0];
         holder.replaceChildren(panels[i][1]);
+        if (preferred) $("sheetTitle").textContent = panels[i][0];
         if (focus) tabs[i].focus();
       };
       panels.forEach(function (p, i) {
@@ -738,7 +741,7 @@
       });
       var live = (m.items || []).some(function (x) { return x.kind === "combo" && x.live; });
       if (panels.length > 1) body.append(seg);
-      body.append(holder);
+      body.append(sectionLabel, holder);
       body.append(h("p", { class: "tiny" }, "Plan pickup " + (m.pickupDays || []).join(", ") + ". Everything is cooked fresh at " + (m.address || "our kitchen") + "."));
       if ($("chat").hidden) body.append(h("button", { class: "btn", type: "button", onclick: function () { closeSheet(); if ($("fName")) $("fName").focus(); } }, "Start an order"));
       if (panels.length) {
