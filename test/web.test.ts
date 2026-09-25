@@ -294,6 +294,14 @@ describe("web: chat and orders", () => {
       await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "cancelled" } });
       const owner = (await call("GET", "/web/history", { token })).json.messages.filter((m: any) => m.who === "owner");
       assert.match(owner.at(-1).text, /cancelled/);
+
+      // with a reason from the owner, the customer sees it
+      t.llm.push(modelReply({ items: [{ id: "fry_piece_pulao", qty: 1, pack: "single", asked_for: "fry piece pulao" }], pickup: FRI_6PM, stage: "awaiting_confirmation" }));
+      await say(token, "1 fry piece pulao friday 6pm");
+      const id2 = (await say(token, "yes")).json.orderId;
+      await call("POST", `/api/orders/${id2}/status`, { token: "secret", body: { status: "cancelled", reason: "Sorry, this dish is sold out for that day.\u0007" } });
+      const last = (await call("GET", "/web/history", { token })).json.messages.filter((m: any) => m.who === "owner").at(-1).text;
+      assert.equal(last, `Sorry, order #${id2} has been cancelled.\nSorry, this dish is sold out for that day.`);
       const wa = t.store.listCustomers()[0]!.waId;
       assert.equal((await call("POST", `/api/customers/${encodeURIComponent(wa)}/reply`, { token: "secret", body: { text: "  " } })).status, 400);
       assert.equal((await call("POST", "/api/customers/web%3Anobody/reply", { token: "secret", body: { text: "hi" } })).status, 404);

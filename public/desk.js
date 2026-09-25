@@ -89,9 +89,36 @@ async function act(path, body, method = "POST") {
   refresh();
 }
 
+/* ---------- cancel with a reason for the customer ---------- */
+const CANCEL_REASONS = [
+  "Sorry, this dish is sold out for that day.",
+  "Sorry, we can't make it for that pickup time.",
+  "Sorry, we are closed that day.",
+  "Cancelled as you asked. Hope to cook for you next time!",
+];
+function cancelOrder(o, after) {
+  const ta = h("textarea", { rows: 3, maxlength: 300, placeholder: "Message to the customer (optional)", "aria-label": "Reason for the customer" });
+  const dlg = h("dialog", { class: "cancel" },
+    h("h3", {}, "Cancel order #" + o.id + " for " + o.name + "?"),
+    h("p", { class: "sub" }, "Tell the customer why. It is sent to their chat with the cancel message."),
+    h("div", { class: "reasons" }, CANCEL_REASONS.map((r) => h("button", { type: "button", onclick: () => { ta.value = r; ta.focus(); } }, r))),
+    ta,
+    h("div", { class: "row" },
+      h("button", { type: "button", class: "ghost", onclick: () => dlg.close() }, "Keep order"),
+      h("button", { type: "button", class: "pri danger", onclick: async () => {
+        dlg.close();
+        await act(`/api/orders/${o.id}/status`, { status: "cancelled", reason: ta.value.trim() });
+        if (after) after();
+      } }, "Cancel order")));
+  dlg.addEventListener("close", () => dlg.remove());
+  document.body.append(dlg);
+  dlg.showModal();
+  ta.focus();
+}
+
 /* ---------- orders ---------- */
 function ticket(o) {
-  const b = (to, txt, ghost) => h("button", { class: ghost ? "ghost" : "", onclick: () => act(`/api/orders/${o.id}/status`, { status: to }) }, txt);
+  const b = (to, txt, ghost) => h("button", { class: ghost ? "ghost" : "", onclick: () => (to === "cancelled" ? cancelOrder(o) : act(`/api/orders/${o.id}/status`, { status: to })) }, txt);
   return h("article", { class: "ticket" },
     h("div", {}, h("b", {}, o.name), " #" + o.id),
     o.contact ? h("div", { class: "contact" }, o.contact) : null,
@@ -117,7 +144,7 @@ function renderOrders() {
         h("span", {}, h("b", {}, a.cust + (a.contact ? " (" + a.contact + ")" : "") + ": "), a.note),
         h("span", {},
           isWeb(a.waId) ? h("button", { onclick: () => openChat(a.waId) }, "Open chat") : null, " ",
-          o && ["hold", "cook", "ready"].includes(o.status) ? h("button", { class: "bad", onclick: async () => { await act(`/api/orders/${o.id}/status`, { status: "cancelled" }); act(`/api/alerts/${a.id}/done`); } }, "Cancel order #" + o.id) : null, " ",
+          o && ["hold", "cook", "ready"].includes(o.status) ? h("button", { class: "bad", onclick: () => cancelOrder(o, () => act(`/api/alerts/${a.id}/done`)) }, "Cancel order #" + o.id) : null, " ",
           h("button", { onclick: () => act(`/api/alerts/${a.id}/done`) }, "Done"))));
     }
     if (held.length) out.push(h("p", { class: "sub" }, "These orders broke a rule or wait for you. Accept them to send to the kitchen."), h("div", { class: "cols" }, held.map(ticket)));

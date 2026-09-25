@@ -83,6 +83,15 @@ form.reply textarea{flex:1;resize:none;height:44px}
 .days label{flex-direction:row;align-items:center;gap:4px;color:var(--cream);font-weight:400}
 details summary{cursor:pointer;color:var(--muted);font-size:13px}
 details textarea{width:100%;min-height:80px;margin-top:6px}
+dialog.cancel{border:0;border-radius:18px;padding:18px;max-width:min(460px,calc(100vw - 32px));background:var(--panel);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.35)}
+dialog.cancel::backdrop{background:rgba(10,20,14,.5)}
+dialog.cancel h3{margin:0 0 4px;font:700 19px/1.25 var(--f-display)}
+dialog.cancel .reasons{display:flex;flex-direction:column;gap:6px;margin:10px 0}
+dialog.cancel .reasons button{text-align:left;background:var(--panel2);border:1.5px solid var(--line);border-radius:10px;padding:8px 11px;font-weight:400}
+dialog.cancel .reasons button:hover{border-color:var(--gold)}
+dialog.cancel textarea{width:100%;box-sizing:border-box;font-weight:400}
+dialog.cancel .row{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+button.danger{background:var(--bad);border-color:var(--bad);color:#fff}
 </style>
 </head>
 <body>

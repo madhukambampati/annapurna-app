@@ -183,7 +183,8 @@ export function createServer(d: ServerDeps): Server {
     return waId;
   };
 
-  const orderNote = (o: Order, from: OrderStatus, to: OrderStatus, s: Settings): string | null => {
+  const orderNote = (o: Order, from: OrderStatus, to: OrderStatus, s: Settings, reason = ""): string | null => {
+    if (to === "cancelled" && reason) return `Sorry, order #${o.id} has been cancelled.\n${reason}`;
     if (from === "hold" && to === "cook") return `Annapurna Home Foods confirmed your order #${o.id}. Pickup ${formatWhen(o.pickup)} at ${s.address}.`;
     if (to === "cancelled") return `Order #${o.id} has been cancelled by Annapurna Home Foods. We may write to you here about it.`;
     if (to === "ready") return `Your order #${o.id} is ready for pickup at ${s.address}.`;
@@ -388,11 +389,14 @@ export function createServer(d: ServerDeps): Server {
         if (m === "POST" && mt) {
           const o = store.getOrder(Number(mt[1]));
           if (!o) throw new HttpError(404, "No such order");
-          const to = (await readJson(req)).status as OrderStatus;
+          const body = await readJson(req);
+          const to = body.status as OrderStatus;
+          // The owner can say why an order is cancelled. It goes to the customer with the cancel message.
+          const reason = to === "cancelled" ? cleanText(body.reason, 300) : "";
           if (!ALLOWED[o.status]?.includes(to)) throw new HttpError(400, `Cannot move an order from ${o.status} to ${String(to)}`);
           const updated = store.setOrderStatus(o.id, to, o.status === "hold" && to === "cook");
           const s = store.getSettings();
-          const note = orderNote(o, o.status, to, s);
+          const note = orderNote(o, o.status, to, s, reason);
           if (note) store.addMessage(o.waId, "owner", note, now());
           // After pickup the assistant thanks the customer and asks for feedback, once per order.
           if (to === "done" && o.status !== "done") store.addMessage(o.waId, "agent", thanksNote(o, s), now());
