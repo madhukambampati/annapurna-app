@@ -396,8 +396,8 @@ export function createServer(d: ServerDeps): Server {
             if (!text) throw new HttpError(400, "Reply is empty");
             const id = store.addMessage(waId, "owner", text, now());
 
-            // Custom/catering orders keep the owner's quoted total and explicit approval in the draft.
-            // This makes the customer's later YES a real order event instead of just another AI reply.
+            // Custom/catering orders keep the owner's quoted total in the draft.
+            // A quoted price finalizes the owner's terms; the customer's later confirmation creates the real order.
             const draft = store.getDraft(waId);
             if (draft?.custom) {
               const quoted = ownerQuotedPrice(text);
