@@ -407,7 +407,7 @@ export function createServer(d: ServerDeps): Server {
                   ...draft,
                   custom: {
                     ...draft.custom,
-                    ...(quoted != null ? { price: quoted } : {}),
+                    ...(quoted != null ? { price: quoted, approved: true } : {}),
                     ...(approved ? { approved: true } : {}),
                   },
                 });
