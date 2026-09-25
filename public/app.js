@@ -176,6 +176,8 @@
   function openHome() {
     show("home");
     initHome();
+    var home = $("home");
+    if (home) home.scrollTop = 0;
     loadMenu();
     loadOrders();
     startPolling();
