@@ -54,6 +54,8 @@ const ADD_MORE = /\b(another|again|second|one more|extra|also|additional|add|mor
 const THANKS = /^(thanks|thank you|thank u|thankyou|thx|ty|tq|many thanks|thanks a lot|thank you so much|great|perfect|awesome|cool|nice|noted|got it|super|superb|ok thanks|okay thanks|ok thank you|okay thank you)[\s!.]*$/i;
 /** A bare yes or ok. Only ignored when there is nothing in progress to say yes to. */
 const BARE_OK = /^(yes|yep|yeah|yup|y|ya|ok|okay|k|sure|done|fine|alright)[\s!.]*$/i;
+/** Natural acknowledgements while a custom order is waiting on owner/customer confirmation. */
+const CUSTOM_ACK = /^(?:(?:ok(?:ay)?|got it)[,\s.!]*)*(?:thanks|thank you|thank u|thx)[\s!.]*$/i;
 /** The customer wants a real person, a phone number or the Instagram page. */
 const HUMAN = /\b(real (person|human)|human being|a human|(talk|speak|chat) (to|with) (a |the |an )?(person|human|someone|somebody|owner|maddy|team|staff|agent)|contact (you|us|number|info|details)|phone( number)?|your number|call me|call you|instagram|insta|whatsapp|customer (service|support))\b/i;
 /** Text sent by the web app's "Yes, place order" button. */
@@ -177,7 +179,7 @@ export class Agent {
       for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
       return out;
     }
-    if (draft?.custom && THANKS.test(text)) {
+    if (draft?.custom && (THANKS.test(text) || CUSTOM_ACK.test(text))) {
       out.route = "custom_ack";
       const ready = draft.custom.approved && draft.custom.price != null && !!draft.pickup_local;
       out.replies.push(ready
