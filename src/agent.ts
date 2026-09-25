@@ -61,7 +61,7 @@ const CONFIRM_BUTTON = /^yes, confirm$/i;
 /** Owner-managed catering/bulk orders. A headcount alone counts as custom only at 8+ people. */
 const CUSTOM_WORDS = /\b(cater(?:ing)?|bulk|party order|large order|full tray|half tray|medium tray|large tray)\b/i;
 const CUSTOM_HEADCOUNT = /\b(\d{1,3})\s*(?:people|persons|pax|members|guests)\b/i;
-const CUSTOM_CONFIRM = /^(?:yes\b.*|yep\b.*|yeah\b.*|ok(?:ay)?\b.*|sure\b.*|please\s+confirm\b.*|confirm\b.*|go\s+ahead\b.*|sounds\s+good\b.*)$/i;
+const CUSTOM_CONFIRM = /^(?:yes\b.*|please\s+confirm\b.*|confirm\b.*|go\s+ahead\b.*)$/i;
 
 function looksCustom(text: string): boolean {
   if (CUSTOM_WORDS.test(text)) return true;
@@ -311,9 +311,12 @@ export class Agent {
       else if (stage === "awaiting_confirmation" && (!pickup || fixes.length)) stage = "collecting";
       else if (stage === "browsing") stage = "collecting";
     }
+    // Custom orders never enter the normal menu-order confirmation path. They wait for explicit
+    // owner approval + price, then the customer's explicit YES is handled by placeCustomOrder().
+    if (custom) stage = "collecting";
 
     const next: Draft = { items, pickup_local: pickup, customer_name: custName, notes, readback_hash: null, stage, ...(again ? { again: true } : {}), ...(custom ? { custom } : {}) };
-    if (stage === "awaiting_confirmation") next.readback_hash = draftHash(next);
+    if (stage === "awaiting_confirmation" && !custom) next.readback_hash = draftHash(next);
     // A frozen turn keeps the earlier read-back valid, since the draft did not change.
     if (frozen && draft) next.readback_hash = draft.readback_hash;
 
