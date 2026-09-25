@@ -583,3 +583,40 @@ test("the button text counts as yes even if the judge doubts it", async () => {
   assert.equal(r.route, "confirm_order");
   assert.equal(t.store.listOrders().length, 1);
 });
+
+test("extras in a new order are priced items on the read-back and the order", async () => {
+  const t = setup({ judge: yesJudge });
+  t.llm.push(modelReply({ reply: "Noted!", items: [KHEEMA_BOGO, { id: "extra_chicken_fry", qty: 2, pack: "single", asked_for: "2 extra chicken fry" }, { id: "extra_raita", qty: 1, pack: "single", asked_for: "extra raita" }], pickup: FRI_6PM, name: "Asha", stage: "awaiting_confirmation" }));
+  const r = await t.say("2 kheema fry combos bogo friday 6pm, plus 2 extra chicken fry and extra raita");
+  assert.match(r.replies[0]!, /2 x Extra Chicken Fry \(12oz\): \$16/);
+  assert.match(r.replies[0]!, /1 x Extra Raita: \$1/);
+  assert.match(r.replies[0]!, /Total: \$73/);
+  await t.say("yes");
+  assert.equal(t.store.listOrders()[0]!.status, "cook");
+});
+
+test("extras after the order is placed: read back as extras for that order and placed as a linked order", async () => {
+  const t = setup({ judge: yesJudge });
+  await orderAndReadBack(t);
+  await t.say("yes");
+  t.llm.push(modelReply({ reply: "Sure!", items: [{ id: "extra_chicken_fry", qty: 2, pack: "single", asked_for: "2 extra chicken fry" }], pickup: FRI_6PM, name: "Asha", stage: "awaiting_confirmation" }));
+  const r = await t.say("can I add 2 extra chicken fry?");
+  assert.match(r.replies[0]!, /Please check your extras for order #1/);
+  assert.match(r.replies[0]!, /Total: \$16/);
+  assert.doesNotMatch(r.replies[0]!, /needs to confirm/);
+  const r2 = await t.say("yes");
+  assert.match(r2.replies[0]!, /Order #2 \(extras for order #1\) is confirmed/);
+  const o = t.store.listOrders().find((x) => x.id === 2)!;
+  assert.equal(o.status, "cook");
+  assert.match(o.notes, /Extras for order #1/);
+  assert.match(t.notifier.sent.at(-1)!.title, /Extras for order #1/);
+});
+
+test("extras on their own with no main dish that day wait for the shop", async () => {
+  const t = setup({ judge: yesJudge });
+  t.llm.push(modelReply({ reply: "Sure!", items: [{ id: "extra_raita", qty: 3, pack: "single", asked_for: "3 raita" }], pickup: FRI_6PM, name: "Asha", stage: "awaiting_confirmation" }));
+  const r = await t.say("just 3 raita friday 6pm");
+  assert.match(r.replies[0]!, /extras need a main dish/i);
+  await t.say("yes");
+  assert.equal(t.store.listOrders()[0]!.status, "hold");
+});

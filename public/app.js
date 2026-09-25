@@ -135,6 +135,7 @@
 
   /* ---------- chat ---------- */
   var msgsEl = $("msgs");
+  msgsEl.addEventListener("scroll", function () { if (jumpBtn && !jumpBtn.hidden && nearBottom()) hideJump(); }, { passive: true });
 
   /* The read-back is drawn as a summary card. The text stays the same, only the look changes. */
   function summary(m) {
@@ -150,7 +151,7 @@
       } else if (/needs to confirm this order first/.test(l)) warn = l;
     });
     var card = h("div", { class: "b agent sum", "data-id": m.id || "", "data-sum": "1" },
-      h("h3", {}, "Check your order"),
+      h("h3", {}, (/extras for order #(\d+)/.exec(lines[0]) ? "Check your extras for order #" + /extras for order #(\d+)/.exec(lines[0])[1] : "Check your order")),
       h("ul", {}, items.map(function (it) { return h("li", {}, h("span", {}, it[0]), h("span", { class: "pr" }, it[1])); })),
       rows.map(function (r) { return h("div", { class: "row" + (r[0] === "Total" ? " total" : "") }, h("span", {}, r[0]), h("span", {}, r[1])); }),
       warn ? h("div", { class: "warnrow" }, warn) : null,
@@ -171,7 +172,7 @@
       else if (/^(Total|Pickup): /.test(l)) { var j = l.indexOf(": "); rows.push([l.slice(0, j), l.slice(j + 2)]); }
     });
     return h("div", { class: "b agent sum", "data-id": m.id || "" },
-      h("div", { class: "cfhead" }, mascot("sm jump"), h("h3", {}, "Order " + (num ? "#" + num[1] + " " : "") + "confirmed")),
+      h("div", { class: "cfhead" }, mascot("sm jump"), h("h3", {}, "Order " + (num ? "#" + num[1] + " " : "") + "confirmed" + (/extras for order #(\d+)/.test(lines[0]) ? " \u00b7 extras for #" + /extras for order #(\d+)/.exec(lines[0])[1] : ""))),
       h("ul", {}, items.map(function (it) { return h("li", {}, h("span", {}, it)); })),
       rows.map(function (r) { return h("div", { class: "row" + (r[0] === "Total" ? " total" : "") }, h("span", {}, r[0]), h("span", {}, r[1])); }),
       h("time", {}, m.ts ? clock(m.ts) : ""));
@@ -209,7 +210,8 @@
     if (it.kind === "plan") {
       kids.push(pill(it.plan, it.unit ? it.unit.replace(/^per /, "/ ").replace(/ per /g, " / ") : "plan", "", function () { fillComposer("I'd like the " + it.name + " for 1 person, starting "); }));
     } else {
-      if (it.single != null || it.bogo == null) kids.push(pill(it.single, "single", "", function () { fillComposer("1 " + it.name + ", single, pickup "); }));
+      if (it.kind === "addon") kids.push(pill(it.single, "each", "", function () { fillComposer("Add 1 " + it.name); }));
+      else if (it.single != null || it.bogo == null) kids.push(pill(it.single, "single", "", function () { fillComposer("1 " + it.name + ", single, pickup "); }));
       if (it.bogo != null) kids.push(pill(it.bogo, "Buy 1 Get 1", "bogo", function () { fillComposer("1 " + it.name + ", Buy 1 Get 1, pickup "); }));
     }
     var hue = [148, 38, 12, 95, 170, 28, 120, 200][k % 8];
@@ -247,7 +249,7 @@
   /* When the assistant asks about spice, offer one-tap answers. Only on the newest message. */
   /* Only when a question itself asks about spice, not when a reply just mentions it ("medium spice noted! What day?"). */
   function asksSpice(m) {
-    if (m.who !== "agent" || /Order #\d+ is confirmed|Please check your order/.test(m.text)) return false;
+    if (m.who !== "agent" || /Order #\d+(?: \([^)]*\))? is confirmed|Please check your (order|extras)/.test(m.text)) return false;
     return (m.text.match(/[^.!?\n]*\?/g) || []).some(function (q) { return /\bspic(e|y|iness)\b/i.test(q); });
   }
   var SPICE = [["Less spicy", 1], ["Medium", 2], ["Spicy", 3]];
@@ -272,15 +274,30 @@
       else if (!rows.length) before.push(l); else after.push(l);
     });
     if (rows.length < 3) return null;
+    /* Use the owner's weekly menu, not the assistant's short version, so nothing gets left out. */
+    var notes = [];
+    if (menuData && menuData.weekly) {
+      var own = [];
+      menuData.weekly.forEach(function (l) {
+        var d = DAYRE.exec(l);
+        if (d) own.push({ day: d[1].toLowerCase(), extra: (d[2] || "").replace(/[()]/g, ""), text: d[3].trim() });
+        else if (l.trim()) notes.push(l.trim());
+      });
+      if (own.length >= 3) rows = own; else notes = [];
+    }
     var today = new Date().getDay();
     var fresh = m.ts && Date.now() - new Date(m.ts).getTime() < 90000;
+    /* A breakfast-only or curries-only plan shows just that part of each day. */
+    var head = before.join(" ");
+    var onlyBf = /\b(only breakfast|breakfast[- ]only|breakfast plan)\b/i.test(head) && !/curr/i.test(head);
+    var noBf = /\b(only curries|curries[- ]only|curries plan|curry plan|breakfast\s*\+\s*curries)\b/i.test(head) ? !/breakfast\s*\+/i.test(head) : false;
     return h("div", { class: "b agent week" + (fresh ? " fresh" : ""), "data-id": m.id || "" },
       before.join("\n").trim() ? h("p", { class: "intro" }, before.join("\n").trim()) : null,
       h("ol", { class: "wlist" }, rows.map(function (r, k) {
         var parts = r.text.split(/;\s*|\.\s+(?=[A-Z])/), bf = "", rest = [];
         parts.forEach(function (p) {
           if (!bf && /breakfast/i.test(p)) bf = p.replace(/\bbreakfast\b:?/i, "").replace(/^[\s,:\-]+|[\s,:\-]+$/g, "");
-          else if (p.trim()) rest.push(p.trim().replace(/^lunch\s*(\/|and|&)\s*dinner\s*:?\s*/i, ""));
+          else if (p.trim()) rest.push(p.trim().replace(/\.$/, "").replace(/^lunch\s*(\/|and|&)\s*dinner\s*:?\s*/i, ""));
         });
         var meal = rest.join("; "), alt = /^(alternates?|alternating)(\s+(by|each|every)\s+week)?\s*[-:\u2013]?\s*/i;
         var alternates = alt.test(meal) || /\balternat/i.test(r.extra);
@@ -290,26 +307,39 @@
         if (/\begg/.test(all)) tags.push(["Egg", "t-egg"]);
         if (!tags.length || /\bveg\b/.test(all) && !/chicken|kodi|egg/.test(all)) { if (!tags.length) tags.push(["Veg", "t-veg"]); }
         if (alternates) tags.push(["Alternates weekly", "t-x"]);
-        if (r.extra && !/\balternat/i.test(r.extra)) tags.push([r.extra.charAt(0).toUpperCase() + r.extra.slice(1), "t-x"]);
+        if (r.extra && !/\balternat|^veg$/i.test(r.extra)) tags.push([r.extra.charAt(0).toUpperCase() + r.extra.slice(1), "t-x"]);
         var isToday = DOW[r.day] === today;
         return h("li", { class: "wday" + (isToday ? " today" : ""), style: "--i:" + k },
           h("div", { class: "dchip" }, h("b", {}, r.day.slice(0, 3).toUpperCase()), isToday ? h("small", {}, "Today") : null),
           h("div", { class: "wbody" },
-            bf ? h("div", { class: "wrow" }, icon("sun"), h("span", {}, h("em", {}, "Breakfast "), bf)) : null,
-            meal ? h("div", { class: "wrow" }, icon("bowl"), h("span", {}, bf ? h("em", {}, "Lunch & dinner ") : null, meal)) : null,
+            bf && !noBf ? h("div", { class: "wrow" }, icon("sun"), h("span", {}, h("em", {}, "Breakfast "), bf)) : null,
+            meal && !onlyBf ? h("div", { class: "wrow" }, icon("bowl"), h("span", {}, bf ? h("em", {}, "Lunch & dinner ") : null, meal)) : null,
             h("div", { class: "tags" }, tags.map(function (t) { return h("span", { class: "tag " + t[1] }, t[0]); }))));
       })),
+      notes.length ? h("p", { class: "wnote" }, notes.join(" ")) : null,
       after.join("\n").trim() ? h("p", { class: "outro" }, after.join("\n").trim()) : null,
       h("time", {}, m.ts ? clock(m.ts) : ""));
   }
 
+  /* Only our own Instagram links become links. Everything else stays plain text. */
+  function linkify(text) {
+    var out = [], re = /(?:https?:\/\/)?(?:www\.)?instagram\.com\/([A-Za-z0-9_.]{1,30})\/?/g, last = 0, mm;
+    while ((mm = re.exec(text))) {
+      if (mm.index > last) out.push(text.slice(last, mm.index));
+      out.push(h("a", { class: "ilink", href: "https://www.instagram.com/" + mm[1] + "/", target: "_blank", rel: "noopener noreferrer" }, icon("insta"), "@" + mm[1]));
+      last = re.lastIndex;
+    }
+    if (last < text.length) out.push(text.slice(last));
+    return out;
+  }
+
   function bubble(m, pending) {
-    if (m.who === "agent" && /^Please check your order:/.test(m.text)) return summary(m);
-    if (m.who === "agent" && /^[^\n]*Order #\d+ is confirmed:/.test(m.text)) return confirmed(m);
+    if (m.who === "agent" && /^Please check your (order|extras)/.test(m.text)) return summary(m);
+    if (m.who === "agent" && /^[^\n]*Order #\d+(?: \([^)]*\))? is confirmed:/.test(m.text)) return confirmed(m);
     var card = dishes(m) || weekCard(m); if (card) return card;
     var kids = [];
     if (m.who === "owner") kids.push(h("span", { class: "who" }, "Annapurna"));
-    kids.push(m.text);
+    kids.push.apply(kids, linkify(m.text));
     kids.push(spiceRow(m));
     kids.push(h("time", {}, m.ts ? clock(m.ts) : ""));
     return h("div", { class: "b " + m.who + (pending ? " pending" : ""), "data-id": m.id || "" }, kids);
@@ -322,7 +352,17 @@
     msgsEl.querySelectorAll(".spice").forEach(function (a) { a.hidden = a.parentNode !== last; });
   }
 
-  function scrollDown() { msgsEl.scrollTop = msgsEl.scrollHeight; }
+  function scrollDown() { msgsEl.scrollTop = msgsEl.scrollHeight; hideJump(); }
+  /* "New message" pill when something arrives while the customer is reading older messages */
+  var jumpBtn = null;
+  function showJump() {
+    if (!jumpBtn) {
+      jumpBtn = h("button", { type: "button", class: "newmsg", onclick: function () { msgsEl.scrollTo({ top: msgsEl.scrollHeight, behavior: "smooth" }); hideJump(); } }, "New message \u2193");
+      $("chat").append(jumpBtn);
+    }
+    jumpBtn.hidden = false;
+  }
+  function hideJump() { if (jumpBtn) jumpBtn.hidden = true; }
 
   function renderEmptyHello() {
     if (msgsEl.children.length) return;
@@ -333,8 +373,10 @@
       "Ask about the menu, or tell me what you'd like. I'll check everything with you before we cook."));
   }
 
-  function addMessages(list) {
-    var added = false;
+  /* Background checks never pull the reader down. Only their own sends, or new messages while they are at the bottom. */
+  function nearBottom() { return msgsEl.scrollHeight - msgsEl.scrollTop - msgsEl.clientHeight < 140; }
+  function addMessages(list, background) {
+    var added = false, stay = !background || nearBottom();
     list.forEach(function (m) {
       if (seen[m.id]) return;
       seen[m.id] = true;
@@ -344,9 +386,10 @@
       added = true;
     });
     if (added) {
-      scrollDown(); refreshActions(); refreshChips();
+      if (stay) scrollDown(); else showJump();
+      refreshActions(); refreshChips();
       /* a new confirmation updates the Orders badge right away */
-      if (list.some(function (m) { return m.who === "agent" && /Order #\d+ is confirmed/.test(m.text || ""); })) loadOrders();
+      if (list.some(function (m) { return m.who === "agent" && /Order #\d+(?: \([^)]*\))? is confirmed/.test(m.text || ""); })) loadOrders();
     }
     return added;
   }
@@ -400,18 +443,19 @@
   }
 
   /* "Talk to a person" status, visible on every screen until the team replies. */
-  function setHandoff(hf) {
+  function setHandoff(hf, background) {
+    var changed = !!hf !== !!handoff || (hf && handoff && hf.at !== handoff.at);
     handoff = hf;
     var bar = $("handoffBar");
     bar.hidden = !hf;
     if (hf) $("handoffText").textContent = "Request sent at " + clock(hf.at) + ". We'll reply in this chat.";
-    if (!$("chat").hidden) scrollDown();
+    if (changed && !$("chat").hidden && (!background || nearBottom())) scrollDown();
     if (sheetOpen === "help") renderHelp();
   }
 
   function poll() {
     if (document.hidden || !token || busy) return;
-    api("GET", "/web/history?after=" + lastId).then(function (j) { addMessages(j.messages || []); setHandoff(j.handoff || null); }).catch(function (e) { if (e.status === 401) toBoarding(e.message); });
+    api("GET", "/web/history?after=" + lastId).then(function (j) { addMessages(j.messages || [], true); setHandoff(j.handoff || null, true); }).catch(function (e) { if (e.status === 401) toBoarding(e.message); });
     loadOrders();
   }
   function startPolling() { stopPolling(); pollTimer = setInterval(poll, 7000); }
@@ -503,7 +547,7 @@
     var price = h("div", { class: "dprice" });
     if (x.kind === "plan") price.append(h("span", { class: "lab" }, "Per person, per week"), h("span", { class: "amt" }, money(x.plan)));
     else {
-      price.append(h("span", { class: "lab" }, x.kind === "combo" ? "Single" : "Price"), h("span", { class: "amt" }, money(x.single)));
+      price.append(h("span", { class: "lab" }, x.kind === "combo" ? "Single" : x.kind === "addon" ? "Each" : "Price"), h("span", { class: "amt" }, money(x.single)));
       if (x.kind === "combo" && x.bogo != null) price.append(h("span", { class: "lab" }, "Buy 1 Get 1"), h("span", { class: "amt alt" }, money(x.bogo)));
     }
     if (!off && !noPrice) {
@@ -520,13 +564,16 @@
   function menuPanels(m) {
     var byKind = function (k) { return (m.items || []).filter(function (x) { return x.kind === k; }); };
     var panels = [];
-    var combos = byKind("combo"), plans = byKind("plan"), other = byKind("item");
+    var combos = byKind("combo"), plans = byKind("plan"), other = byKind("item"), extras = byKind("addon");
     if (combos.length) panels.push(["Weekend combos", h("div", { class: "panel" },
       h("p", { class: "lead" }, "Cooked fresh for weekend pickup. Order at least " + m.noticeHrs + " hours ahead."),
       combos.map(dish))]);
     if (plans.length || other.length) panels.push(["Weekly plans", h("div", { class: "panel" },
       h("p", { class: "lead" }, "Meals for the whole week, per person. Prices in CAD."),
       plans.concat(other).map(dish))]);
+    if (extras.length) panels.push(["Extras", h("div", { class: "panel" },
+      h("p", { class: "lead" }, "Add these to any order. Chicken extras come in a 12oz box."),
+      extras.map(dish))]);
     if ((m.weekly || []).length) {
       panels.push(["Day by day", h("div", { class: "panel" },
         h("p", { class: "lead" }, "What is on the plan each weekday."),

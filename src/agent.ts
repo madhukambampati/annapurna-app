@@ -1,5 +1,5 @@
 import type { Config } from "./config.js";
-import { checkFlags, checkWeekday, draftHash, sanitizeItems, type Issue } from "./guards.js";
+import { checkFlags, checkWeekday, draftHash, extrasOnly, mainOrderFor, sanitizeItems, type Issue } from "./guards.js";
 import { HeuristicJudge, type Judge, type Judgment } from "./judge.js";
 import type { Llm } from "./llm.js";
 import { findItem, itemLabel, lineAmt, money, total, optionPicks } from "./menu.js";
@@ -287,7 +287,7 @@ export class Agent {
 
     let reply: string;
     if (fixes.length) reply = fixes.join("\n");
-    else if (stage === "awaiting_confirmation" && !frozen) reply = this.readBack(next, settings, now);
+    else if (stage === "awaiting_confirmation" && !frozen) reply = this.readBack(next, settings, now, open);
     else reply = modelReply || "Sorry, could you say that again?";
     out.replies.push(reply);
 
@@ -302,12 +302,14 @@ export class Agent {
   }
 
   /** The read-back is built here, not by the model, so the total, dates and items are always right. */
-  readBack(d: Draft, s: Settings, now: number): string {
+  readBack(d: Draft, s: Settings, now: number, open: Order[] = []): string {
+    const menu = this.d.store.getMenu();
     const lines = d.items.map((it) => `- ${itemLabel(it)}: ${it.amt == null ? "price to be confirmed" : money(it.amt)}`);
     const t = total(d.items);
-    const flags = checkFlags(d.items, d.pickup_local, s, now, this.d.store.getMenu());
+    const flags = checkFlags(d.items, d.pickup_local, s, now, menu, open);
+    const main = extrasOnly(d.items, menu) ? mainOrderFor(d.pickup_local, open) : undefined;
     const out = [
-      "Please check your order:",
+      main ? `Please check your extras for order #${main.id}:` : "Please check your order:",
       ...lines,
       t == null ? "Total: Annapurna Home Foods will confirm the price" : `Total: ${money(t)}`,
       `Pickup: ${formatWhen(d.pickup_local)} at ${s.address}`,
@@ -340,7 +342,7 @@ export class Agent {
       const lead = off.length
         ? `Sorry, ${off.map((o) => o.name).join(" and ")} ${off.length > 1 ? "aren't" : "isn't"} running right now, so I've taken ${off.length > 1 ? "them" : "it"} off your order.`
         : "Heads up, a price was just updated.";
-      out.replies.push(stage === "awaiting_confirmation" ? `${lead}\n${this.readBack(next, s, now)}` : `${lead} What else would you like?`);
+      out.replies.push(stage === "awaiting_confirmation" ? `${lead}\n${this.readBack(next, s, now, store.openOrdersFor(waId))}` : `${lead} What else would you like?`);
       return;
     }
     // Last line of defence against double orders: the same items and pickup as an order that is already
@@ -353,11 +355,15 @@ export class Agent {
       out.replies.push(`Order #${sameAs.id} is already confirmed (${formatWhen(sameAs.pickup)}), so there is nothing more to confirm. If you'd like another order, just tell me what to add.`);
       return;
     }
-    const flags = checkFlags(items, draft.pickup_local, s, now, menu);
+    const openNow = store.openOrdersFor(waId);
+    const flags = checkFlags(items, draft.pickup_local, s, now, menu, openNow);
+    // Extras on their own ride along with the customer's order for the same day.
+    const main = extrasOnly(items, menu) ? mainOrderFor(draft.pickup_local, openNow) : undefined;
+    const notes = main ? [`Extras for order #${main.id}`, draft.notes].filter(Boolean).join(". ") : draft.notes;
     const customer = store.getCustomer(waId)!;
     const name = customer.name || draft.customer_name || "Customer";
     const order = store.insertOrder({
-      waId, name, items, pickup: draft.pickup_local, flags, status: flags.length ? "hold" : "cook", notes: draft.notes, createdAt: now,
+      waId, name, items, pickup: draft.pickup_local, flags, status: flags.length ? "hold" : "cook", notes, createdAt: now,
     });
     store.clearDraft(waId);
     if (!customer.name && draft.customer_name) store.updateCustomer(waId, { name: draft.customer_name });
@@ -370,10 +376,10 @@ export class Agent {
     if (flags.length) {
       out.replies.push(`Thank you${who ? ` ${who}` : ""}! I've noted order #${order.id}:\n${listing}\nWe need to confirm it first (${flags.join("; ").toLowerCase()}). Annapurna Home Foods will reach out to you here in this chat.`);
     } else {
-      out.replies.push(`Thank you${who ? ` ${who}` : ""}! Order #${order.id} is confirmed:\n${listing}\nTotal: ${money(t)}\nPickup: ${formatWhen(draft.pickup_local)} at ${s.address}`);
+      out.replies.push(`Thank you${who ? ` ${who}` : ""}! Order #${order.id}${main ? ` (extras for order #${main.id})` : ""} is confirmed:\n${listing}\nTotal: ${money(t)}\nPickup: ${formatWhen(draft.pickup_local)} at ${s.address}`);
     }
     await this.d.notifier.notify(
-      flags.length ? `Order #${order.id} needs you` : `New order #${order.id}`,
+      flags.length ? `Order #${order.id} needs you` : main ? `Extras for order #${main.id} (new order #${order.id})` : `New order #${order.id}`,
       `${name}: ${items.map(itemLabel).join(", ")}. Pickup ${formatWhen(draft.pickup_local)}. ${money(t)}${flags.length ? `. HOLD: ${flags.join("; ")}` : ""}`,
     );
   }

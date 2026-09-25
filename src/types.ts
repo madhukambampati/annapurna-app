@@ -1,4 +1,4 @@
-export type Kind = "combo" | "plan" | "item";
+export type Kind = "combo" | "plan" | "item" | "addon";
 export type Pack = "single" | "bogo" | "plan";
 export type Stage = "browsing" | "collecting" | "awaiting_confirmation";
 export type OrderStatus = "hold" | "cook" | "ready" | "done" | "cancelled";

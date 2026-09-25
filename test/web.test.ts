@@ -272,6 +272,17 @@ describe("web: chat and orders", () => {
       assert.equal(owner[0], "Monday works, see you then!");
       assert.match(owner[1], /confirmed your order #1/);
       assert.match(owner[2], /ready for pickup/);
+
+      await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "done" } });
+      const after = (await call("GET", "/web/history", { token })).json.messages;
+      const thanks = after.at(-1);
+      assert.equal(thanks.who, "agent");
+      assert.match(thanks.text, /Thank you for your order, Asha! Enjoy your food/);
+      assert.match(thanks.text, /instagram\.com\/annapurna_hometaste/);
+      // moving back and forth does not send it twice
+      await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "done" } }).catch(() => null);
+      const count = (await call("GET", "/web/history", { token })).json.messages.filter((m: any) => /Enjoy your food/.test(m.text)).length;
+      assert.equal(count, 1);
     }));
 
   test("cancelling from the desk tells the customer; unknown customer/empty reply are rejected", () =>

@@ -76,3 +76,21 @@ test("option numbers: a bare '5' counts only right after a numbered list", () =>
   assert.deepEqual(optionPicks("5", menu, null), []);
   assert.deepEqual(optionPicks("1 and 5", menu, list).map((p) => p.no), [1, 5]);
 });
+
+import { upgradeMenu, extrasMenu } from "../src/menu.js";
+
+test("extras: on the default menu with the owner's prices", () => {
+  const m = new Map(defaultMenu().map((x) => [x.id, x]));
+  assert.deepEqual(["extra_chicken_fry", "extra_chicken_kheema", "extra_kheema_fry", "extra_salan", "extra_raita", "extra_onion_lemon"].map((id) => m.get(id)!.single), [8, 8, 10, 1, 1, 1]);
+  assert.ok(extrasMenu().every((x) => x.kind === "addon"));
+});
+
+test("upgrade from version 3 adds extras but keeps combo prices changed on the desk", () => {
+  const stored = defaultMenu().filter((x) => x.kind !== "addon").map((x) => (x.id === "kheema_fry" ? { ...x, single: 19 } : x));
+  const up = upgradeMenu(stored, 3);
+  assert.equal(up.find((x) => x.id === "kheema_fry")!.single, 19);
+  assert.equal(up.find((x) => x.id === "extra_kheema_fry")!.single, 10);
+  const again = upgradeMenu(up.map((x) => (x.id === "extra_raita" ? { ...x, single: 2 } : x)), 3);
+  assert.equal(again.find((x) => x.id === "extra_raita")!.single, 2, "an extra's price set on the desk is kept");
+  assert.equal(again.filter((x) => x.id === "extra_raita").length, 1);
+});

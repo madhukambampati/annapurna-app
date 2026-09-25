@@ -49,7 +49,7 @@ export class Store {
     const v = this.kvGet<number>("menu_version", () => 0);
     if (v >= MENU_VERSION) return;
     const has = this.db.prepare("SELECT 1 FROM kv WHERE key = 'menu'").get();
-    if (has) this.kvPut("menu", upgradeMenu(this.kvGet<MenuItem[]>("menu", defaultMenu)));
+    if (has) this.kvPut("menu", upgradeMenu(this.kvGet<MenuItem[]>("menu", defaultMenu), v));
     this.kvPut("menu_version", MENU_VERSION);
   }
 

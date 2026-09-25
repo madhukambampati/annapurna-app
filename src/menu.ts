@@ -47,16 +47,30 @@ export function posterCombos(): MenuItem[] {
   ];
 }
 
+/** Extras a customer can add to a main dish. Chicken extras come in a 12oz box. */
+export function extrasMenu(): MenuItem[] {
+  const base = { plan: null, bogo: null, unit: "", verify: false, live: true, recipe: "", kind: "addon" as const };
+  return [
+    { ...base, id: "extra_chicken_fry", name: "Extra Chicken Fry (12oz)", single: 8, desc: "Extra chicken fry, 12oz box.", aliases: ["extra chicken fry", "chicken fry extra", "extra fry", "extra chicken"] },
+    { ...base, id: "extra_chicken_kheema", name: "Extra Chicken Kheema (12oz)", single: 8, desc: "Extra chicken kheema, 12oz box.", aliases: ["extra chicken kheema", "extra kheema", "extra keema", "extra chicken keema"] },
+    { ...base, id: "extra_kheema_fry", name: "Extra Chicken Kheema Fry (12oz)", single: 10, desc: "Extra chicken kheema fry, 12oz box.", aliases: ["extra chicken kheema fry", "extra kheema fry", "extra keema fry"] },
+    { ...base, id: "extra_salan", name: "Extra Mirchi Ka Salan", single: 1, desc: "", aliases: ["extra salan", "extra mirchi ka salan", "salan"] },
+    { ...base, id: "extra_raita", name: "Extra Raita", single: 1, desc: "", aliases: ["extra raita", "extra raitha", "raita", "raitha"] },
+    { ...base, id: "extra_onion_lemon", name: "Extra Onion & Lemon", single: 1, desc: "", aliases: ["extra onion and lemon", "extra onion", "extra lemon", "onion and lemon", "onions"] },
+  ];
+}
+
 /** Bump when the poster prices or combos change. Existing databases get the update once. */
-export const MENU_VERSION = 3;
+export const MENU_VERSION = 4;
 
 /**
  * Brings a stored menu up to the poster version. Only names, prices, descriptions and aliases of combos
  * are refreshed. `live` and `recipe` are kept as Maddy set them, plans are untouched, new dishes are added.
  */
-export function upgradeMenu(stored: MenuItem[]): MenuItem[] {
+export function upgradeMenu(stored: MenuItem[], fromVersion = 0): MenuItem[] {
   const out = stored.map((m) => ({ ...m }));
-  for (const p of posterCombos()) {
+  // Version 3 brought the poster prices. Later versions must not undo prices changed on the desk since then.
+  for (const p of fromVersion < 3 ? posterCombos() : []) {
     const cur = out.find((m) => m.id === p.id);
     if (!cur) {
       out.push(p);
@@ -65,6 +79,8 @@ export function upgradeMenu(stored: MenuItem[]): MenuItem[] {
     Object.assign(cur, { name: p.name, single: p.single, bogo: p.bogo, desc: p.desc, aliases: p.aliases, verify: false });
     if (p.days) cur.days = p.days;
   }
+  // Extras are only added when missing, so prices Maddy changed on the desk are kept.
+  for (const x of extrasMenu()) if (!out.some((m) => m.id === x.id)) out.push(x);
   return out;
 }
 
@@ -92,6 +108,7 @@ export function defaultMenu(): MenuItem[] {
       desc: "5 days of breakfast.",
       aliases: ["only breakfast plan", "breakfast plan", "breakfast only"],
     },
+    ...extrasMenu(),
   ];
 }
 
@@ -130,6 +147,7 @@ export function defaultSettings(): Settings {
 /** Pickup days that apply to one menu item. An item's own days win, then the combo days, then the plan days. */
 export function itemDays(m: MenuItem | undefined, s: Settings): number[] {
   if (m?.days?.length) return m.days;
+  if (m?.kind === "addon") return [0, 1, 2, 3, 4, 5, 6]; // extras follow the main dish
   return m?.kind === "combo" ? s.comboDays : s.days;
 }
 

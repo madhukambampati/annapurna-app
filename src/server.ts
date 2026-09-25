@@ -190,6 +190,14 @@ export function createServer(d: ServerDeps): Server {
     return null;
   };
 
+  const thanksNote = (o: Order, s: Settings): string => {
+    const first = (o.name || "").trim().split(/\s+/)[0];
+    const lines = [`Thank you for your order${first && first !== "Customer" ? `, ${first}` : ""}! Enjoy your food.`];
+    if (s.contactInstagram) lines.push("We'd love your feedback on Instagram. Please follow our page too:", `instagram.com/${s.contactInstagram}`);
+    else lines.push("We'd love to hear how you liked it. Just reply here.");
+    return lines.join("\n");
+  };
+
   return httpServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? "/", "http://x");
@@ -223,6 +231,7 @@ export function createServer(d: ServerDeps): Server {
             let label = days.length === 1 ? dayRange(days) : `Pickup ${dayRange(days)}`;
             if (days.length === 1) label += ` · ${dayLabel(nextDateForDow(now(), s.tz, days[0]!)).replace(/^\w+, /, "")}`;
             if (!live) label = "Not running right now";
+            if (x.kind === "addon") label = "Add to any order";
             return {
               no: i + 1, id: x.id, name: x.name, kind: x.kind, single: x.single, bogo: x.bogo, plan: x.plan, unit: x.unit,
               desc: /price not set yet|please add/i.test(x.desc ?? "") ? "" : x.desc,
@@ -382,8 +391,11 @@ export function createServer(d: ServerDeps): Server {
           const to = (await readJson(req)).status as OrderStatus;
           if (!ALLOWED[o.status]?.includes(to)) throw new HttpError(400, `Cannot move an order from ${o.status} to ${String(to)}`);
           const updated = store.setOrderStatus(o.id, to, o.status === "hold" && to === "cook");
-          const note = orderNote(o, o.status, to, store.getSettings());
+          const s = store.getSettings();
+          const note = orderNote(o, o.status, to, s);
           if (note) store.addMessage(o.waId, "owner", note, now());
+          // After pickup the assistant thanks the customer and asks for feedback, once per order.
+          if (to === "done" && o.status !== "done") store.addMessage(o.waId, "agent", thanksNote(o, s), now());
           return send(req, res, 200, { order: updated });
         }
         mt = /^\/api\/alerts\/(\d+)\/done$/.exec(path);

@@ -174,7 +174,19 @@ export function checkWeekday(text: string, pickupLocal: string | null, now: numb
 
 /* ---------- flags ---------- */
 
-export function checkFlags(items: OrderItem[], pickupLocal: string | null, s: Settings, now: number, menu: MenuItem[] = []): string[] {
+/** Extras only, with no main dish in this order. */
+export function extrasOnly(items: OrderItem[], menu: MenuItem[]): boolean {
+  return items.length > 0 && items.every((it) => findItem(menu, it.id)?.kind === "addon");
+}
+
+/** An open order of this customer with pickup on the same day, which extras can go with. */
+export function mainOrderFor(pickupLocal: string | null, open: Array<{ id: number; pickup: string | null; status: string }>): { id: number; pickup: string | null } | undefined {
+  if (!pickupLocal) return undefined;
+  const day = pickupLocal.slice(0, 10);
+  return open.find((o) => ["hold", "cook", "ready"].includes(o.status) && o.pickup?.slice(0, 10) === day);
+}
+
+export function checkFlags(items: OrderItem[], pickupLocal: string | null, s: Settings, now: number, menu: MenuItem[] = [], open: Array<{ id: number; pickup: string | null; status: string }> = []): string[] {
   const f: string[] = [];
   if (!pickupLocal) {
     f.push("No pickup time");
@@ -191,6 +203,7 @@ export function checkFlags(items: OrderItem[], pickupLocal: string | null, s: Se
   if (bad.length) f.push(`${DAYN[dow]} is not a pickup day for ${bad.map((b) => b.name).join(", ")}`);
   else if (!items.length && !s.days.includes(dow)) f.push(`${DAYN[dow]} is not a pickup day`);
   if (items.some((it) => it.amt == null)) f.push("Price not set");
+  if (extrasOnly(items, menu) && !mainOrderFor(pickupLocal, open)) f.push("Extras need a main dish picked up the same day");
   return f;
 }
 
