@@ -347,6 +347,162 @@ input[type=text]:focus,textarea:focus{border-color:var(--brand);outline:0;box-sh
 @keyframes floatUp{0%{opacity:0;transform:translateY(8px) scale(.6)}20%{opacity:1}100%{opacity:0;transform:translateY(-40px) scale(1.1) rotate(12deg)}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
+
+<style id="customerRedesignV1">
+/* CUSTOMER REDESIGN V1 — presentation only; ordering logic remains in app.js */
+body.customer-mode{
+  background:
+    radial-gradient(700px 420px at 0% 0%,rgba(29,107,77,.20),transparent 70%),
+    radial-gradient(540px 360px at 100% 100%,rgba(241,168,36,.14),transparent 72%),
+    var(--bg);
+}
+.customer-mode .app{isolation:isolate}
+.customer-mode .top{
+  position:relative;z-index:20;
+  padding-top:calc(12px + env(safe-area-inset-top));
+  padding-bottom:12px;
+  background:color-mix(in srgb,var(--surface) 92%,transparent);
+  backdrop-filter:blur(18px) saturate(1.15);
+  -webkit-backdrop-filter:blur(18px) saturate(1.15);
+  box-shadow:0 1px 0 var(--line),0 8px 26px rgba(14,49,35,.05);
+}
+.customer-mode .seal{width:46px;height:46px;border-radius:15px;box-shadow:0 8px 22px rgba(29,107,77,.18)}
+.customer-mode .brand h1{font-size:21px}
+.customer-mode .brand small{font-size:12px;letter-spacing:.02em}
+.customer-mode .brand small::after{
+  content:"  ·  CUSTOMER";
+  margin-left:5px;
+  color:var(--brand2);
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.12em;
+}
+.customer-mode .tab{
+  min-width:52px;border-radius:14px;padding:7px 8px 5px;
+  transition:transform .18s ease,background .18s ease,color .18s ease;
+}
+.customer-mode .tab:active{transform:scale(.94)}
+.customer-mode .onboard{gap:14px;padding-top:14px}
+.customer-mode .hero{
+  min-height:330px;
+  display:flex;flex-direction:column;justify-content:flex-end;
+  padding:26px 22px;
+  background:
+    radial-gradient(260px 220px at 78% 18%,rgba(241,168,36,.26),transparent 70%),
+    linear-gradient(145deg,#0e4932 0%,#176b4b 55%,#477431 130%);
+  border:1px solid rgba(255,255,255,.12);
+  box-shadow:0 22px 48px rgba(10,45,30,.24);
+}
+.customer-mode .hero::before{width:300px;height:300px;right:-100px;top:-110px}
+.customer-mode .heroTop{margin-bottom:auto}
+.customer-mode .hero h2{font-size:34px;max-width:470px;letter-spacing:-.02em}
+.customer-mode .hero p{font-size:16px;max-width:470px}
+.customer-mode .hero .kick{
+  width:max-content;background:rgba(255,255,255,.16);
+  border:1px solid rgba(255,255,255,.15);
+  backdrop-filter:blur(10px);
+}
+.customer-mode .bubble{
+  box-shadow:0 10px 28px rgba(0,0,0,.16);
+}
+.customer-mode .steps{gap:10px}
+.customer-mode .steps li{
+  min-height:116px;padding:14px 12px;border-radius:20px;
+  box-shadow:0 9px 22px rgba(20,50,32,.05);
+}
+.customer-mode .steps b{width:30px;height:30px}
+.customer-mode .card{
+  border-radius:24px;padding:18px;
+  box-shadow:0 14px 32px rgba(20,50,32,.07);
+}
+.customer-mode input[type=text],
+.customer-mode input[type=tel],
+.customer-mode input[type=email],
+.customer-mode textarea{border-radius:16px}
+.customer-mode .btn{border-radius:16px;min-height:48px}
+.customer-mode .chat{
+  background:
+    radial-gradient(440px 260px at 0% 0%,color-mix(in srgb,var(--brand) 8%,transparent),transparent 76%),
+    var(--page);
+}
+.customer-mode .msgs{padding:14px 14px 10px;gap:12px}
+.customer-mode .b{box-shadow:0 6px 18px rgba(16,44,30,.06)}
+.customer-mode .b.cust{box-shadow:0 8px 22px rgba(29,107,77,.16)}
+.customer-mode .sum{
+  border-radius:24px;
+  box-shadow:0 16px 38px rgba(29,107,77,.13);
+}
+.customer-mode .sum h3{padding:13px 16px}
+.customer-mode .dcard{
+  border-radius:20px;
+  box-shadow:0 9px 24px rgba(19,49,32,.07);
+  transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;
+}
+.customer-mode .dcard:active{transform:scale(.985)}
+.customer-mode .ppill{
+  border-radius:14px;
+  transition:transform .16s ease,filter .16s ease;
+}
+.customer-mode .ppill:active{transform:scale(.95)}
+.customer-mode .composer{
+  background:color-mix(in srgb,var(--surface) 93%,transparent);
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+  border-top:1px solid var(--line);
+  padding-top:10px;
+}
+.customer-mode .composer textarea{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--brand) 16%,transparent)}
+.customer-mode .send{
+  box-shadow:0 8px 18px color-mix(in srgb,var(--brand) 32%,transparent);
+  transition:transform .16s ease,filter .16s ease;
+}
+.customer-mode .send:active{transform:scale(.9) rotate(-6deg)}
+.customer-actions{
+  display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;
+  padding:10px 14px 8px;
+  background:linear-gradient(to bottom,color-mix(in srgb,var(--page) 96%,transparent),var(--page));
+  border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent);
+  flex:none;
+}
+.customer-actions::-webkit-scrollbar{display:none}
+.customer-action{
+  flex:0 0 auto;display:flex;align-items:center;gap:8px;
+  min-height:42px;padding:8px 12px;border:1px solid var(--line);
+  border-radius:15px;background:var(--surface);color:var(--ink);
+  font:700 12.5px/1.1 var(--f-body);
+  box-shadow:0 7px 18px rgba(20,50,32,.06);
+  animation:customerActionIn .42s cubic-bezier(.2,.8,.3,1.1) both;
+  animation-delay:calc(var(--i) * 60ms);
+}
+.customer-action .ic{width:18px;height:18px;color:var(--brand2)}
+.customer-action[data-accent=true]{
+  background:var(--brand);color:var(--on-brand);border-color:var(--brand);
+}
+.customer-action[data-accent=true] .ic{color:inherit}
+.customer-action:active{transform:scale(.96)}
+.customer-mode .veil{backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.customer-mode .sheet{border-radius:28px 28px 0 0}
+@media(min-width:700px){
+  .customer-mode .app{max-width:680px}
+  .customer-mode .customer-actions{padding-inline:18px}
+}
+@media(max-width:520px){
+  .customer-mode .top{gap:7px;padding-inline:10px}
+  .customer-mode .brand h1{font-size:18px}
+  .customer-mode .brand small::after{display:none}
+  .customer-mode .tab{min-width:48px;padding-inline:6px}
+  .customer-mode .hero{min-height:300px}
+  .customer-mode .hero h2{font-size:31px}
+  .customer-mode .steps li{min-height:108px}
+}
+@keyframes customerActionIn{
+  from{opacity:0;transform:translateY(-7px) scale(.96)}
+  to{opacity:1;transform:none}
+}
+@media(prefers-reduced-motion:reduce){
+  .customer-action{animation:none}
+}
+</style>
 </head>
 <body>
 <template id="tplMascot">
