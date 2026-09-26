@@ -460,6 +460,23 @@ describe("web: chat and orders", () => {
       assert.ok(t.store.listAlerts(true).length >= 1);
     }));
 
+  test("terse owner filler replies are rejected and never reach customer history", () =>
+    withRig(async ({ t, start, call }) => {
+      const token = await start("Asha");
+      const waId = t.store.listCustomers()[0]!.waId;
+      const reply = (text: string) => call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text } });
+
+      for (const filler of ["Yes", "Ok", "No thank you", "Sure", "Thanks"]) {
+        const r = await reply(filler);
+        assert.equal(r.status, 400, filler);
+      }
+      assert.equal((await reply("$120")).status, 200, "a short quoted price is meaningful and remains allowed");
+      assert.equal((await reply("Yes, we can prepare that for tomorrow.")).status, 200);
+
+      const history = (await call("GET", "/web/history", { token })).json.messages.filter((m: any) => m.who === "owner");
+      assert.deepEqual(history.map((m: any) => m.text), ["$120", "Yes, we can prepare that for tomorrow."]);
+    }));
+
   test("owner replies and status notes show up in the customer's chat", () =>
     withRig(async ({ t, start, say, call }) => {
       const token = await start("Asha");

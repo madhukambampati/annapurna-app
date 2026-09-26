@@ -128,6 +128,11 @@ function ownerApprovesCustom(text: string): boolean {
   return /\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\b.*\border\b|\border\b.*\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\b|\b(?:sure\s+)?we\s+can\s+(?:make|prepare|do)\b|\bwe(?:'|’)ll\s+(?:make|prepare)\b|\bwill\s+(?:make|prepare)\s+(?:the\s+)?order\b/i.test(text);
 }
 
+/** Very short acknowledgements are ambiguous and should never become customer-visible owner messages. */
+function lowValueOwnerReply(text: string): boolean {
+  return /^(?:ok(?:ay)?|yes|no|sure|thanks|thank you|no thank you|yes please|got it|fine|alright)[\s.!?]*$/i.test(text.trim());
+}
+
 /** A display name is plain text. HTML-like names are rejected for customer-facing polish. */
 export function validName(n: string): boolean {
   return n.length > 0 && n.length <= 60 && !/[<>]/.test(n);
@@ -443,6 +448,9 @@ export function createServer(d: ServerDeps): Server {
           if (m === "POST" && mt[2] === "reply") {
             const text = cleanText((await readJson(req)).text, MAX_TEXT);
             if (!text) throw new HttpError(400, "Reply is empty");
+            if (lowValueOwnerReply(text) && ownerQuotedPrice(text) == null) {
+              throw new HttpError(400, "Please send a more complete reply so the customer has enough context.");
+            }
             const id = store.addMessage(waId, "owner", text, now());
 
             // Custom/catering orders keep the owner's quoted total in the draft.

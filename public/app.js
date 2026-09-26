@@ -84,6 +84,9 @@
     if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) return true;
     return /^[+()\-.\s\d]+$/.test(c) && c.replace(/\D/g, "").length >= 7;
   }
+  function isLowValueOwnerMessage(m) {
+    return !!m && m.who === "owner" && /^(?:ok(?:ay)?|yes|no|sure|thanks|thank you|no thank you|yes please|got it|fine|alright)[\s.!?]*$/i.test(String(m.text || "").trim());
+  }
 
 
   /* ---------- Annu, the tiffin mascot ---------- */
@@ -478,6 +481,9 @@
       if (seen[m.id]) return;
       seen[m.id] = true;
       if (m.id > lastId) lastId = m.id;
+      // Older sessions may already contain terse owner acknowledgements. Consume their ids so polling
+      // moves forward, but do not show disconnected "Annapurna: Yes/Ok/No thank you" bubbles.
+      if (isLowValueOwnerMessage(m)) return;
       var hello = $("hello"); if (hello) hello.remove();
       msgsEl.append(bubble(m));
       added = true;
