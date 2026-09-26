@@ -1,0 +1,155 @@
+name: One-time filler hotfix
+
+on:
+  push:
+    branches: [ui-redesign-v1]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'Run filler hotfix automation'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ui-redesign-v1
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply filler-message hotfix
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              p = Path(path)
+              s = p.read_text()
+              if new in s:
+                  print('already fixed:', label)
+                  return
+              if old not in s:
+                  raise SystemExit(f'expected code not found for {label}')
+              p.write_text(s.replace(old, new, 1))
+              print('fixed:', label)
+
+          replace_once(
+              'src/server.ts',
+              '''function ownerApprovesCustom(text: string): boolean {
+  return /\\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\\b.*\\border\\b|\\border\\b.*\\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\\b|\\b(?:sure\\s+)?we\\s+can\\s+(?:make|prepare|do)\\b|\\bwe(?:'|’)ll\\s+(?:make|prepare)\\b|\\bwill\\s+(?:make|prepare)\\s+(?:the\\s+)?order\\b/i.test(text);
+}
+''',
+              '''function ownerApprovesCustom(text: string): boolean {
+  return /\\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\\b.*\\border\\b|\\border\\b.*\\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\\b|\\b(?:sure\\s+)?we\\s+can\\s+(?:make|prepare|do)\\b|\\bwe(?:'|’)ll\\s+(?:make|prepare)\\b|\\bwill\\s+(?:make|prepare)\\s+(?:the\\s+)?order\\b/i.test(text);
+}
+
+/** Very short acknowledgements are ambiguous and should never become customer-visible owner messages. */
+function lowValueOwnerReply(text: string): boolean {
+  return /^(?:ok(?:ay)?|yes|no|sure|thanks|thank you|no thank you|yes please|got it|fine|alright)[\\s.!?]*$/i.test(text.trim());
+}
+''',
+              'server low-value owner reply detector',
+          )
+
+          replace_once(
+              'src/server.ts',
+              '''            const text = cleanText((await readJson(req)).text, MAX_TEXT);
+            if (!text) throw new HttpError(400, "Reply is empty");
+            const id = store.addMessage(waId, "owner", text, now());
+''',
+              '''            const text = cleanText((await readJson(req)).text, MAX_TEXT);
+            if (!text) throw new HttpError(400, "Reply is empty");
+            if (lowValueOwnerReply(text) && ownerQuotedPrice(text) == null) {
+              throw new HttpError(400, "Please send a more complete reply so the customer has enough context.");
+            }
+            const id = store.addMessage(waId, "owner", text, now());
+''',
+              'server rejects stray one-word owner messages',
+          )
+
+          replace_once(
+              'public/app.js',
+              '''  function validContactInput(c) {
+    if (c.length < 5 || c.length > 80) return false;
+    if (/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(c)) return true;
+    return /^[+()\\-.\\s\\d]+$/.test(c) && c.replace(/\\D/g, "").length >= 7;
+  }
+''',
+              '''  function validContactInput(c) {
+    if (c.length < 5 || c.length > 80) return false;
+    if (/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(c)) return true;
+    return /^[+()\\-.\\s\\d]+$/.test(c) && c.replace(/\\D/g, "").length >= 7;
+  }
+  function isLowValueOwnerMessage(m) {
+    return !!m && m.who === "owner" && /^(?:ok(?:ay)?|yes|no|sure|thanks|thank you|no thank you|yes please|got it|fine|alright)[\\s.!?]*$/i.test(String(m.text || "").trim());
+  }
+''',
+              'client legacy filler detector',
+          )
+
+          replace_once(
+              'public/app.js',
+              '''      seen[m.id] = true;
+      if (m.id > lastId) lastId = m.id;
+      var hello = $("hello"); if (hello) hello.remove();
+      msgsEl.append(bubble(m));
+      added = true;
+''',
+              '''      seen[m.id] = true;
+      if (m.id > lastId) lastId = m.id;
+      // Older sessions may already contain terse owner acknowledgements. Consume their ids so polling
+      // moves forward, but do not show disconnected "Annapurna: Yes/Ok/No thank you" bubbles.
+      if (isLowValueOwnerMessage(m)) return;
+      var hello = $("hello"); if (hello) hello.remove();
+      msgsEl.append(bubble(m));
+      added = true;
+''',
+              'client suppresses legacy filler bubbles',
+          )
+
+          p = Path('test/web.test.ts')
+          s = p.read_text()
+          marker = '''  test("owner replies and status notes show up in the customer's chat", () =>
+'''
+          block = '''  test("terse owner filler replies are rejected and never reach customer history", () =>
+    withRig(async ({ t, start, call }) => {
+      const token = await start("Asha");
+      const waId = t.store.listCustomers()[0]!.waId;
+      const reply = (text: string) => call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text } });
+
+      for (const filler of ["Yes", "Ok", "No thank you", "Sure", "Thanks"]) {
+        const r = await reply(filler);
+        assert.equal(r.status, 400, filler);
+      }
+      assert.equal((await reply("$120")).status, 200, "a short quoted price is meaningful and remains allowed");
+      assert.equal((await reply("Yes, we can prepare that for tomorrow.")).status, 200);
+
+      const history = (await call("GET", "/web/history", { token })).json.messages.filter((m: any) => m.who === "owner");
+      assert.deepEqual(history.map((m: any) => m.text), ["$120", "Yes, we can prepare that for tomorrow."]);
+    }));
+
+'''
+          if 'terse owner filler replies are rejected and never reach customer history' not in s:
+              if marker not in s:
+                  raise SystemExit('test insertion marker not found')
+              s = s.replace(marker, block + marker, 1)
+              p.write_text(s)
+              print('fixed: filler regression test')
+
+          print('Filler hotfix applied.')
+          PY
+      - run: npm ci
+      - run: git diff --check
+      - run: npm test
+      - name: Commit tested hotfix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/app.js src/server.ts test/web.test.ts
+          git commit -m "Block stray owner filler messages"
+          git push origin HEAD:ui-redesign-v1
