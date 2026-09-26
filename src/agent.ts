@@ -557,6 +557,22 @@ export class Agent {
 
   /* ---------- talk to a person ---------- */
 
+  /** A placed-order cancellation remains an owner decision, but the request itself is deterministic and notified. */
+  async requestOrderCancellation(waId: string, who: string, orderId: number): Promise<{ created: boolean; alert: Alert }> {
+    const { store } = this.d;
+    const existing = store.listAlerts(true).find((a) => a.waId === waId && a.orderId === orderId && a.note.startsWith("Cancellation requested"));
+    if (existing) return { created: false, alert: existing };
+    const alert = store.insertAlert({
+      waId,
+      cust: who,
+      note: `Cancellation requested for order #${orderId}`,
+      orderId,
+      createdAt: this.now(),
+    });
+    await this.d.notifier.notify(`Cancellation request for order #${orderId}`, `${who} asked to cancel order #${orderId}. Review it in the owner desk.`);
+    return { created: true, alert };
+  }
+
   /** Records one open request per customer and alerts the owner. Asking twice does not create a second alert. */
   async requestHuman(waId: string, who: string, said: string): Promise<{ created: boolean; alert: Alert }> {
     const { store } = this.d;

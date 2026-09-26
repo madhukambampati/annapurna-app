@@ -68,8 +68,8 @@ describe("http server", () => {
 
   test("order status moves follow the allowed steps only", async () => {
     assert.equal((await post("/api/orders/1/status", { status: "done" }, "secret")).status, 400); // cook -> done not allowed
-    assert.equal((await post("/api/orders/1/status", { status: "ready" }, "secret")).json.order.status, "ready");
-    assert.equal((await post("/api/orders/1/status", { status: "done" }, "secret")).json.order.status, "done");
+    assert.equal((await post("/api/orders/1/status", { status: "ready", confirm: true }, "secret")).json.order.status, "ready");
+    assert.equal((await post("/api/orders/1/status", { status: "done", confirm: true }, "secret")).json.order.status, "done");
     assert.equal((await post("/api/orders/1/status", { status: "cancelled" }, "secret")).status, 400); // done is final
     assert.equal((await post("/api/orders/99/status", { status: "ready" }, "secret")).status, 404);
   });

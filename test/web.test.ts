@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import { describe, test } from "node:test";
 import { loadConfig, type Config } from "../src/config.js";
 import { RateLimiter } from "../src/limiter.js";
-import { createServer, validContact } from "../src/server.js";
+import { createServer, validContact, validName } from "../src/server.js";
 import { FRI_6PM, NOW, modelReply, setup } from "./helpers.js";
 
 const ASSETS = { "index.html": "<html>shop</html>", "desk.html": "<html>desk</html>", "app.js": "//app", "desk.js": "//desk" };
@@ -86,9 +86,11 @@ describe("limiter", () => {
   });
 });
 
-test("validContact accepts phones and emails, rejects junk", () => {
+test("customer identity validation accepts real values and rejects junk", () => {
   for (const ok of ["519-555-0101", "+1 (519) 555 0101", "maddy@example.com", "5195550101"]) assert.equal(validContact(ok), true, ok);
   for (const bad of ["", "abc", "12345", "not an email@", "a@b", "<script>alert(1)</script>", "x".repeat(81)]) assert.equal(validContact(bad), false, bad);
+  for (const ok of ["Asha", "M. Kiran", "Siva-Parvathi", "José"]) assert.equal(validName(ok), true, ok);
+  for (const bad of ["", "<script>alert(1)</script>", "A < B", "x".repeat(61)]) assert.equal(validName(bad), false, bad);
 });
 
 describe("web: files and headers", () => {
@@ -315,11 +317,11 @@ describe("web: chat and orders", () => {
       assert.match(t.notifier.sent.at(-1)!.title, /Custom order #1 confirmed/);
 
       // After confirmation it follows the ordinary order lifecycle.
-      await call("POST", "/api/orders/1/status", { token: "secret", body: { status: "ready" } });
+      await call("POST", "/api/orders/1/status", { token: "secret", body: { status: "ready", confirm: true } });
       let customerOrders = (await call("GET", "/web/orders", { token })).json.orders;
       assert.equal(customerOrders[0].status, "ready");
 
-      await call("POST", "/api/orders/1/status", { token: "secret", body: { status: "done" } });
+      await call("POST", "/api/orders/1/status", { token: "secret", body: { status: "done", confirm: true } });
       customerOrders = (await call("GET", "/web/orders", { token })).json.orders;
       assert.equal(customerOrders[0].status, "done");
     }));
@@ -376,6 +378,51 @@ describe("web: chat and orders", () => {
       assert.doesNotMatch(stored.notes, /Custom order/i);
     }));
 
+  test("ended-session resume keeps the same customer and existing orders", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Test User", "test@example.com");
+      t.llm.push(modelReply({ items: [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "kheema fry" }], pickup: FRI_6PM, stage: "awaiting_confirmation" }));
+      await say(token, "1 kheema fry friday 6pm");
+      await say(token, "yes");
+      assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 1);
+      const resumed = await call("POST", "/web/resume", { token, body: { name: "Test User", contact: "test@example.com", consent: true } });
+      assert.equal(resumed.status, 200);
+      assert.equal(t.store.listCustomers().length, 1);
+      assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 1);
+      const wrong = await call("POST", "/web/resume", { token, body: { name: "Other", contact: "other@example.com", consent: true } });
+      assert.equal(wrong.status, 409);
+    }));
+
+  test("customer can request cancellation without the order being auto-cancelled", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Asha", "5195550101");
+      t.llm.push(modelReply({ items: [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "kheema fry" }], pickup: FRI_6PM, stage: "awaiting_confirmation" }));
+      await say(token, "1 kheema fry friday 6pm");
+      const id = (await say(token, "yes")).json.orderId;
+      const r = await call("POST", `/web/orders/${id}/cancel-request`, { token });
+      assert.equal(r.status, 200);
+      assert.equal(t.store.getOrder(id)!.status, "cook");
+      const alert = t.store.listAlerts(true).find((a) => a.orderId === id);
+      assert.ok(alert);
+      assert.match(alert!.note, /Cancellation requested/);
+      assert.ok(r.json.messages.some((m: any) => /cancellation request/i.test(m.text)));
+      assert.match(t.notifier.sent.at(-1)!.title, /Cancellation request/);
+    }));
+
+  test("ready and picked-up transitions require explicit owner confirmation", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Asha");
+      t.llm.push(modelReply({ items: [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "kheema fry" }], pickup: FRI_6PM, stage: "awaiting_confirmation" }));
+      await say(token, "1 kheema fry friday 6pm");
+      const id = (await say(token, "yes")).json.orderId;
+      assert.equal((await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "ready" } })).status, 400);
+      assert.equal(t.store.getOrder(id)!.status, "cook");
+      assert.equal((await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "ready", confirm: true } })).status, 200);
+      assert.equal((await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "done" } })).status, 400);
+      assert.equal(t.store.getOrder(id)!.status, "ready");
+      assert.equal((await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "done", confirm: true } })).status, 200);
+    }));
+
   test("customers cannot see each other's chats or orders", () =>
     withRig(async ({ t, start, say, call }) => {
       const a = await start("Asha", "5195550101");
@@ -427,7 +474,7 @@ describe("web: chat and orders", () => {
       const rep = await call("POST", `/api/customers/${encodeURIComponent(t.store.listCustomers()[0]!.waId)}/reply`, { token: "secret", body: { text: "Monday works, see you then!" } });
       assert.equal(rep.status, 200);
       await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "cook" } });
-      await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "ready" } });
+      await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "ready", confirm: true } });
 
       const h = await call("GET", `/web/history?after=${last}`, { token });
       const owner = h.json.messages.filter((m: any) => m.who === "owner").map((m: any) => m.text);
@@ -436,14 +483,14 @@ describe("web: chat and orders", () => {
       assert.match(owner[1], /confirmed your order #1/);
       assert.match(owner[2], /ready for pickup/);
 
-      await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "done" } });
+      await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "done", confirm: true } });
       const after = (await call("GET", "/web/history", { token })).json.messages;
       const thanks = after.at(-1);
       assert.equal(thanks.who, "agent");
       assert.match(thanks.text, /Thank you for your order, Asha! Enjoy your food/);
       assert.match(thanks.text, /instagram\.com\/annapurna_hometaste/);
       // moving back and forth does not send it twice
-      await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "done" } }).catch(() => null);
+      await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "done", confirm: true } }).catch(() => null);
       const count = (await call("GET", "/web/history", { token })).json.messages.filter((m: any) => /Enjoy your food/.test(m.text)).length;
       assert.equal(count, 1);
     }));

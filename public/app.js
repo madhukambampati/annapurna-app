@@ -2,6 +2,7 @@
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
   var TOKEN_KEY = "annapurna-token";
+  var RESUME_TOKEN_KEY = "annapurna-resume-token";
   var NAME_KEY = "annapurna-name";
   var CHIPS = ["What's on the menu?", "Tell me about the weekly plans", "What weekend combos are running?"];
   var STATUS = {
@@ -32,6 +33,7 @@
 
   var token = "", lastId = 0, busy = false, seen = {}, orders = [], pollTimer = 0;
   var sheetOpen = "", lastFocus = null, menuData = null, handoff = null, confirmingDelete = false, confirmingEndSession = false;
+  var pendingOrderText = "";
 
   function store(k, v) { try { if (v === null) localStorage.removeItem(k); else if (v !== undefined) localStorage.setItem(k, v); else return localStorage.getItem(k); } catch (e) { /* private mode */ } return null; }
 
@@ -76,6 +78,12 @@
 
   function money(n) { return n == null ? "Ask us" : "$" + (Math.round(n * 100) / 100); }
   function clock(ts) { try { return new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); } catch (e) { return ""; } }
+  function validNameInput(n) { return !!n && n.length <= 60 && !/[<>]/.test(n); }
+  function validContactInput(c) {
+    if (c.length < 5 || c.length > 80) return false;
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) return true;
+    return /^[+()\-.\s\d]+$/.test(c) && c.replace(/\D/g, "").length >= 7;
+  }
 
 
   /* ---------- Annu, the tiffin mascot ---------- */
@@ -135,7 +143,9 @@
   }
 
   function toBoarding(msg) {
+    var oldToken = token;
     token = ""; store(TOKEN_KEY, null);
+    if (oldToken && store(RESUME_TOKEN_KEY) === oldToken) store(RESUME_TOKEN_KEY, null);
     stopPolling();
     show("onboard");
     $("startErr").textContent = msg || "";
@@ -586,7 +596,7 @@
         h("div", { class: "empty-icon", "aria-hidden": "true" }, icon("bag")),
         h("h3", {}, "No orders yet"),
         h("p", {}, "Once you confirm an order in the chat, you can follow every step here."),
-        h("button", { class: "btn", type: "button", onclick: function () { closeSheet(); openChat("I'd like to order "); } }, "Start an order")));
+        h("button", { class: "btn", type: "button", onclick: function () { closeSheet(); openChat(); } }, "Start an order")));
       return;
     }
     var copy = {
@@ -609,6 +619,9 @@
       if (o.status === "ready" && o.address) {
         actions.push(h("a", { class: "btn sm", href: "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(o.address), target: "_blank", rel: "noopener noreferrer" }, icon("pin"), "Directions"));
       }
+      if (o.status === "hold" || o.status === "cook" || o.status === "ready") {
+        actions.push(h("button", { class: "btn ghost sm", type: "button", onclick: function () { requestCancellation(o); } }, "Request cancellation"));
+      }
       actions.push(h("button", { class: "btn ghost sm", type: "button", onclick: function () { closeSheet(); openChat("Question about order #" + o.id + ": "); } }, "Ask about this order"));
       body.append(h("article", { class: "ord ord-" + st[1], "data-status": o.status },
         head,
@@ -625,6 +638,15 @@
           h("div", { class: "ord-actions" }, actions))
       ));
     });
+  }
+
+  function requestCancellation(o) {
+    var ok = window.confirm("Send a cancellation request for order #" + o.id + " to Annapurna Home Foods? The order stays active until the team confirms the cancellation.");
+    if (!ok) return;
+    api("POST", "/web/orders/" + o.id + "/cancel-request").then(function () {
+      closeSheet();
+      openChat();
+    }).catch(function (e) { toast(errText(e)); });
   }
 
   /* ---------- sheets: focus stays inside, Escape closes, focus goes back to where it was ---------- */
@@ -678,7 +700,15 @@
       if (x.kind === "combo" && x.bogo != null) price.append(h("span", { class: "lab" }, "Buy 1 Get 1"), h("span", { class: "amt alt" }, money(x.bogo)));
     }
     if (!off && !noPrice) {
-      price.append(h("button", { class: "btn sm", type: "button", onclick: function () { closeSheet(); openChat("I'd like to order the " + x.name + " "); } }, "Add to order"));
+      price.append(h("button", { class: "btn sm", type: "button", onclick: function () {
+        var choice = "I'd like to order the " + x.name + " ";
+        closeSheet();
+        if (token) { openChat(choice); return; }
+        pendingOrderText = choice;
+        show("onboard");
+        $("startErr").textContent = "Enter your details to continue with the item you selected.";
+        $("fName").focus();
+      } }, "Add to order"));
     }
     return h("article", { class: "dish" + (off ? " off" : "") },
       h("div", { class: "dmain" },
@@ -743,7 +773,11 @@
       if (panels.length > 1) body.append(seg);
       body.append(sectionLabel, holder);
       body.append(h("p", { class: "tiny" }, "Plan pickup " + (m.pickupDays || []).join(", ") + ". Everything is cooked fresh at " + (m.address || "our kitchen") + "."));
-      if ($("chat").hidden) body.append(h("button", { class: "btn", type: "button", onclick: function () { closeSheet(); if ($("fName")) $("fName").focus(); } }, "Start an order"));
+      if ($("chat").hidden) body.append(h("button", { class: "btn", type: "button", onclick: function () {
+        closeSheet();
+        if (token) openChat();
+        else { show("onboard"); if ($("fName")) $("fName").focus(); }
+      } }, "Start an order"));
       if (panels.length) {
         var wanted = preferred ? panels.findIndex(function (p) { return p[0] === preferred; }) : -1;
         select(wanted >= 0 ? wanted : (live || panels.length === 1 ? 0 : Math.min(1, panels.length - 1)));
@@ -771,7 +805,7 @@
     if (token) {
       body.append(h("section", { class: "card2" },
         h("h3", {}, "Session"),
-        h("p", {}, "Finished for now? End this session to return to the welcome screen. Your placed orders stay with Annapurna Home Foods."),
+        h("p", {}, "Finished for now? End this session to return to the welcome screen. On this device, enter the same contact later to resume your chat and placed orders."),
         confirmingEndSession
           ? h("div", { class: "links" },
               h("button", { class: "btn warn", type: "button", onclick: endSession }, "Yes, end session"),
@@ -781,7 +815,7 @@
     if (token) {
       body.append(h("section", { class: "card2" },
         h("h3", {}, "Your data"),
-        h("p", {}, "You can remove this chat from our system. Orders that were already placed stay so we can cook them."),
+        h("p", {}, "You can remove this chat and this browser's access to it. Placed orders stay with Annapurna Home Foods so we can cook them, but this deleted chat cannot be reopened."),
         confirmingDelete
           ? h("div", { class: "links" },
               h("button", { class: "btn warn", type: "button", onclick: deleteChat }, icon("trash"), "Yes, delete my chat"),
@@ -809,6 +843,7 @@
   function endSession() {
     confirmingEndSession = false;
     stopPolling();
+    if (token) store(RESUME_TOKEN_KEY, token);
     token = "";
     store(TOKEN_KEY, null);
     store(NAME_KEY, null);
@@ -817,6 +852,7 @@
     orders = [];
     handoff = null;
     busy = false;
+    pendingOrderText = "";
     if ($("msgs")) $("msgs").replaceChildren();
     if ($("homeActive")) { $("homeActive").hidden = true; $("homeActive").replaceChildren(); }
     if ($("fName")) $("fName").value = "";
@@ -829,7 +865,21 @@
   }
 
   function deleteChat() {
-    api("DELETE", "/web/me").then(function () { store(NAME_KEY, null); closeSheet(); toBoarding("Your chat was deleted."); }).catch(function (e) { confirmingDelete = false; renderHelp(); toast(errText(e)); });
+    api("DELETE", "/web/me").then(function () {
+      token = "";
+      store(TOKEN_KEY, null);
+      store(RESUME_TOKEN_KEY, null);
+      store(NAME_KEY, null);
+      pendingOrderText = "";
+      if ($("fName")) $("fName").value = "";
+      if ($("fContact")) $("fContact").value = "";
+      if ($("fConsent")) $("fConsent").checked = false;
+      closeSheet();
+      stopPolling();
+      show("onboard");
+      $("startErr").textContent = "Your chat was deleted.";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }).catch(function (e) { confirmingDelete = false; renderHelp(); toast(errText(e)); });
   }
 
   /* ---------- customer quick actions (presentation only) ---------- */
@@ -884,14 +934,46 @@
     var err = $("startErr"); err.textContent = "";
     var name = $("fName").value.trim(), contact = $("fContact").value.trim();
     if (!name) { err.textContent = "Please enter your name."; return; }
+    if (!validNameInput(name)) { err.textContent = "Please enter a name without < or > characters."; return; }
     if (!contact) { err.textContent = "Please enter a phone number or email."; return; }
+    if (!validContactInput(contact)) { err.textContent = "Please enter a valid phone number or email."; return; }
     if (!$("fConsent").checked) { err.textContent = "Please tick the box to continue."; return; }
     $("startBtn").disabled = true;
-    api("POST", "/web/session", { name: name, contact: contact, consent: true }).then(function (j) {
-      token = j.token; store(TOKEN_KEY, token); store(NAME_KEY, j.name || name);
-      openHome();
-    }).catch(function (e2) { err.textContent = e2.status === 429 ? "Too many new chats from this network. Please try again later." : e2.message; })
-      .then(function () { $("startBtn").disabled = false; });
+
+    var selected = pendingOrderText;
+    var finish = function (j) {
+      if (j && j.token) token = j.token;
+      store(TOKEN_KEY, token);
+      store(RESUME_TOKEN_KEY, null);
+      store(NAME_KEY, (j && j.name) || name);
+      pendingOrderText = "";
+      if (selected) openChat(selected); else openHome();
+    };
+    var fresh = function () {
+      token = "";
+      return api("POST", "/web/session", { name: name, contact: contact, consent: true }).then(finish);
+    };
+    var resume = store(RESUME_TOKEN_KEY) || "";
+    var work;
+    if (resume) {
+      token = resume;
+      work = api("POST", "/web/resume", { name: name, contact: contact, consent: true }).then(function (j) {
+        finish(j);
+      }).catch(function (e2) {
+        token = "";
+        if (e2.status === 401 || e2.status === 409) {
+          store(RESUME_TOKEN_KEY, null);
+          return fresh();
+        }
+        throw e2;
+      });
+    } else {
+      work = fresh();
+    }
+    work.catch(function (e2) {
+      token = "";
+      err.textContent = e2.status === 429 ? "Too many new chats from this network. Please try again later." : e2.message;
+    }).then(function () { $("startBtn").disabled = false; });
   });
 
   /* ---------- start ---------- */

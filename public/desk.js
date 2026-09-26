@@ -167,7 +167,18 @@ function renderDashboard() {
 
 /* ---------- orders ---------- */
 function ticket(o) {
-  const b = (to, txt, ghost) => h("button", { class: ghost ? "ghost" : "", onclick: () => (to === "cancelled" ? cancelOrder(o) : act(`/api/orders/${o.id}/status`, { status: to })) }, txt);
+  const b = (to, txt, ghost) => h("button", { class: ghost ? "ghost" : "", onclick: () => {
+    if (to === "cancelled") return cancelOrder(o);
+    if (to === "ready") {
+      if (!window.confirm(`Mark order #${o.id} ready? The customer will immediately be told to come pick it up.`)) return;
+      return act(`/api/orders/${o.id}/status`, { status: to, confirm: true });
+    }
+    if (to === "done") {
+      if (!window.confirm(`Mark order #${o.id} picked up? This closes the order and sends the thank-you message.`)) return;
+      return act(`/api/orders/${o.id}/status`, { status: to, confirm: true });
+    }
+    return act(`/api/orders/${o.id}/status`, { status: to });
+  } }, txt);
   const tones = { hold: "#e7882b", cook: "#1d6b4d", ready: "#2f8fb0", done: "#6f7c73", cancelled: "#c94f45" };
   const isCustom = o.items.some((i) => String(i.id || "").startsWith("custom:"));
   return h("article", { class: "ticket" + (isCustom ? " custom-ticket" : ""), style: "--ticket-tone:" + (tones[o.status] || "#1d6b4d") },
@@ -262,6 +273,7 @@ async function openChat(waId) {
 async function sendReply(text) {
   text = text.trim();
   if (!text || !chat.waId) return;
+  if (/^(?:ok(?:ay)?|yes|no|sure|thanks|thank you)\b/i.test(text) && text.split(/\s+/).length <= 4 && !window.confirm("This reply is very short and will appear to the customer exactly as written: “" + text + "”. Send it?")) return;
   try {
     await api("/api/customers/" + encodeURIComponent(chat.waId) + "/reply", { method: "POST", body: JSON.stringify({ text }) });
     showErr(null);

@@ -128,11 +128,24 @@ function ownerApprovesCustom(text: string): boolean {
   return /\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\b.*\border\b|\border\b.*\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\b|\b(?:sure\s+)?we\s+can\s+(?:make|prepare|do)\b|\bwe(?:'|’)ll\s+(?:make|prepare)\b|\bwill\s+(?:make|prepare)\s+(?:the\s+)?order\b/i.test(text);
 }
 
+/** A display name is plain text. HTML-like names are rejected for customer-facing polish. */
+export function validName(n: string): boolean {
+  return n.length > 0 && n.length <= 60 && !/[<>]/.test(n);
+}
+
 /** A phone number (7+ digits) or something that looks like an email. */
 export function validContact(c: string): boolean {
   if (c.length < 5 || c.length > 80) return false;
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) return true;
   return /^[+()\-.\s\d]+$/.test(c) && c.replace(/\D/g, "").length >= 7;
+}
+
+function contactKey(c: string): string {
+  const v = c.trim();
+  if (v.includes("@")) return "email:" + v.toLowerCase();
+  let digits = v.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
+  return "phone:" + digits;
 }
 
 export interface ServerDeps {
@@ -259,12 +272,28 @@ export function createServer(d: ServerDeps): Server {
           });
         }
 
+        if (m === "POST" && path === "/web/resume") {
+          const waId = webSession(req);
+          const b = await readJson(req);
+          const name = cleanText(b.name, 61);
+          const contact = cleanText(b.contact, 80);
+          if (!validName(name)) throw new HttpError(400, "Please enter a valid name.");
+          if (!validContact(contact)) throw new HttpError(400, "Please enter a phone number or email so Annapurna Home Foods can reach you.");
+          if (b.consent !== true) throw new HttpError(400, "Please tick the box to continue.");
+          const customer = store.getCustomer(waId);
+          if (!customer || contactKey(customer.contact) !== contactKey(contact)) {
+            throw new HttpError(409, "That saved session belongs to a different contact.");
+          }
+          store.updateCustomer(waId, { name, contact });
+          return send(req, res, 200, { ok: true, name });
+        }
+
         if (m === "POST" && path === "/web/session") {
           limit(`sess:${ip}`, w.sessionsPerIpHour, HOUR);
           const b = await readJson(req);
-          const name = cleanText(b.name, 60);
+          const name = cleanText(b.name, 61);
           const contact = cleanText(b.contact, 80);
-          if (!name) throw new HttpError(400, "Please enter your name.");
+          if (!validName(name)) throw new HttpError(400, "Please enter a valid name.");
           if (!validContact(contact)) throw new HttpError(400, "Please enter a phone number or email so Annapurna Home Foods can reach you.");
           if (b.consent !== true) throw new HttpError(400, "Please tick the box to continue.");
           const waId = `web:${randomBytes(8).toString("hex")}`;
@@ -309,6 +338,26 @@ export function createServer(d: ServerDeps): Server {
           const before = store.lastMessage(waId)?.id ?? 0;
           const { created, alert } = await agent.requestHuman(waId, c.name || "Customer", "Pressed the Talk to a person button");
           store.addMessage(waId, "agent", agent.handoffReply(created, alert, s), now());
+          return send(req, res, 200, { messages: store.getMessagesAfter(waId, before), handoff: { at: alert.createdAt } });
+        }
+
+        let customerOrder = /^\/web\/orders\/(\d+)\/cancel-request$/.exec(path);
+        if (m === "POST" && customerOrder) {
+          const waId = webSession(req);
+          const order = store.getOrder(Number(customerOrder[1]));
+          if (!order || order.waId !== waId) throw new HttpError(404, "No such order");
+          if (order.status === "done" || order.status === "cancelled") throw new HttpError(400, "This order is already closed.");
+          const customer = store.getCustomer(waId)!;
+          const before = store.lastMessage(waId)?.id ?? 0;
+          const { created, alert } = await agent.requestOrderCancellation(waId, customer.name || "Customer", order.id);
+          store.addMessage(
+            waId,
+            "agent",
+            created
+              ? `I've sent your cancellation request for order #${order.id} to Annapurna Home Foods. The order stays active until the team confirms the cancellation here.`
+              : `Your cancellation request for order #${order.id} is already with Annapurna Home Foods. The order stays active until the team confirms it here.`,
+            now(),
+          );
           return send(req, res, 200, { messages: store.getMessagesAfter(waId, before), handoff: { at: alert.createdAt } });
         }
 
@@ -426,6 +475,9 @@ export function createServer(d: ServerDeps): Server {
           const to = body.status as OrderStatus;
           // The owner can say why an order is cancelled. It goes to the customer with the cancel message.
           const reason = to === "cancelled" ? cleanText(body.reason, 300) : "";
+          if ((to === "ready" || to === "done") && body.confirm !== true) {
+            throw new HttpError(400, to === "ready" ? "Explicit confirmation is required before telling the customer an order is ready." : "Explicit confirmation is required before marking an order picked up.");
+          }
           if (!ALLOWED[o.status]?.includes(to)) throw new HttpError(400, `Cannot move an order from ${o.status} to ${String(to)}`);
           const updated = store.setOrderStatus(o.id, to, o.status === "hold" && to === "cook");
           const s = store.getSettings();
