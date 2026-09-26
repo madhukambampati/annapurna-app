@@ -347,6 +347,720 @@ input[type=text]:focus,textarea:focus{border-color:var(--brand);outline:0;box-sh
 @keyframes floatUp{0%{opacity:0;transform:translateY(8px) scale(.6)}20%{opacity:1}100%{opacity:0;transform:translateY(-40px) scale(1.1) rotate(12deg)}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
+
+<style id="customerRedesignV1">
+/* CUSTOMER REDESIGN V1 — presentation only; ordering logic remains in app.js */
+body.customer-mode{
+  background:
+    radial-gradient(700px 420px at 0% 0%,rgba(29,107,77,.20),transparent 70%),
+    radial-gradient(540px 360px at 100% 100%,rgba(241,168,36,.14),transparent 72%),
+    var(--bg);
+}
+.customer-mode .app{isolation:isolate}
+.customer-mode .top{
+  position:relative;z-index:20;
+  padding-top:calc(12px + env(safe-area-inset-top));
+  padding-bottom:12px;
+  background:color-mix(in srgb,var(--surface) 92%,transparent);
+  backdrop-filter:blur(18px) saturate(1.15);
+  -webkit-backdrop-filter:blur(18px) saturate(1.15);
+  box-shadow:0 1px 0 var(--line),0 8px 26px rgba(14,49,35,.05);
+}
+.customer-mode .seal{width:46px;height:46px;border-radius:15px;box-shadow:0 8px 22px rgba(29,107,77,.18)}
+.customer-mode .brand h1{font-size:21px}
+.customer-mode .brand small{font-size:12px;letter-spacing:.02em}
+.customer-mode .brand small::after{
+  content:"  ·  CUSTOMER";
+  margin-left:5px;
+  color:var(--brand2);
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.12em;
+}
+.customer-mode .tab{
+  min-width:52px;border-radius:14px;padding:7px 8px 5px;
+  transition:transform .18s ease,background .18s ease,color .18s ease;
+}
+.customer-mode .tab:active{transform:scale(.94)}
+.customer-mode .onboard{gap:14px;padding-top:14px}
+.customer-mode .hero{
+  min-height:330px;
+  display:flex;flex-direction:column;justify-content:flex-end;
+  padding:26px 22px;
+  background:
+    radial-gradient(260px 220px at 78% 18%,rgba(241,168,36,.26),transparent 70%),
+    linear-gradient(145deg,#0e4932 0%,#176b4b 55%,#477431 130%);
+  border:1px solid rgba(255,255,255,.12);
+  box-shadow:0 22px 48px rgba(10,45,30,.24);
+}
+.customer-mode .hero::before{width:300px;height:300px;right:-100px;top:-110px}
+.customer-mode .heroTop{margin-bottom:auto}
+.customer-mode .hero h2{font-size:34px;max-width:470px;letter-spacing:-.02em}
+.customer-mode .hero p{font-size:16px;max-width:470px}
+.customer-mode .hero .kick{
+  width:max-content;background:rgba(255,255,255,.16);
+  border:1px solid rgba(255,255,255,.15);
+  backdrop-filter:blur(10px);
+}
+.customer-mode .bubble{
+  box-shadow:0 10px 28px rgba(0,0,0,.16);
+}
+.customer-mode .steps{gap:10px}
+.customer-mode .steps li{
+  min-height:116px;padding:14px 12px;border-radius:20px;
+  box-shadow:0 9px 22px rgba(20,50,32,.05);
+}
+.customer-mode .steps b{width:30px;height:30px}
+.customer-mode .card{
+  border-radius:24px;padding:18px;
+  box-shadow:0 14px 32px rgba(20,50,32,.07);
+}
+.customer-mode input[type=text],
+.customer-mode input[type=tel],
+.customer-mode input[type=email],
+.customer-mode textarea{border-radius:16px}
+.customer-mode .btn{border-radius:16px;min-height:48px}
+.customer-mode .chat{
+  background:
+    radial-gradient(440px 260px at 0% 0%,color-mix(in srgb,var(--brand) 8%,transparent),transparent 76%),
+    var(--page);
+}
+.customer-mode .msgs{padding:14px 14px 10px;gap:12px}
+.customer-mode .b{box-shadow:0 6px 18px rgba(16,44,30,.06)}
+.customer-mode .b.cust{box-shadow:0 8px 22px rgba(29,107,77,.16)}
+.customer-mode .sum{
+  border-radius:24px;
+  box-shadow:0 16px 38px rgba(29,107,77,.13);
+}
+.customer-mode .sum h3{padding:13px 16px}
+.customer-mode .dcard{
+  border-radius:20px;
+  box-shadow:0 9px 24px rgba(19,49,32,.07);
+  transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;
+}
+.customer-mode .dcard:active{transform:scale(.985)}
+.customer-mode .ppill{
+  border-radius:14px;
+  transition:transform .16s ease,filter .16s ease;
+}
+.customer-mode .ppill:active{transform:scale(.95)}
+.customer-mode .composer{
+  background:color-mix(in srgb,var(--surface) 93%,transparent);
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+  border-top:1px solid var(--line);
+  padding-top:10px;
+}
+.customer-mode .composer textarea{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--brand) 16%,transparent)}
+.customer-mode .send{
+  box-shadow:0 8px 18px color-mix(in srgb,var(--brand) 32%,transparent);
+  transition:transform .16s ease,filter .16s ease;
+}
+.customer-mode .send:active{transform:scale(.9) rotate(-6deg)}
+.customer-actions{
+  display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;
+  padding:10px 14px 8px;
+  background:linear-gradient(to bottom,color-mix(in srgb,var(--page) 96%,transparent),var(--page));
+  border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent);
+  flex:none;
+}
+.customer-actions::-webkit-scrollbar{display:none}
+.customer-action{
+  flex:0 0 auto;display:flex;align-items:center;gap:8px;
+  min-height:42px;padding:8px 12px;border:1px solid var(--line);
+  border-radius:15px;background:var(--surface);color:var(--ink);
+  font:700 12.5px/1.1 var(--f-body);
+  box-shadow:0 7px 18px rgba(20,50,32,.06);
+  animation:customerActionIn .42s cubic-bezier(.2,.8,.3,1.1) both;
+  animation-delay:calc(var(--i) * 60ms);
+}
+.customer-action .ic{width:18px;height:18px;color:var(--brand2)}
+.customer-action[data-accent=true]{
+  background:var(--brand);color:var(--on-brand);border-color:var(--brand);
+}
+.customer-action[data-accent=true] .ic{color:inherit}
+.customer-action:active{transform:scale(.96)}
+.customer-mode .veil{backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.customer-mode .sheet{border-radius:28px 28px 0 0}
+@media(min-width:700px){
+  .customer-mode .app{max-width:680px}
+  .customer-mode .customer-actions{padding-inline:18px}
+}
+@media(max-width:520px){
+  .customer-mode .top{gap:7px;padding-inline:10px}
+  .customer-mode .brand h1{font-size:18px}
+  .customer-mode .brand small::after{display:none}
+  .customer-mode .tab{min-width:48px;padding-inline:6px}
+  .customer-mode .hero{min-height:300px}
+  .customer-mode .hero h2{font-size:31px}
+  .customer-mode .steps li{min-height:108px}
+}
+@keyframes customerActionIn{
+  from{opacity:0;transform:translateY(-7px) scale(.96)}
+  to{opacity:1;transform:none}
+}
+@media(prefers-reduced-motion:reduce){
+  .customer-action{animation:none}
+}
+</style>
+
+<style id="customerFlowPolishV1">
+/* CUSTOMER FLOW POLISH V1 — completes onboarding, menu, order tracking and help surfaces */
+.customer-mode .handoff{
+  position:relative;z-index:18;
+  padding:10px 14px;
+  background:linear-gradient(90deg,var(--accent-soft),color-mix(in srgb,var(--accent-soft) 72%,var(--surface)));
+  box-shadow:0 7px 18px rgba(79,55,8,.05);
+}
+.customer-mode .hello{
+  width:min(100%,360px);max-width:360px;margin:auto;
+  padding:20px 18px;border:1px solid var(--line);border-radius:24px;
+  background:linear-gradient(180deg,var(--surface),color-mix(in srgb,var(--surface2) 65%,var(--surface)));
+  box-shadow:0 14px 32px rgba(20,50,32,.07);
+}
+.customer-mode .hello .mascot{width:112px}
+.customer-mode .chips{padding-top:9px;padding-bottom:9px}
+.customer-mode .chips button{
+  min-height:38px;border-radius:14px;
+  box-shadow:0 5px 14px rgba(20,50,32,.04);
+  transition:transform .16s ease,border-color .16s ease,background .16s ease;
+}
+.customer-mode .chips button:active{transform:scale(.96)}
+.customer-mode .sheet>header{
+  min-height:64px;padding:15px 18px 12px;
+  background:color-mix(in srgb,var(--surface) 94%,transparent);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+}
+.customer-mode .sheet>header h2{font-size:23px}
+.customer-mode .sheet .body{padding:16px 16px calc(24px + env(safe-area-inset-bottom));gap:14px}
+.customer-mode .seg{
+  position:sticky;top:0;z-index:3;
+  overflow-x:auto;scrollbar-width:none;
+  border-radius:16px;padding:4px;
+  box-shadow:0 8px 22px rgba(22,48,33,.06);
+}
+.customer-mode .seg::-webkit-scrollbar{display:none}
+.customer-mode .seg button{min-width:max-content;padding:9px 12px;border-radius:12px}
+.customer-mode .dish{
+  border-radius:22px;padding:15px;
+  box-shadow:0 9px 24px rgba(20,50,32,.06);
+  transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;
+}
+.customer-mode .dish:not(.off):active{transform:scale(.99)}
+.customer-mode .dprice .btn{min-height:38px;padding:8px 12px;border-radius:12px}
+.customer-mode .day{border-radius:18px;padding:13px 14px}
+.customer-mode .card2{
+  border-radius:22px;padding:16px;
+  box-shadow:0 10px 26px rgba(20,50,32,.05);
+}
+.customer-mode .status{border-radius:16px}
+.customer-mode .links .btn{min-height:44px}
+.customer-mode .ord{
+  position:relative;overflow:hidden;
+  padding:0;border-radius:24px;
+  box-shadow:0 14px 34px rgba(20,50,32,.08);
+}
+.customer-mode .ord::before{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--brand);
+}
+.customer-mode .ord-ready::before{background:var(--accent)}
+.customer-mode .ord-cancelled::before{background:var(--chilli)}
+.customer-mode .ord-done::before{background:var(--dim)}
+.customer-mode .ord-head{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:15px 16px 8px 18px;
+}
+.customer-mode .ord-head>div{display:flex;align-items:baseline;gap:7px}
+.customer-mode .ord-head b{font:800 22px/1 var(--f-display)}
+.customer-mode .ord-kicker{
+  color:var(--muted);font-size:11px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;
+}
+.customer-mode .ord-copy{margin:0;padding:0 16px 12px 18px;color:var(--muted);font-size:14px}
+.customer-mode .ord .steps4{padding:0 16px 15px 18px;gap:6px}
+.customer-mode .ord .steps4 li{padding-top:19px;font-size:10.5px}
+.customer-mode .ord .steps4 li::before{height:7px;border-radius:999px}
+.customer-mode .ord .steps4 li.current-step::after{
+  content:"";position:absolute;top:-3px;left:50%;width:13px;height:13px;margin-left:-6px;
+  border-radius:50%;background:var(--brand);box-shadow:0 0 0 5px color-mix(in srgb,var(--brand) 18%,transparent);
+  animation:orderPulse 1.7s ease-in-out infinite;
+}
+.customer-mode .ord-ready .steps4 li.current-step::after{background:var(--accent);box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 20%,transparent)}
+.customer-mode .ord-items{
+  margin:0 14px 0 18px;padding:12px 14px;border-radius:16px;
+  background:var(--surface2);border:1px solid var(--line);
+}
+.customer-mode .ord-items ul{padding-left:18px}
+.customer-mode .ord-meta{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;
+  padding:12px 16px 0 18px;
+}
+.customer-mode .ord-meta>div{
+  min-width:0;padding:10px 11px;border:1px solid var(--line);border-radius:14px;background:var(--surface);
+}
+.customer-mode .ord-meta span{display:block;color:var(--muted);font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+.customer-mode .ord-meta b{display:block;margin-top:2px;font-size:13px;overflow-wrap:anywhere}
+.customer-mode .ord-foot{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:13px 16px 16px 18px;flex-wrap:wrap;
+}
+.customer-mode .ord-foot .tot{font-size:16px}
+.customer-mode .ord-actions{display:flex;gap:7px;flex-wrap:wrap}
+.customer-mode .ord-actions .btn{min-height:38px}
+.customer-mode .orders-empty{text-align:center;align-items:center;padding:26px 20px}
+.customer-mode .orders-empty .empty-icon{
+  display:grid;place-items:center;width:64px;height:64px;border-radius:20px;
+  background:var(--brand-soft);color:var(--brand2);
+}
+.customer-mode .orders-empty .empty-icon .ic{width:30px;height:30px}
+.customer-mode .orders-empty .btn{width:100%}
+.customer-mode .st{
+  border:1px solid color-mix(in srgb,currentColor 18%,transparent);
+  padding:4px 9px;
+}
+.customer-mode .sheet[data-kind="orders"] .body{background:linear-gradient(180deg,color-mix(in srgb,var(--brand-soft) 22%,var(--page)),var(--page) 180px)}
+.customer-mode .sheet[data-kind="menu"] .body{background:linear-gradient(180deg,color-mix(in srgb,var(--accent-soft) 18%,var(--page)),var(--page) 190px)}
+.customer-mode .sheet[data-kind="help"] .body{background:linear-gradient(180deg,color-mix(in srgb,var(--brand-soft) 15%,var(--page)),var(--page) 170px)}
+@keyframes orderPulse{0%,100%{transform:scale(.82);opacity:.7}50%{transform:scale(1.08);opacity:1}}
+@media(max-width:520px){
+  .customer-mode .ord-meta{grid-template-columns:1fr}
+  .customer-mode .ord-foot{align-items:stretch}
+  .customer-mode .ord-actions{width:100%}
+  .customer-mode .ord-actions .btn{flex:1}
+  .customer-mode .dish{flex-direction:column}
+  .customer-mode .dprice{align-items:flex-start;text-align:left;display:grid;grid-template-columns:auto auto;gap:4px 10px}
+  .customer-mode .dprice .btn{grid-column:1/-1;width:100%;margin-top:8px}
+}
+@media(prefers-reduced-motion:reduce){
+  .customer-mode .ord .steps4 li.current-step::after{animation:none}
+}
+</style>
+
+<style id="customerHomeRedesignV2">
+/* CUSTOMER HOME REDESIGN V2 — a true home experience, separate from the ordering chat */
+.customer-mode .app{max-width:820px}
+.customer-mode .top{
+  min-height:74px;padding-inline:20px;
+  background:color-mix(in srgb,var(--surface) 96%,transparent);
+}
+.customer-mode .brand h1{font-size:23px}
+.customer-mode .brand small{font-size:12px}
+.customer-mode .tabs{gap:6px}
+.customer-mode .tab{
+  min-width:58px;padding:8px 9px 6px;border-radius:14px;
+}
+.customer-mode .tab[aria-current=true]{
+  color:var(--brand2);background:var(--brand-soft);
+}
+.customer-mode .tab[aria-current=true]::after{
+  content:"";position:absolute;left:12px;right:12px;bottom:2px;height:2px;border-radius:2px;background:var(--brand);
+}
+.customer-home{
+  flex:1;min-height:0;overflow-y:auto;
+  padding:18px 20px calc(30px + env(safe-area-inset-bottom));
+  background:
+    radial-gradient(600px 320px at 100% 0%,color-mix(in srgb,var(--accent) 12%,transparent),transparent 72%),
+    radial-gradient(520px 300px at 0% 35%,color-mix(in srgb,var(--brand) 8%,transparent),transparent 75%),
+    var(--page);
+}
+.home-hero{
+  position:relative;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(220px,.8fr);
+  min-height:355px;overflow:hidden;padding:34px;border-radius:30px;
+  color:#fff;background:
+    radial-gradient(360px 300px at 88% 18%,rgba(241,168,36,.36),transparent 67%),
+    radial-gradient(300px 260px at 8% 105%,rgba(255,255,255,.12),transparent 68%),
+    linear-gradient(135deg,#0c3d2c 0%,#17694a 55%,#244f36 100%);
+  border:1px solid rgba(255,255,255,.11);
+  box-shadow:0 24px 60px rgba(12,55,38,.25);
+}
+.home-hero::before{
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:.18;
+  background-image:radial-gradient(rgba(255,255,255,.9) .7px,transparent .7px);
+  background-size:18px 18px;
+  mask-image:linear-gradient(90deg,transparent,#000 60%);
+}
+.home-copy{position:relative;z-index:2;display:flex;flex-direction:column;justify-content:center;align-items:flex-start}
+.home-eyebrow{
+  display:inline-flex;padding:6px 10px;border-radius:999px;
+  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.13);
+  font-size:11px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;
+}
+.home-copy h2{
+  max-width:500px;margin:16px 0 10px;
+  font:700 clamp(34px,6vw,52px)/1.02 var(--f-display);letter-spacing:-.035em;text-wrap:balance;
+}
+.home-copy>p{max-width:500px;margin:0;color:rgba(255,255,255,.78);font-size:15px}
+.home-hero-actions{display:flex;align-items:stretch;gap:9px;flex-wrap:wrap;margin-top:24px}
+.home-primary,.home-secondary{
+  min-height:58px;border:0;border-radius:18px;font:inherit;font-weight:800;cursor:pointer;
+}
+.home-primary{
+  min-width:245px;display:flex;align-items:center;gap:11px;padding:10px 14px;
+  text-align:left;background:var(--accent);color:#2d2103;box-shadow:0 13px 30px rgba(0,0,0,.17);
+}
+.home-primary .ic{width:25px;height:25px}
+.home-primary>span:nth-child(2){display:flex;flex:1;flex-direction:column;line-height:1.2}
+.home-primary small{margin-top:2px;font-size:11px;font-weight:700;opacity:.68}
+.home-arrow{font-size:23px}
+.home-secondary{
+  padding:0 17px;display:flex;gap:8px;align-items:center;
+  color:#fff;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);
+}
+.home-primary,.home-secondary,.home-tile{transition:transform .18s ease,box-shadow .18s ease,filter .18s ease}
+.home-primary:active,.home-secondary:active,.home-tile:active{transform:scale(.98)}
+.home-annuwrap{
+  position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:280px;
+}
+.home-annuwrap .mascot{position:relative;z-index:2;width:185px;filter:drop-shadow(0 20px 18px rgba(0,0,0,.2))}
+.home-glow{
+  position:absolute;width:230px;height:230px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,225,146,.52),rgba(255,255,255,.08) 52%,transparent 72%);
+  animation:homeGlow 3.2s ease-in-out infinite;
+}
+.home-bubble{
+  position:relative;z-index:3;margin-top:-20px;padding:8px 12px;border-radius:14px 14px 14px 4px;
+  background:#fff;color:#173126;font-size:12px;font-weight:800;box-shadow:0 8px 20px rgba(0,0,0,.13);
+}
+.home-section{margin-top:24px}
+.home-section-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-end;margin:0 2px 12px}
+.home-section-head>div>span{
+  display:block;color:var(--brand2);font-size:10px;font-weight:900;letter-spacing:.13em;
+}
+.home-section-head h3{margin:3px 0 0;font:700 25px/1.1 var(--f-display)}
+.home-section-head>small{max-width:190px;color:var(--muted);font-size:12px;text-align:right}
+.home-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.home-tile{
+  position:relative;min-height:126px;display:grid;grid-template-columns:50px 1fr 24px;align-items:center;gap:12px;
+  padding:17px;border:1px solid var(--line);border-radius:23px;text-align:left;
+  background:var(--surface);color:var(--ink);box-shadow:0 12px 30px rgba(20,50,32,.065);
+}
+.home-tile::after{
+  content:"";position:absolute;right:-24px;bottom:-28px;width:92px;height:92px;border-radius:50%;
+  background:color-mix(in srgb,var(--tile-tone) 10%,transparent);
+}
+.tile-icon{
+  display:grid;place-items:center;width:50px;height:50px;border-radius:17px;
+  background:color-mix(in srgb,var(--tile-tone) 14%,var(--surface));color:var(--tile-tone);
+}
+.tile-icon .ic{width:25px;height:25px}
+.tile-copy{position:relative;z-index:1;display:flex;flex-direction:column;gap:4px}
+.tile-copy b{font:700 19px/1.12 var(--f-display)}
+.tile-copy small{color:var(--muted);font-size:12px;font-weight:500}
+.tile-arrow{position:relative;z-index:1;color:var(--tile-tone);font-size:22px;font-weight:500}
+.tile-combo{--tile-tone:#c67b16}.tile-plan{--tile-tone:#476f3f}.tile-orders{--tile-tone:#2a718a}.tile-menu{--tile-tone:#8b5140}
+.home-active{
+  margin-top:18px;padding:18px;border-radius:23px;
+  background:linear-gradient(120deg,color-mix(in srgb,var(--brand) 92%,#102c21),var(--brand2));color:var(--on-brand);
+  box-shadow:0 15px 34px color-mix(in srgb,var(--brand) 25%,transparent);
+}
+.home-active-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.home-active .eyebrow{font-size:10px;font-weight:900;letter-spacing:.11em;text-transform:uppercase;opacity:.7}
+.home-active h3{margin:4px 0 2px;font:700 22px/1.1 var(--f-display)}
+.home-active p{margin:0;color:color-mix(in srgb,var(--on-brand) 75%,transparent);font-size:13px}
+.home-status{
+  flex:none;display:inline-flex;padding:5px 9px;border-radius:999px;background:rgba(255,255,255,.15);
+  font-size:11px;font-weight:900;
+}
+.home-active-progress{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:16px 0 13px}
+.home-active-progress span{height:6px;border-radius:999px;background:rgba(255,255,255,.18)}
+.home-active-progress span.on{background:var(--accent)}
+.home-active-foot{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+.home-active-foot small{opacity:.74}
+.home-active-foot button{
+  min-height:38px;padding:7px 12px;border:0;border-radius:12px;background:#fff;color:#173126;font-weight:800;
+}
+.home-promise{
+  margin:18px 0 4px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;
+}
+.home-promise>div{
+  min-width:0;display:flex;gap:9px;align-items:flex-start;padding:12px;
+  border:1px solid var(--line);border-radius:17px;background:color-mix(in srgb,var(--surface) 76%,transparent);
+}
+.promise-icon{
+  flex:none;display:grid;place-items:center;width:28px;height:28px;border-radius:9px;
+  background:var(--brand-soft);color:var(--brand2);font-weight:900;
+}
+.home-promise>div>span:last-child{display:flex;flex-direction:column;min-width:0}
+.home-promise b{font-size:12px;line-height:1.2}
+.home-promise small{margin-top:3px;color:var(--muted);font-size:10.5px;line-height:1.25}
+.customer-mode .chat{background:var(--page)}
+.customer-mode .chat::before{
+  content:"ORDER CHAT";flex:none;padding:7px 18px 0;color:var(--muted);
+  font-size:9px;font-weight:900;letter-spacing:.14em;
+}
+.customer-mode .customer-actions{display:none}
+.customer-mode .msgs{padding-top:8px}
+@keyframes homeGlow{0%,100%{transform:scale(.94);opacity:.72}50%{transform:scale(1.05);opacity:1}}
+@media(min-width:900px){
+  .customer-mode .app{height:calc(100dvh - 36px)}
+}
+@media(max-width:680px){
+  .customer-mode .app{max-width:100%}
+  .customer-mode .top{min-height:68px;padding-inline:12px}
+  .customer-mode .seal{width:42px;height:42px}
+  .customer-mode .brand h1{font-size:19px}
+  .customer-mode .brand small{display:none}
+  .customer-mode .tabs{gap:1px}
+  .customer-mode .tab{min-width:48px;padding-inline:5px;font-size:10.5px}
+  .customer-home{padding:12px 12px calc(24px + env(safe-area-inset-bottom))}
+  .home-hero{grid-template-columns:1fr;min-height:auto;padding:23px 20px 20px;border-radius:25px}
+  .home-copy h2{font-size:38px}
+  .home-annuwrap{position:absolute;right:-28px;top:-18px;min-height:0;opacity:.23;pointer-events:none}
+  .home-annuwrap .mascot{width:175px}
+  .home-annuwrap .home-bubble{display:none}
+  .home-glow{width:190px;height:190px}
+  .home-copy{padding-right:22px}
+  .home-primary{min-width:0;flex:1 1 210px}
+  .home-secondary{flex:1 1 130px;justify-content:center}
+  .home-grid{grid-template-columns:1fr}
+  .home-tile{min-height:94px;grid-template-columns:46px 1fr 20px;padding:14px;border-radius:19px}
+  .tile-icon{width:46px;height:46px;border-radius:14px}
+  .home-promise{grid-template-columns:1fr}
+  .home-promise>div{padding:10px 11px}
+  .home-section-head>small{display:none}
+}
+@media(max-width:430px){
+  .customer-mode .top{gap:5px}
+  .customer-mode .tab{min-width:44px}
+  .customer-mode .tab .ic{width:18px;height:18px}
+  .home-copy h2{font-size:34px}
+}
+@media(prefers-reduced-motion:reduce){
+  .home-glow{animation:none}
+}
+</style>
+
+<style id="brandHomeNavigation">
+/* BRAND HOME NAVIGATION */
+.brand-home{
+  flex:1;min-width:0;display:flex;align-items:center;gap:10px;
+  padding:0;border:0;background:transparent;color:inherit;text-align:left;
+  border-radius:15px;cursor:pointer;
+}
+.brand-home:hover{background:color-mix(in srgb,var(--brand-soft) 42%,transparent)}
+.brand-home:active{transform:scale(.985)}
+.brand-home:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.brand-home .brand{display:block;flex:1;min-width:0}
+.brand-home .seal{flex:none}
+@media(max-width:680px){
+  .brand-home{gap:7px}
+}
+</style>
+
+<style id="homeMotionVisibilityFix">
+/* HOME MOTION VISIBILITY FIX — keep Annu fully visible and make the motion intentional */
+.customer-home{scroll-behavior:smooth}
+.home-hero{
+  overflow:hidden;
+  padding-top:38px;
+}
+.home-annuwrap{
+  overflow:visible;
+  min-height:300px;
+  padding-top:8px;
+}
+.home-motion-stage{
+  position:relative;
+  width:250px;height:250px;
+  display:grid;place-items:center;
+  overflow:visible;
+}
+.home-motion-stage #homeMascot{
+  position:relative;z-index:5;
+  display:grid;place-items:center;
+  width:210px;height:230px;
+}
+.home-motion-stage #homeMascot .mascot{
+  width:190px!important;
+  max-height:225px;
+  overflow:visible;
+  animation:homeMascotFloat 3s ease-in-out infinite;
+}
+.home-motion-stage .home-glow{
+  z-index:1;
+  width:230px;height:230px;
+  animation:homeGlow 3.2s ease-in-out infinite, homeGlowDrift 7s ease-in-out infinite;
+}
+.home-orbit{
+  position:absolute;z-index:3;
+  width:18px;height:10px;border-radius:100% 0 100% 0;
+  background:#7bc58f;
+  box-shadow:0 4px 12px rgba(0,0,0,.12);
+  transform-origin:50% 50%;
+}
+.orbit-1{left:10px;top:58px;animation:leafDriftOne 5.4s ease-in-out infinite}
+.orbit-2{right:5px;top:92px;width:14px;height:9px;background:#f1a824;animation:leafDriftTwo 4.8s ease-in-out infinite .4s}
+.orbit-3{left:32px;bottom:38px;width:13px;height:8px;background:#f08a7c;animation:leafDriftThree 5.8s ease-in-out infinite .8s}
+.home-spark{
+  position:absolute;z-index:4;
+  color:#ffe4a2;font-size:18px;line-height:1;
+  text-shadow:0 4px 12px rgba(0,0,0,.18);
+  opacity:.8;
+}
+.spark-1{right:24px;top:28px;animation:sparkTwinkle 2.5s ease-in-out infinite}
+.spark-2{left:18px;top:112px;font-size:13px;animation:sparkTwinkle 2.2s ease-in-out infinite .5s}
+.spark-3{right:38px;bottom:30px;font-size:11px;animation:sparkTwinkle 2.8s ease-in-out infinite 1s}
+.home-bubble{
+  margin-top:-12px;
+  animation:homeBubbleFloat 3.4s ease-in-out infinite;
+}
+@keyframes homeMascotFloat{
+  0%,100%{transform:translateY(0) rotate(0deg)}
+  50%{transform:translateY(-10px) rotate(-1.5deg)}
+}
+@keyframes homeGlowDrift{
+  0%,100%{transform:translate(-5px,2px) scale(.96)}
+  50%{transform:translate(7px,-4px) scale(1.04)}
+}
+@keyframes leafDriftOne{
+  0%,100%{transform:translate(0,0) rotate(-24deg);opacity:.55}
+  45%{transform:translate(20px,-14px) rotate(22deg);opacity:1}
+  70%{transform:translate(8px,7px) rotate(56deg);opacity:.78}
+}
+@keyframes leafDriftTwo{
+  0%,100%{transform:translate(0,0) rotate(25deg);opacity:.55}
+  50%{transform:translate(-18px,13px) rotate(-22deg);opacity:1}
+}
+@keyframes leafDriftThree{
+  0%,100%{transform:translate(0,0) rotate(10deg);opacity:.48}
+  50%{transform:translate(22px,-12px) rotate(58deg);opacity:.95}
+}
+@keyframes sparkTwinkle{
+  0%,100%{transform:scale(.7) rotate(0);opacity:.25}
+  45%{transform:scale(1.2) rotate(20deg);opacity:1}
+}
+@keyframes homeBubbleFloat{
+  0%,100%{transform:translateY(0)}
+  50%{transform:translateY(-4px)}
+}
+@media(max-width:680px){
+  .home-hero{
+    min-height:420px;
+    padding-top:28px;
+    padding-right:20px;
+  }
+  .home-copy{
+    position:relative;z-index:4;
+    padding-right:0;
+  }
+  .home-copy>p{max-width:95%}
+  .home-annuwrap{
+    position:relative;
+    right:auto;top:auto;
+    min-height:210px;
+    width:100%;
+    margin-top:8px;
+    opacity:1;
+    pointer-events:none;
+  }
+  .home-motion-stage{width:210px;height:205px}
+  .home-motion-stage #homeMascot{width:180px;height:190px}
+  .home-motion-stage #homeMascot .mascot{width:156px!important;max-height:190px}
+  .home-motion-stage .home-glow{width:190px;height:190px}
+  .home-annuwrap .home-bubble{
+    display:block;
+    margin-top:-18px;
+    font-size:11px;
+  }
+}
+@media(max-width:430px){
+  .home-hero{min-height:440px}
+  .home-motion-stage{transform:scale(.94)}
+}
+@media(prefers-reduced-motion:reduce){
+  .home-motion-stage #homeMascot .mascot,
+  .home-motion-stage .home-glow,
+  .home-orbit,.home-spark,.home-bubble{animation:none!important}
+}
+</style>
+
+<style id="menuCategoryNavFix">
+/* MENU CATEGORY NAV FIX — replace the clipped/blank-looking strip with clear section buttons */
+.customer-mode .menu-seg{
+  position:relative!important;
+  top:auto!important;
+  z-index:2;
+  width:100%;
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:7px;
+  overflow:visible!important;
+  padding:7px!important;
+  min-height:58px;
+  border:1px solid var(--line)!important;
+  border-radius:18px!important;
+  background:color-mix(in srgb,var(--surface2) 90%,var(--surface))!important;
+  box-shadow:0 8px 22px rgba(22,48,33,.06);
+}
+.customer-mode .menu-seg button{
+  min-width:0!important;
+  min-height:42px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:8px 10px!important;
+  border:1px solid transparent!important;
+  border-radius:12px!important;
+  background:transparent!important;
+  color:var(--muted)!important;
+  font-size:12.5px!important;
+  font-weight:800!important;
+  line-height:1.15!important;
+  text-align:center;
+  white-space:normal!important;
+  opacity:1!important;
+}
+.customer-mode .menu-seg button[aria-selected=true]{
+  background:var(--brand)!important;
+  color:var(--on-brand)!important;
+  border-color:var(--brand)!important;
+  box-shadow:0 7px 18px color-mix(in srgb,var(--brand) 22%,transparent)!important;
+}
+.customer-mode .menu-section-label{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin:2px 2px -2px;
+}
+.customer-mode .menu-section-label span{
+  color:var(--brand2);font-size:10px;font-weight:900;letter-spacing:.11em;text-transform:uppercase;
+}
+.customer-mode .menu-section-label b{
+  font:700 20px/1.15 var(--f-display);color:var(--ink);
+}
+@media(max-width:600px){
+  .customer-mode .menu-seg{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .customer-mode .menu-seg button{min-height:44px;font-size:12px!important}
+}
+</style>
+
+<style id="orderCardFlexClipFix">
+/* ORDER CARD FLEX CLIP FIX — order cards must grow with their content inside the scrolling sheet */
+.customer-mode .sheet[data-kind="orders"] .body > *{
+  flex:0 0 auto;
+}
+.customer-mode .sheet[data-kind="orders"] .ord{
+  flex:none;
+  min-height:max-content;
+}
+.customer-mode .sheet[data-kind="orders"] .ord-head,
+.customer-mode .sheet[data-kind="orders"] .ord-copy,
+.customer-mode .sheet[data-kind="orders"] .steps4,
+.customer-mode .sheet[data-kind="orders"] .ord-items,
+.customer-mode .sheet[data-kind="orders"] .ord-meta,
+.customer-mode .sheet[data-kind="orders"] .ord-foot{
+  flex:none;
+}
+.customer-mode .sheet[data-kind="orders"] .ord-meta>div{
+  min-height:68px;
+}
+.customer-mode .sheet[data-kind="orders"] .ord-meta b{
+  line-height:1.35;
+  white-space:normal;
+}
+@media(max-width:640px){
+  .customer-mode .sheet[data-kind="orders"] .ord-meta{
+    grid-template-columns:1fr;
+  }
+}
+</style>
 </head>
 <body>
 <template id="tplMascot">
@@ -384,9 +1098,12 @@ input[type=text]:focus,textarea:focus{border-color:var(--brand);outline:0;box-sh
 </template>
 <div class="app" id="app">
   <header class="top">
-    <img class="seal" src="/icon.svg" alt="" width="40" height="40">
-    <div class="brand"><h1>Annapurna</h1><small>Home Foods</small></div>
+    <button class="brand-home" id="brandHome" type="button" aria-label="Go to Annapurna Home">
+      <img class="seal" src="/icon.svg" alt="" width="40" height="40">
+      <span class="brand"><h1>Annapurna</h1><small>Home Foods</small></span>
+    </button>
     <nav class="tabs" aria-label="Sections">
+      <button class="tab" id="btnHome" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5M9.5 20v-6h5v6"/></svg>Home</button>
       <button class="tab" id="btnMenu" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H19v15H5.5A1.5 1.5 0 0 0 4 20.5z"/><path d="M8 8h7M8 11.5h5"/></svg>Menu</button>
       <button class="tab" id="btnOrders" type="button" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12l-1 12H7z"/><path d="M9 8V7a3 3 0 0 1 6 0v1"/></svg>Orders<span class="dotn" id="ordDot" hidden></span></button>
       <button class="tab" id="btnHelp" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a9 9 0 1 0-9-9c0 1.6.4 3 1.2 4.3L3 21l4.7-1.2A9 9 0 0 0 12 21z"/><path d="M9.7 9.5a2.4 2.4 0 1 1 3.4 2.2c-.7.4-1.1.9-1.1 1.6M12 16.4v.1"/></svg>Help</button>
@@ -396,6 +1113,63 @@ input[type=text]:focus,textarea:focus{border-color:var(--brand);outline:0;box-sh
     <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="9"/></svg>
     <span id="handoffText"></span>
   </div>
+
+  <main class="customer-home" id="home" hidden>
+    <section class="home-hero">
+      <div class="home-copy">
+        <span class="home-eyebrow">Homemade in Kitchener · pickup fresh</span>
+        <h2 id="homeGreeting">What are you craving today?</h2>
+        <p>Choose a path below. Annu will help with the details and we always show you the full order before placing it.</p>
+        <div class="home-hero-actions">
+          <button class="home-primary" id="homeOrder" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11h16c0 5-3.6 8-8 8s-8-3-8-8z"/><path d="M9 7c-1-1 1-2 0-3M13 7c-1-1 1-2 0-3"/></svg><span><b>Start an order</b><small>Chat with Annu</small></span><span class="home-arrow">→</span></button>
+          <button class="home-secondary" id="homeContinue" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H8l-4 3z"/></svg>Continue chat</button>
+        </div>
+      </div>
+      <div class="home-annuwrap" aria-hidden="true">
+        <div class="home-motion-stage">
+          <span class="home-orbit orbit-1"></span>
+          <span class="home-orbit orbit-2"></span>
+          <span class="home-orbit orbit-3"></span>
+          <span class="home-spark spark-1">✦</span>
+          <span class="home-spark spark-2">✦</span>
+          <span class="home-spark spark-3">✦</span>
+          <div class="home-glow"></div>
+          <div id="homeMascot"></div>
+        </div>
+        <div class="home-bubble">Freshly cooked, never complicated.</div>
+      </div>
+    </section>
+
+    <section class="home-section">
+      <div class="home-section-head"><div><span>EXPLORE</span><h3>Choose what you need</h3></div><small>Everything stays in one order chat</small></div>
+      <div class="home-grid">
+        <button class="home-tile tile-combo" id="homeCombos" type="button">
+          <span class="tile-icon"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11h16c0 5-3.6 8-8 8s-8-3-8-8z"/><path d="M9 7c-1-1 1-2 0-3M13 7c-1-1 1-2 0-3"/></svg></span>
+          <span class="tile-copy"><b>Weekend Combos</b><small>Single & Buy 1 Get 1 specials</small></span><span class="tile-arrow">→</span>
+        </button>
+        <button class="home-tile tile-plan" id="homePlans" type="button">
+          <span class="tile-icon"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 8h16M5 5h14v15H5z"/><path d="M8 12h3M13 12h3M8 16h3"/></svg></span>
+          <span class="tile-copy"><b>Weekly Plans</b><small>See the full week at a glance</small></span><span class="tile-arrow">→</span>
+        </button>
+        <button class="home-tile tile-orders" id="homeOrders" type="button">
+          <span class="tile-icon"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12l-1 12H7z"/><path d="M9 8V7a3 3 0 0 1 6 0v1"/></svg></span>
+          <span class="tile-copy"><b>My Orders</b><small>Track confirmation and pickup</small></span><span class="tile-arrow">→</span>
+        </button>
+        <button class="home-tile tile-menu" id="homeMenu" type="button">
+          <span class="tile-icon"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H19v15H5.5A1.5 1.5 0 0 0 4 20.5z"/><path d="M8 8h7M8 11.5h5"/></svg></span>
+          <span class="tile-copy"><b>Browse Menu</b><small>Prices, extras & availability</small></span><span class="tile-arrow">→</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="home-active" id="homeActive" hidden></section>
+
+    <section class="home-promise">
+      <div><span class="promise-icon">✓</span><span><b>Clear confirmation</b><small>Nothing is placed until you say yes</small></span></div>
+      <div><span class="promise-icon">♨</span><span><b>Cooked fresh</b><small>Pickup from our Kitchener kitchen</small></span></div>
+      <div><span class="promise-icon">☺</span><span><b>Real-person help</b><small>Ask for Annapurna anytime</small></span></div>
+    </section>
+  </main>
 
   <main class="onboard" id="onboard" hidden>
     <section class="hero">
@@ -415,7 +1189,7 @@ input[type=text]:focus,textarea:focus{border-color:var(--brand);outline:0;box-sh
     <form class="card" id="startForm" autocomplete="on">
       <label class="f">Your name<input type="text" id="fName" name="name" autocomplete="name" maxlength="60" required></label>
       <label class="f">Phone or email (so Annapurna Home Foods can reach you)<input type="text" id="fContact" name="contact" autocomplete="tel" inputmode="text" maxlength="80" required></label>
-      <label class="check"><input type="checkbox" id="fConsent"><span>I understand this chat is handled by an AI assistant. My messages and name are shared with the AI services that power it, and the Annapurna Home Foods team can read my chat and orders.</span></label>
+      <label class="check"><input type="checkbox" id="fConsent"><span>I agree that my name and messages may be processed to provide this ordering chat, and the Annapurna Home Foods team can review my chat and orders.</span></label>
       <div class="err" id="startErr" role="alert"></div>
       <button class="btn" id="startBtn" type="submit">Start chat</button>
       <button class="btn ghost" id="startMenu" type="button">See the menu first</button>

@@ -7,7 +7,7 @@ import type { Notifier } from "./notify.js";
 import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
 import { route as decideRoute, type Route } from "./router.js";
 import type { Store } from "./store.js";
-import { dayLabel, formatWhen, isLocalIso } from "./time.js";
+import { dayLabel, formatWhen, isLocalIso, pad, zonedParts } from "./time.js";
 import type { Alert, Draft, Order, Settings, Stage } from "./types.js";
 
 /**
@@ -54,10 +54,45 @@ const ADD_MORE = /\b(another|again|second|one more|extra|also|additional|add|mor
 const THANKS = /^(thanks|thank you|thank u|thankyou|thx|ty|tq|many thanks|thanks a lot|thank you so much|great|perfect|awesome|cool|nice|noted|got it|super|superb|ok thanks|okay thanks|ok thank you|okay thank you)[\s!.]*$/i;
 /** A bare yes or ok. Only ignored when there is nothing in progress to say yes to. */
 const BARE_OK = /^(yes|yep|yeah|yup|y|ya|ok|okay|k|sure|done|fine|alright)[\s!.]*$/i;
+/** Natural acknowledgements while a custom order is waiting on owner/customer confirmation. */
+const CUSTOM_ACK = /^(?:(?:ok(?:ay)?|got it)[,\s.!]*)*(?:thanks|thank you|thank u|thx)[\s!.]*$/i;
 /** The customer wants a real person, a phone number or the Instagram page. */
 const HUMAN = /\b(real (person|human)|human being|a human|(talk|speak|chat) (to|with) (a |the |an )?(person|human|someone|somebody|owner|maddy|team|staff|agent)|contact (you|us|number|info|details)|phone( number)?|your number|call me|call you|instagram|insta|whatsapp|customer (service|support))\b/i;
 /** Text sent by the web app's "Yes, place order" button. */
 const CONFIRM_BUTTON = /^yes, confirm$/i;
+/** Owner-managed catering/bulk orders. A headcount alone counts as custom only at 8+ people. */
+const CUSTOM_WORDS = /\b(cater(?:ing)?|bulk|party order|large order|full tray|half tray|medium tray|large tray)\b/i;
+const CUSTOM_HEADCOUNT = /\b(\d{1,3})\s*(?:people|persons|pax|members|guests)\b/i;
+const CUSTOM_CONFIRM = /(?:^yes\b|^go\s+ahead\b|\bconfirm(?:ing|ed)?\s+(?:(?:the|my)\s+)?order\b|\bplace\s+(?:(?:the|my)\s+)?order\b)/i;
+
+function looksCustom(text: string): boolean {
+  if (CUSTOM_WORDS.test(text)) return true;
+  const m = CUSTOM_HEADCOUNT.exec(text);
+  return !!m && Number(m[1]) >= 8;
+}
+
+function customHeadcount(text: string): number | null {
+  const m = CUSTOM_HEADCOUNT.exec(text);
+  const n = m ? Number(m[1]) : 0;
+  return n > 0 && n < 500 ? n : null;
+}
+
+/** Common catering pickup replies should not depend on an LLM call. */
+function simpleCustomPickup(text: string, now: number, tz: string): string | null {
+  const m = /\b(today|tomorrow)\b[^\d]{0,24}(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i.exec(text);
+  if (!m) return null;
+  let h = Number(m[2]);
+  const mi = Number(m[3] ?? "0");
+  if (h < 1 || h > 12 || mi < 0 || mi > 59) return null;
+  const ap = m[4]!.toLowerCase();
+  if (ap === "pm" && h !== 12) h += 12;
+  if (ap === "am" && h === 12) h = 0;
+  const p = zonedParts(now, tz);
+  const add = m[1]!.toLowerCase() === "tomorrow" ? 1 : 0;
+  const d = new Date(Date.UTC(p.y, p.m - 1, p.d + add));
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(h)}:${pad(mi)}`;
+}
+
 export const HANDOFF_NOTE = "Wants to talk to a person";
 
 /** Identity of an order for duplicate checks: what is ordered and when it is picked up. */
@@ -101,8 +136,59 @@ export class Agent {
     const lastShop = [...before].reverse().find((m) => m.who === "agent" || m.who === "owner")?.text ?? null;
     store.addMessage(msg.from, "cust", text, now);
 
-    const draft = store.getDraft(msg.from);
+    let draft = store.getDraft(msg.from);
     const open = store.openOrdersFor(msg.from);
+
+    // Important: only the active draft decides whether an order is custom.
+    // Do not infer custom/catering state from older chat history: customers often place a normal
+    // menu order after a catering order in the same conversation.
+
+    // For an active custom order, parse common pickup replies in code so a transient model failure
+    // cannot lose "tomorrow 6 PM". The kitchen timezone remains the source of truth.
+    if (draft?.custom) {
+      const custom = draft.custom;
+      const parsedPickup = simpleCustomPickup(text, now, settings.tz);
+      if (parsedPickup && parsedPickup !== draft.pickup_local) {
+        draft = { ...draft, custom, pickup_local: parsedPickup, stage: "collecting", readback_hash: null };
+        store.putDraft(msg.from, draft);
+        if (!CUSTOM_CONFIRM.test(text)) {
+          out.route = "custom_pickup";
+          out.replies.push(custom.price == null
+            ? `Got it — pickup is ${formatWhen(parsedPickup)}. Annapurna Home Foods will confirm the final price here.`
+            : `Got it — pickup is ${formatWhen(parsedPickup)} and the quoted price is ${money(custom.price)}. Reply CONFIRM THE ORDER when you're ready.`);
+          for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+          return out;
+        }
+      }
+    }
+
+    // Custom/catering orders are different from menu orders: the owner sets the final price in chat,
+    // then the customer confirms. Handle confirmation/acknowledgements deterministically so the model
+    // can never invent a custom-order confirmation or lose the pending terms.
+    if (draft?.custom && CUSTOM_CONFIRM.test(text)) {
+      if (draft.custom.price != null && draft.pickup_local) {
+        out.route = "confirm_custom_order";
+        await this.placeCustomOrder(msg.from, draft, settings, out);
+      } else {
+        const missing = [
+          draft.custom.price == null ? "the final price" : "",
+          !draft.pickup_local ? "the pickup day and time" : "",
+        ].filter(Boolean);
+        out.route = "confirm_custom_order+waiting";
+        out.replies.push(`Your custom order is saved, but I still need ${missing.join(", ").replace(/, ([^,]*)$/, " and $1")} before I can place it. Annapurna Home Foods will finalize that here in this chat.`);
+      }
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
+    }
+    if (draft?.custom && (THANKS.test(text) || CUSTOM_ACK.test(text))) {
+      out.route = "custom_ack";
+      const ready = draft.custom.price != null && !!draft.pickup_local;
+      out.replies.push(ready
+        ? "You're welcome! Your custom order details are ready. Reply CONFIRM THE ORDER when you want me to place it."
+        : "You're welcome! Your custom order request is saved. Annapurna Home Foods will finalize the remaining details here.");
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
+    }
 
     // Wants a real person or a contact detail: answered by code, so the customer always gets a clear status.
     if (HUMAN.test(text) && !(draft?.stage === "awaiting_confirmation" && BARE_OK.test(text))) {
@@ -214,16 +300,33 @@ export class Agent {
     let notes = draft?.notes ?? "";
     let custName = draft?.customer_name ?? null;
     let again = draft?.again ?? false;
+    let custom = draft?.custom;
     const issues: Issue[] = [];
 
     if (!frozen) {
-      const s = sanitizeItems(rd.items, menu);
-      items = s.items;
-      issues.push(...s.issues);
-      pickup = typeof rd.pickup_local === "string" && isLocalIso(rd.pickup_local) ? rd.pickup_local : null;
-      notes = typeof rd.notes === "string" ? rd.notes.slice(0, 300) : "";
+      const startsCustom = !custom && looksCustom(text);
+      if (custom || startsCustom) {
+        // Custom orders are owner-managed. Preserve the structured draft we already have and do not
+        // run normal menu-item ambiguity checks on phrases such as "15-person medium tray".
+        custom = custom ?? { request: text.slice(0, 300), price: null, approved: false };
+        if (Array.isArray(rd.items) && rd.items.length) {
+          const s = sanitizeItems(rd.items, menu);
+          // Keep any clearly resolved menu items for a useful label, but ambiguity must not block catering.
+          if (s.items.length) items = s.items;
+          issues.push(...s.issues.filter((i) => i.kind === "not_live" || i.kind === "weekday_mismatch"));
+        }
+        if (typeof rd.pickup_local === "string" && isLocalIso(rd.pickup_local)) pickup = rd.pickup_local;
+        if (typeof rd.notes === "string" && rd.notes.trim()) notes = rd.notes.slice(0, 300);
+        if (typeof rd.customer_name === "string" && rd.customer_name.trim()) custName = rd.customer_name.trim().slice(0, 60);
+      } else {
+        const s = sanitizeItems(rd.items, menu);
+        items = s.items;
+        issues.push(...s.issues);
+        pickup = typeof rd.pickup_local === "string" && isLocalIso(rd.pickup_local) ? rd.pickup_local : null;
+        notes = typeof rd.notes === "string" ? rd.notes.slice(0, 300) : "";
+        custName = typeof rd.customer_name === "string" && rd.customer_name.trim() ? rd.customer_name.trim().slice(0, 60) : null;
+      }
       if (ADD_MORE.test(text)) again = true;
-      custName = typeof rd.customer_name === "string" && rd.customer_name.trim() ? rd.customer_name.trim().slice(0, 60) : null;
       const wk = checkWeekday(text, pickup, now, settings.tz);
       if (wk) {
         issues.push(wk);
@@ -275,20 +378,28 @@ export class Agent {
       else if (stage === "awaiting_confirmation" && (!pickup || fixes.length)) stage = "collecting";
       else if (stage === "browsing") stage = "collecting";
     }
+    // Custom orders never enter the normal menu-order confirmation path. Once the owner has quoted
+    // the custom price and pickup is known, the customer's explicit confirmation is handled by placeCustomOrder().
+    if (custom) stage = "collecting";
 
-    const next: Draft = { items, pickup_local: pickup, customer_name: custName, notes, readback_hash: null, stage, ...(again ? { again: true } : {}) };
-    if (stage === "awaiting_confirmation") next.readback_hash = draftHash(next);
+    const next: Draft = { items, pickup_local: pickup, customer_name: custName, notes, readback_hash: null, stage, ...(again ? { again: true } : {}), ...(custom ? { custom } : {}) };
+    if (stage === "awaiting_confirmation" && !custom) next.readback_hash = draftHash(next);
     // A frozen turn keeps the earlier read-back valid, since the draft did not change.
     if (frozen && draft) next.readback_hash = draft.readback_hash;
 
-    if (!items.length && !pickup && !custName && !notes) store.clearDraft(msg.from);
+    if (!items.length && !pickup && !custName && !notes && !custom) store.clearDraft(msg.from);
     else store.putDraft(msg.from, next);
     if (custName && !customer.name) store.updateCustomer(msg.from, { name: custName });
 
     let reply: string;
     if (fixes.length) reply = fixes.join("\n");
-    else if (stage === "awaiting_confirmation" && !frozen) reply = this.readBack(next, settings, now, open);
+    else if (stage === "awaiting_confirmation" && !frozen && !custom) reply = this.readBack(next, settings, now, open);
     else reply = modelReply || "Sorry, could you say that again?";
+    if (custom && /(?:\bis\s+confirmed\b|\bhas\s+been\s+confirmed\b|\border\b[^.!?\n]{0,80}\bconfirmed\b)/i.test(reply)) {
+      reply = custom.price != null && pickup
+        ? "The custom order details are ready. Reply CONFIRM THE ORDER to place it."
+        : "I've saved your custom order request. Annapurna Home Foods will confirm the final price and details here in this chat.";
+    }
     out.replies.push(reply);
 
     const ownerNote = typeof raw.owner_note === "string" ? raw.owner_note.trim() : "";
@@ -321,6 +432,66 @@ export class Agent {
   }
 
   /* ---------- placing an order (code only) ---------- */
+
+  private async placeCustomOrder(waId: string, draft: Draft, s: Settings, out: Outcome): Promise<void> {
+    const { store } = this.d;
+    const now = this.now();
+    const custom = draft.custom;
+    if (!custom || custom.price == null || !draft.pickup_local) return;
+
+    const already = store.openOrdersFor(waId).find((o) =>
+      o.pickup === draft.pickup_local &&
+      o.items.some((it) => it.id.startsWith("custom:")) &&
+      total(o.items) === custom.price
+    );
+    if (already) {
+      store.clearDraft(waId);
+      out.orderId = already.id;
+      out.route = "confirm_custom_order+duplicate";
+      out.replies.push(`Order #${already.id} is already confirmed for ${formatWhen(already.pickup)}. There is nothing more to confirm.`);
+      return;
+    }
+
+    const people = customHeadcount(custom.request);
+    const menuNames = [...new Set(draft.items.map((it) => it.name))];
+    const requestName = custom.request
+      .replace(/^\s*(?:hi\s+)?(?:i\s+(?:would\s+like|want|need)\s+to\s+order\s*)/i, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120);
+    const baseName = menuNames.length ? menuNames.join(" + ") : (requestName || "Custom catering order");
+    const item = {
+      id: `custom:${now}`,
+      name: `${baseName} · custom catering`,
+      qty: people ?? 1,
+      pack: "single" as const,
+      amt: custom.price,
+    };
+    const customer = store.getCustomer(waId)!;
+    const name = customer.name || draft.customer_name || "Customer";
+    const notes = [
+      "Custom order price quoted by Annapurna and confirmed by customer",
+      custom.request ? `Request: ${custom.request}` : "",
+      draft.notes,
+    ].filter(Boolean).join(". ").slice(0, 300);
+
+    const order = store.insertOrder({
+      waId, name, items: [item], pickup: draft.pickup_local, flags: [], status: "cook", notes, createdAt: now,
+    });
+    store.clearDraft(waId);
+    if (!customer.name && draft.customer_name) store.updateCustomer(waId, { name: draft.customer_name });
+    store.updateCustomer(waId, { profile: `Has ordered before. Last order: ${itemLabel(item)}, pickup ${formatWhen(draft.pickup_local)}.` });
+    out.orderId = order.id;
+
+    const who = friendlyName(name);
+    out.replies.push(
+      `Thank you${who ? ` ${who}` : ""}! Order #${order.id} is confirmed:\n- ${itemLabel(item)}\nTotal: ${money(custom.price)}\nPickup: ${formatWhen(draft.pickup_local)} at ${s.address}`
+    );
+    await this.d.notifier.notify(
+      `Custom order #${order.id} confirmed`,
+      `${name}: ${itemLabel(item)}. Pickup ${formatWhen(draft.pickup_local)}. ${money(custom.price)}`,
+    );
+  }
 
   private async placeOrder(waId: string, draft: Draft, s: Settings, out: Outcome): Promise<void> {
     const { store } = this.d;

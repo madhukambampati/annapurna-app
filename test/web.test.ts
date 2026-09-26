@@ -213,6 +213,169 @@ describe("web: chat and orders", () => {
       assert.equal(st.json.customers[0].contact, "asha@example.com");
     }));
 
+  test("custom catering: owner price + approval then customer YES creates a real order and notification", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("KM", "5195550101");
+
+      t.llm.push(modelReply({
+        reply: "Thanks! Annapurna Home Foods will confirm this custom catering request here.",
+        items: [{ id: "bagara_chicken_fry", qty: 15, pack: "single", asked_for: "Bagara rice and chicken fry for 15 people" }],
+        pickup: null,
+        stage: "collecting",
+        needs_owner: true,
+        owner_note: "Custom catering: Bagara rice and chicken fry for 15 people",
+      }));
+      await say(token, "Hi I would like to order Bagara rice and chicken fry for 15 people");
+
+      t.llm.push(modelReply({
+        reply: "Thanks for the pickup time. Annapurna Home Foods will confirm the exact price here.",
+        items: [{ id: "bagara_chicken_fry", qty: 15, pack: "single", asked_for: "Bagara rice and chicken fry for 15 people" }],
+        pickup: FRI_6PM,
+        stage: "collecting",
+        needs_owner: true,
+        owner_note: "Custom catering pickup Friday 6 PM; price needs owner confirmation",
+      }));
+      await say(token, "Friday at 6 PM, may I know the price?");
+
+      const waId = t.store.listCustomers()[0]!.waId;
+      assert.equal((await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "$120" } })).status, 200);
+      assert.equal((await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "Thank you, I am confirming the order." } })).status, 200);
+
+      const d = t.store.getDraft(waId)!;
+      assert.deepEqual([d.custom?.price, d.custom?.approved, d.pickup_local], [120, true, FRI_6PM]);
+
+      const confirmed = await say(token, "Yes please confirm");
+      assert.equal(confirmed.status, 200);
+      assert.equal(confirmed.json.orderId, 1);
+      assert.ok(confirmed.json.messages.some((m: any) => /Order #1 is confirmed:/.test(m.text)));
+
+      const orders = (await call("GET", "/web/orders", { token })).json.orders;
+      assert.equal(orders.length, 1);
+      assert.deepEqual([orders[0].status, orders[0].total], ["cook", 120]);
+      assert.match(orders[0].items[0], /15 x .*custom catering/i);
+
+      const owner = await call("GET", "/api/state", { token: "secret" });
+      assert.equal(owner.json.orders.length, 1);
+      assert.equal(owner.json.orders[0].items[0].amt, 120);
+      assert.match(t.notifier.sent.at(-1)!.title, /Custom order #1 confirmed/);
+      assert.equal(t.store.getDraft(waId), null);
+    }));
+
+  test("custom catering: pickup + owner price + customer confirmation creates the order", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("KM", "5195550101");
+
+      t.llm.push(modelReply({
+        reply: "A tray order for 15 people is a custom catering request. Annapurna Home Foods will confirm the details and pricing here.",
+        items: [{ id: "bagara_chicken_fry", qty: 15, pack: "single", asked_for: "Bagara rice and chicken fry for 15 people" }],
+        pickup: null,
+        stage: "collecting",
+        needs_owner: true,
+        owner_note: "Custom tray order for 15 people: Bagara rice and chicken fry",
+      }));
+      await say(token, "I would like to place a tray order of bagara rice and chicken fry for 15 people");
+
+      const waId = t.store.listCustomers()[0]!.waId;
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, {
+        token: "secret",
+        body: { text: "Sure thank you, what is the date and time?" },
+      });
+
+      // Common custom pickup replies are parsed by code, not by the LLM.
+      const promptsBeforePickup = t.llm.prompts.length;
+      const pickup = await say(token, "Tomorrow 6:00 PM EST, may I know the price?");
+      assert.equal(t.llm.prompts.length, promptsBeforePickup);
+      assert.ok(pickup.json.messages.some((m: any) => /pickup is Thu, Sep 24 · 6:00 PM/i.test(m.text)));
+
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, {
+        token: "secret",
+        body: { text: "15 people is a medium tray so it would be around 110$" },
+      });
+
+      const d = t.store.getDraft(waId)!;
+      assert.deepEqual([d.custom?.price, d.pickup_local], [110, "2026-09-24T18:00"]);
+
+      // No separate owner-approval message is required. The quoted price is the owner's terms;
+      // the customer's explicit confirmation places the real order.
+      const promptsBeforeConfirm = t.llm.prompts.length;
+      const confirmed = await say(token, "Sure thank you, I am confirming the order");
+      assert.equal(t.llm.prompts.length, promptsBeforeConfirm);
+      assert.equal(confirmed.json.orderId, 1);
+      assert.ok(confirmed.json.messages.some((m: any) => /Order #1 is confirmed:/.test(m.text)));
+
+      const orders = (await call("GET", "/web/orders", { token })).json.orders;
+      assert.equal(orders.length, 1);
+      assert.deepEqual([orders[0].status, orders[0].total], ["cook", 110]);
+      assert.match(orders[0].items[0], /15 x Bagara Rice and Chicken Fry combo.*custom catering/i);
+      assert.match(orders[0].pickupText, /Thu, Sep 24 · 6:00 PM/);
+
+      const owner = await call("GET", "/api/state", { token: "secret" });
+      assert.equal(owner.json.orders.length, 1);
+      assert.equal(owner.json.orders[0].status, "cook");
+      assert.match(t.notifier.sent.at(-1)!.title, /Custom order #1 confirmed/);
+
+      // After confirmation it follows the ordinary order lifecycle.
+      await call("POST", "/api/orders/1/status", { token: "secret", body: { status: "ready" } });
+      let customerOrders = (await call("GET", "/web/orders", { token })).json.orders;
+      assert.equal(customerOrders[0].status, "ready");
+
+      await call("POST", "/api/orders/1/status", { token: "secret", body: { status: "done" } });
+      customerOrders = (await call("GET", "/web/orders", { token })).json.orders;
+      assert.equal(customerOrders[0].status, "done");
+    }));
+
+  test("a normal menu order after a custom order stays normal and uses menu pricing", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("KM", "5195550101");
+
+      // First place a real custom order for 15 people.
+      t.llm.push(modelReply({
+        reply: "Saved as a custom order.",
+        items: [{ id: "bagara_chicken_fry", qty: 15, pack: "single", asked_for: "Bagara rice and chicken fry for 15 people" }],
+        pickup: FRI_6PM,
+        stage: "collecting",
+        needs_owner: true,
+        owner_note: "Custom catering for 15 people",
+      }));
+      await say(token, "Bagara rice and chicken fry tray order for 15 people Friday 6 PM");
+      const waId = t.store.listCustomers()[0]!.waId;
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "$120" } });
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "I am confirming the order" } });
+      const custom = await say(token, "Confirm the order");
+      assert.equal(custom.json.orderId, 1);
+      assert.equal(t.store.getDraft(waId), null);
+
+      // Same customer now places an ordinary BOGO menu order.
+      t.llm.push(modelReply({
+        reply: "Perfect.",
+        items: [{ id: "bagara_chicken_fry", qty: 1, pack: "bogo", asked_for: "Bagara Rice and Chicken Fry combo" }],
+        pickup: "2026-09-26T11:00",
+        notes: "Spicy, no extras",
+        stage: "awaiting_confirmation",
+      }));
+      const rb = await say(token, "I'd like Bagara Rice and Chicken Fry combo BOGO, spicy, no extras, Saturday 11 AM");
+      const readback = rb.json.messages.map((m: any) => m.text).join("\n");
+      assert.match(readback, /1 x Bagara Rice and Chicken Fry combo \(Buy 1 Get 1\): \$22/);
+      assert.doesNotMatch(readback, /custom catering/i);
+
+      const normal = await say(token, "yes confirm");
+      assert.equal(normal.json.orderId, 2);
+
+      const orders = (await call("GET", "/web/orders", { token })).json.orders;
+      const latest = orders.find((o: any) => o.id === 2);
+      assert.ok(latest);
+      assert.equal(latest.total, 22);
+      assert.deepEqual(latest.items, ["1 x Bagara Rice and Chicken Fry combo (Buy 1 Get 1)"]);
+
+      const owner = await call("GET", "/api/state", { token: "secret" });
+      const stored = owner.json.orders.find((o: any) => o.id === 2);
+      assert.deepEqual(
+        [stored.items[0].id, stored.items[0].qty, stored.items[0].pack, stored.items[0].amt],
+        ["bagara_chicken_fry", 1, "bogo", 22],
+      );
+      assert.doesNotMatch(stored.notes, /Custom order/i);
+    }));
+
   test("customers cannot see each other's chats or orders", () =>
     withRig(async ({ t, start, say, call }) => {
       const a = await start("Asha", "5195550101");

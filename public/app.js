@@ -31,7 +31,7 @@
   };
 
   var token = "", lastId = 0, busy = false, seen = {}, orders = [], pollTimer = 0;
-  var sheetOpen = "", lastFocus = null, menuData = null, handoff = null, confirmingDelete = false;
+  var sheetOpen = "", lastFocus = null, menuData = null, handoff = null, confirmingDelete = false, confirmingEndSession = false;
 
   function store(k, v) { try { if (v === null) localStorage.removeItem(k); else if (v !== undefined) localStorage.setItem(k, v); else return localStorage.getItem(k); } catch (e) { /* private mode */ } return null; }
 
@@ -124,9 +124,14 @@
   /* ---------- screens ---------- */
   function show(which) {
     $("onboard").hidden = which !== "onboard";
+    $("home").hidden = which !== "home";
     $("chat").hidden = which !== "chat";
-    $("btnOrders").hidden = which !== "chat";
-    if (which !== "chat") setHandoff(null);
+    $("btnHome").hidden = which === "onboard";
+    $("btnOrders").hidden = which === "onboard";
+    [["btnHome","home"],["btnMenu","menu"],["btnOrders","orders"],["btnHelp","help"]].forEach(function (x) {
+      var el = $(x[0]); if (el) el.setAttribute("aria-current", x[1] === which ? "true" : "false");
+    });
+    if (which === "onboard") setHandoff(null);
   }
 
   function toBoarding(msg) {
@@ -134,6 +139,48 @@
     stopPolling();
     show("onboard");
     $("startErr").textContent = msg || "";
+  }
+
+  /* ---------- customer home ---------- */
+  function initHome() {
+    var slot = $("homeMascot");
+    if (slot && !slot.firstChild) slot.append(mascot("pop"));
+    var name = store(NAME_KEY);
+    var greeting = $("homeGreeting");
+    if (greeting) greeting.textContent = name ? "Namaste, " + name + ". What are you craving?" : "What are you craving today?";
+  }
+
+  function renderHomeActive() {
+    var box = $("homeActive");
+    if (!box) return;
+    var active = orders.filter(function (o) { return o.status === "hold" || o.status === "cook" || o.status === "ready"; })
+      .sort(function (a, b) {
+        var p = { ready: 0, cook: 1, hold: 2 };
+        return (p[a.status] == null ? 9 : p[a.status]) - (p[b.status] == null ? 9 : p[b.status]) || b.id - a.id;
+      })[0];
+    if (!active) { box.hidden = true; box.replaceChildren(); return; }
+    var st = STATUS[active.status] || [active.status, active.status];
+    var step = STEP_OF[active.status] == null ? 0 : STEP_OF[active.status];
+    box.hidden = false;
+    box.replaceChildren(
+      h("div", { class: "home-active-head" },
+        h("div", {}, h("span", { class: "eyebrow" }, "ACTIVE ORDER"), h("h3", {}, "Order #" + active.id), h("p", {}, active.pickupText || "Pickup time pending")),
+        h("span", { class: "home-status" }, st[0])),
+      h("div", { class: "home-active-progress", "aria-label": "Order progress" }, STEPS.map(function (_, i) { return h("span", { class: i <= step ? "on" : "" }); })),
+      h("div", { class: "home-active-foot" },
+        h("small", {}, active.status === "ready" ? "Your food is ready for pickup." : active.status === "cook" ? "Confirmed and being prepared." : "Waiting for Annapurna to review."),
+        h("button", { type: "button", onclick: function (e) { showOrders({ currentTarget: e.currentTarget }); } }, "View order →"))
+    );
+  }
+
+  function openHome() {
+    show("home");
+    initHome();
+    var home = $("home");
+    if (home) home.scrollTop = 0;
+    loadMenu();
+    loadOrders();
+    startPolling();
   }
 
   /* ---------- chat ---------- */
@@ -506,11 +553,16 @@
     return fetch("/web/menu").then(function (r) { return r.json(); }).then(function (m) { menuData = m; return m; }).catch(function () { return null; });
   }
 
-  function openChat() {
+  function openChat(prefill) {
     show("chat");
     msgsEl.replaceChildren(); seen = {}; lastId = 0;
     renderEmptyHello(); refreshChips();
-    loadMenu().then(function () { return api("GET", "/web/history?after=0"); }).then(function (j) { addMessages(j.messages || []); setHandoff(j.handoff || null); if (j.name) store(NAME_KEY, j.name); }).catch(function (e) { if (e.status === 401) toBoarding("Your chat expired. Please start a new one."); });
+    loadMenu().then(function () { return api("GET", "/web/history?after=0"); }).then(function (j) {
+      addMessages(j.messages || []);
+      setHandoff(j.handoff || null);
+      if (j.name) store(NAME_KEY, j.name);
+      if (prefill) fillComposer(prefill);
+    }).catch(function (e) { if (e.status === 401) toBoarding("Your chat expired. Please start a new one."); });
     loadOrders();
     startPolling();
   }
@@ -523,21 +575,54 @@
       var active = orders.filter(function (o) { return o.status === "hold" || o.status === "cook" || o.status === "ready"; }).length;
       var dot = $("ordDot"); dot.hidden = !active; dot.textContent = String(active);
       if (sheetOpen === "orders") renderOrders();
+      if (!$("home").hidden) renderHomeActive();
     }).catch(function () { /* polling is best effort */ });
   }
 
   function renderOrders() {
     var body = $("sheetBody"); body.replaceChildren();
-    if (!orders.length) { body.append(h("div", { class: "card2" }, h("h3", {}, "No orders yet"), h("p", {}, "Once you confirm an order in the chat, you can follow it here."))); return; }
-    orders.forEach(function (o) {
+    if (!orders.length) {
+      body.append(h("div", { class: "orders-empty card2" },
+        h("div", { class: "empty-icon", "aria-hidden": "true" }, icon("bag")),
+        h("h3", {}, "No orders yet"),
+        h("p", {}, "Once you confirm an order in the chat, you can follow every step here."),
+        h("button", { class: "btn", type: "button", onclick: function () { closeSheet(); openChat("I'd like to order "); } }, "Start an order")));
+      return;
+    }
+    var copy = {
+      hold: "We received it and Annapurna needs to review it.",
+      cook: "Confirmed — your food is being prepared.",
+      ready: "Ready! Come pick it up from the kitchen.",
+      done: "Picked up. Thank you for ordering with us.",
+      cancelled: "This order was cancelled."
+    };
+    var rank = { ready: 0, cook: 1, hold: 2, done: 3, cancelled: 4 };
+    orders.slice().sort(function (a, b) {
+      return (rank[a.status] == null ? 9 : rank[a.status]) - (rank[b.status] == null ? 9 : rank[b.status]) || b.id - a.id;
+    }).forEach(function (o) {
       var st = STATUS[o.status] || [o.status, ""];
       var step = STEP_OF[o.status];
-      body.append(h("article", { class: "ord" },
-        h("div", {}, h("b", {}, "Order #" + o.id + " "), h("span", { class: "st " + st[1] }, st[0])),
-        step == null ? null : h("ol", { class: "steps4", "aria-label": "Progress" }, STEPS.map(function (s, i) { return h("li", { class: i <= step ? "on" : "" }, s); })),
-        h("ul", {}, o.items.map(function (x) { return h("li", {}, x); })),
-        h("div", { class: "tiny" }, "Pickup: " + o.pickupText + (o.status === "ready" || o.status === "cook" ? " at " + o.address : "")),
-        h("div", { class: "tot" }, o.total == null ? "Total to be confirmed by Annapurna Home Foods" : "Total: " + money(o.total))
+      var head = h("div", { class: "ord-head" },
+        h("div", {}, h("span", { class: "ord-kicker" }, "Order"), h("b", {}, "#" + o.id)),
+        h("span", { class: "st " + st[1] }, st[0]));
+      var actions = [];
+      if (o.status === "ready" && o.address) {
+        actions.push(h("a", { class: "btn sm", href: "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(o.address), target: "_blank", rel: "noopener noreferrer" }, icon("pin"), "Directions"));
+      }
+      actions.push(h("button", { class: "btn ghost sm", type: "button", onclick: function () { closeSheet(); openChat("Question about order #" + o.id + ": "); } }, "Ask about this order"));
+      body.append(h("article", { class: "ord ord-" + st[1], "data-status": o.status },
+        head,
+        h("p", { class: "ord-copy" }, copy[o.status] || ""),
+        step == null ? null : h("ol", { class: "steps4", "aria-label": "Order progress" }, STEPS.map(function (s, i) {
+          return h("li", { class: i < step ? "on done-step" : i === step ? "on current-step" : "" }, h("span", {}, s));
+        })),
+        h("div", { class: "ord-items" }, h("ul", {}, o.items.map(function (x) { return h("li", {}, x); }))),
+        h("div", { class: "ord-meta" },
+          h("div", {}, h("span", {}, "Pickup"), h("b", {}, o.pickupText)),
+          (o.status === "ready" || o.status === "cook") && o.address ? h("div", {}, h("span", {}, "Location"), h("b", {}, o.address)) : null),
+        h("div", { class: "ord-foot" },
+          h("div", { class: "tot" }, o.total == null ? "Total to be confirmed" : "Total " + money(o.total)),
+          h("div", { class: "ord-actions" }, actions))
       ));
     });
   }
@@ -547,6 +632,7 @@
     lastFocus = opener || document.activeElement;
     sheetOpen = kind;
     $("sheetTitle").textContent = title;
+    $("sheet").setAttribute("data-kind", kind);
     $("veil").hidden = false;
     $("app").setAttribute("inert", "");
     document.body.classList.add("noscroll");
@@ -554,7 +640,8 @@
   }
   function closeSheet() {
     if (!sheetOpen) return;
-    sheetOpen = ""; confirmingDelete = false;
+    sheetOpen = ""; confirmingDelete = false; confirmingEndSession = false;
+    $("sheet").removeAttribute("data-kind");
     $("veil").hidden = true;
     $("app").removeAttribute("inert");
     document.body.classList.remove("noscroll");
@@ -591,7 +678,7 @@
       if (x.kind === "combo" && x.bogo != null) price.append(h("span", { class: "lab" }, "Buy 1 Get 1"), h("span", { class: "amt alt" }, money(x.bogo)));
     }
     if (!off && !noPrice) {
-      price.append(h("button", { class: "btn sm", type: "button", onclick: function () { closeSheet(); $("text").value = "I'd like to order the " + x.name; resizeBox(); $("text").focus(); } }, "Add to order"));
+      price.append(h("button", { class: "btn sm", type: "button", onclick: function () { closeSheet(); openChat("I'd like to order the " + x.name + " "); } }, "Add to order"));
     }
     return h("article", { class: "dish" + (off ? " off" : "") },
       h("div", { class: "dmain" },
@@ -625,20 +712,23 @@
     return panels;
   }
 
-  function showMenu(e) {
-    openSheet("menu", "Menu", e && e.currentTarget);
+  function showMenu(e, preferred) {
+    openSheet("menu", preferred || "Menu", e && e.currentTarget);
     var body = $("sheetBody"); body.replaceChildren(h("p", { class: "tiny" }, "Loading..."));
     fetch("/web/menu").then(function (r) { return r.json(); }).then(function (m) {
       menuData = m;
       if (sheetOpen !== "menu") return;
       body.replaceChildren();
       var panels = menuPanels(m);
-      var seg = h("div", { class: "seg", role: "tablist", "aria-label": "Menu sections" });
+      var seg = h("div", { class: "seg menu-seg", role: "tablist", "aria-label": "Menu sections" });
+      var sectionLabel = h("div", { class: "menu-section-label" }, h("span", {}, "MENU SECTION"), h("b", { id: "menuSectionName" }, ""));
       var holder = h("div", { class: "panels" });
       var tabs = [];
       var select = function (i, focus) {
         tabs.forEach(function (t, k) { t.setAttribute("aria-selected", k === i ? "true" : "false"); t.tabIndex = k === i ? 0 : -1; });
+        sectionLabel.querySelector("#menuSectionName").textContent = panels[i][0];
         holder.replaceChildren(panels[i][1]);
+        if (preferred) $("sheetTitle").textContent = panels[i][0];
         if (focus) tabs[i].focus();
       };
       panels.forEach(function (p, i) {
@@ -651,10 +741,13 @@
       });
       var live = (m.items || []).some(function (x) { return x.kind === "combo" && x.live; });
       if (panels.length > 1) body.append(seg);
-      body.append(holder);
+      body.append(sectionLabel, holder);
       body.append(h("p", { class: "tiny" }, "Plan pickup " + (m.pickupDays || []).join(", ") + ". Everything is cooked fresh at " + (m.address || "our kitchen") + "."));
       if ($("chat").hidden) body.append(h("button", { class: "btn", type: "button", onclick: function () { closeSheet(); if ($("fName")) $("fName").focus(); } }, "Start an order"));
-      if (panels.length) select(live || panels.length === 1 ? 0 : Math.min(1, panels.length - 1));
+      if (panels.length) {
+        var wanted = preferred ? panels.findIndex(function (p) { return p[0] === preferred; }) : -1;
+        select(wanted >= 0 ? wanted : (live || panels.length === 1 ? 0 : Math.min(1, panels.length - 1)));
+      }
     }).catch(function () { if (sheetOpen === "menu") body.replaceChildren(h("p", { class: "err" }, "Couldn't load the menu. Please try again.")); });
   }
 
@@ -675,6 +768,16 @@
     if (c.instagram) links.push(h("a", { class: "btn ghost", href: "https://www.instagram.com/" + encodeURIComponent(c.instagram) + "/", target: "_blank", rel: "noopener noreferrer" }, icon("insta"), "Instagram"));
     if (c.phone) links.push(h("a", { class: "btn ghost", href: "tel:" + c.phone.replace(/[^\d+]/g, "") }, icon("phone"), c.phone));
     if (links.length) body.append(h("section", { class: "card2" }, h("h3", {}, "Find us"), h("div", { class: "links" }, links)));
+    if (token) {
+      body.append(h("section", { class: "card2" },
+        h("h3", {}, "Session"),
+        h("p", {}, "Finished for now? End this session to return to the welcome screen. Your placed orders stay with Annapurna Home Foods."),
+        confirmingEndSession
+          ? h("div", { class: "links" },
+              h("button", { class: "btn warn", type: "button", onclick: endSession }, "Yes, end session"),
+              h("button", { class: "btn ghost", type: "button", onclick: function () { confirmingEndSession = false; renderHelp(); } }, "Stay signed in"))
+          : h("button", { class: "btn ghost", type: "button", onclick: function () { confirmingEndSession = true; renderHelp(); var b = $("sheetBody").querySelector(".btn.warn"); if (b) b.focus(); } }, "End session")));
+    }
     if (token) {
       body.append(h("section", { class: "card2" },
         h("h3", {}, "Your data"),
@@ -703,17 +806,69 @@
     }).catch(function (e) { if (e.status === 401) { closeSheet(); toBoarding(e.message); return; } if (b) b.disabled = false; toast(errText(e)); });
   }
 
+  function endSession() {
+    confirmingEndSession = false;
+    stopPolling();
+    token = "";
+    store(TOKEN_KEY, null);
+    store(NAME_KEY, null);
+    lastId = 0;
+    seen = {};
+    orders = [];
+    handoff = null;
+    busy = false;
+    if ($("msgs")) $("msgs").replaceChildren();
+    if ($("homeActive")) { $("homeActive").hidden = true; $("homeActive").replaceChildren(); }
+    if ($("fName")) $("fName").value = "";
+    if ($("fContact")) $("fContact").value = "";
+    if ($("fConsent")) $("fConsent").checked = false;
+    closeSheet();
+    show("onboard");
+    $("startErr").textContent = "Session ended. Start a new chat whenever you're ready.";
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   function deleteChat() {
     api("DELETE", "/web/me").then(function () { store(NAME_KEY, null); closeSheet(); toBoarding("Your chat was deleted."); }).catch(function (e) { confirmingDelete = false; renderHelp(); toast(errText(e)); });
+  }
+
+  /* ---------- customer quick actions (presentation only) ---------- */
+  function addCustomerActions() {
+    document.body.classList.add("customer-mode");
+    var chat = $("chat");
+    if (!chat || document.getElementById("customerActions")) return;
+    var bar = h("div", { class: "customer-actions", id: "customerActions", "aria-label": "Quick actions" });
+    var actions = [
+      ["bowl", "Order food", true, function () { fillComposer("I'd like to order "); $("text").focus(); }],
+      ["sun", "Weekend combos", false, function () { if (!busy) send("What weekend combos are running?"); }],
+      ["clock", "Weekly plans", false, function () { if (!busy) send("Tell me about the weekly plans"); }],
+      ["bag", "My orders", false, function (e) { showOrders({ currentTarget: e.currentTarget }); }]
+    ];
+    actions.forEach(function (a, i) {
+      bar.append(h("button", {
+        type: "button", class: "customer-action", style: "--i:" + i,
+        "data-accent": a[2] ? "true" : "false",
+        onclick: a[3]
+      }, icon(a[0]), a[1]));
+    });
+    chat.insertBefore(bar, $("msgs"));
   }
 
   /* ---------- wiring ---------- */
   CHIPS.forEach(function (c) { $("chips").append(h("button", { type: "button", onclick: function () { send(c); } }, c)); });
 
+  $("brandHome").addEventListener("click", function () { if (token) openHome(); else show("onboard"); });
+  $("btnHome").addEventListener("click", openHome);
   $("btnMenu").addEventListener("click", showMenu);
   $("btnOrders").addEventListener("click", showOrders);
   $("btnHelp").addEventListener("click", showHelp);
   $("startMenu").addEventListener("click", showMenu);
+  $("homeOrder").addEventListener("click", function () { openChat("I'd like to order "); });
+  $("homeContinue").addEventListener("click", function () { openChat(); });
+  $("homeCombos").addEventListener("click", function (e) { showMenu(e, "Weekend combos"); });
+  $("homePlans").addEventListener("click", function (e) { showMenu(e, "Weekly plans"); });
+  $("homeOrders").addEventListener("click", function (e) { showOrders(e); });
+  $("homeMenu").addEventListener("click", showMenu);
   $("sheetClose").addEventListener("click", closeSheet);
   $("veil").addEventListener("click", function (e) { if (e.target === $("veil")) closeSheet(); });
 
@@ -734,7 +889,7 @@
     $("startBtn").disabled = true;
     api("POST", "/web/session", { name: name, contact: contact, consent: true }).then(function (j) {
       token = j.token; store(TOKEN_KEY, token); store(NAME_KEY, j.name || name);
-      openChat();
+      openHome();
     }).catch(function (e2) { err.textContent = e2.status === 429 ? "Too many new chats from this network. Please try again later." : e2.message; })
       .then(function () { $("startBtn").disabled = false; });
   });
@@ -742,5 +897,6 @@
   /* ---------- start ---------- */
   token = store(TOKEN_KEY) || "";
   initHero();
-  if (token) openChat(); else show("onboard");
+  addCustomerActions();
+  if (token) openHome(); else show("onboard");
 })();
