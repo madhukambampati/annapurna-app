@@ -863,7 +863,7 @@
   $("btnOrders").addEventListener("click", showOrders);
   $("btnHelp").addEventListener("click", showHelp);
   $("startMenu").addEventListener("click", showMenu);
-  $("homeOrder").addEventListener("click", function () { openChat("I'd like to order "); });
+  $("homeOrder").addEventListener("click", function () { openChat(); });
   $("homeContinue").addEventListener("click", function () { openChat(); });
   $("homeCombos").addEventListener("click", function (e) { showMenu(e, "Weekend combos"); });
   $("homePlans").addEventListener("click", function (e) { showMenu(e, "Weekly plans"); });
