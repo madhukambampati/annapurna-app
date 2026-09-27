@@ -421,10 +421,11 @@ export function createServer(d: ServerDeps): Server {
       if (path.startsWith("/api/")) {
         ownerAuth(req);
         if (m === "GET" && path === "/api/state") {
+          const ownerChatResetAfterMessageId = store.ownerChatResetAfterMessageId();
           const customers = store
             .listCustomers()
             .map((c) => ({ waId: c.waId, name: c.name, contact: c.contact, last: store.lastMessage(c.waId) ?? null }))
-            .filter((c) => c.last)
+            .filter((c) => c.last && c.last.id > ownerChatResetAfterMessageId)
             .sort((x, y) => y.last!.id - x.last!.id)
             .slice(0, 100);
           const contactOf = (waId: string) => store.getCustomer(waId)?.contact ?? "";
@@ -458,7 +459,10 @@ export function createServer(d: ServerDeps): Server {
           }
           const c = store.getCustomer(waId);
           if (!c) throw new HttpError(404, "No such customer");
-          if (m === "GET" && mt[2] === "messages") return send(req, res, 200, { customer: { waId, name: c.name, contact: c.contact }, messages: store.getMessages(waId, 200) });
+          if (m === "GET" && mt[2] === "messages") {
+            const cutoff = store.ownerChatResetAfterMessageId();
+            return send(req, res, 200, { customer: { waId, name: c.name, contact: c.contact }, messages: store.getMessages(waId, 200).filter((x) => x.id > cutoff) });
+          }
           if (m === "POST" && mt[2] === "reply") {
             const text = cleanText((await readJson(req)).text, MAX_TEXT);
             if (!text) throw new HttpError(400, "Reply is empty");

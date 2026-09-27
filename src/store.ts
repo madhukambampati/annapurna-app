@@ -42,6 +42,38 @@ export class Store {
       /* column already there */
     }
     this.migrateMenu();
+    this.initializeFreshVindhuOwnerChat();
+  }
+
+  /**
+   * One-time launch reset for the owner Chats inbox. Historical customer messages and
+   * placed orders remain stored; owner Chats starts after the current highest message id.
+   */
+  private initializeFreshVindhuOwnerChat(): void {
+    const key = "owner_chat_reset_vindhu_20260927";
+    const done = this.db.prepare("SELECT 1 FROM kv WHERE key = ?").get(key);
+    if (done) return;
+    const r = this.db.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM messages").get() as Row;
+    const afterMessageId = Number(r.id) || 0;
+    this.db.exec(`
+      DELETE FROM drafts;
+      UPDATE alerts SET done = 1 WHERE order_id IS NULL;
+      UPDATE customers SET profile = '', uncertain_streak = 0;
+    `);
+    this.kvPut(key, { afterMessageId, at: Date.now(), reason: "Fresh Vindhu owner chat launch" });
+  }
+
+  /** Owner Chats intentionally hide messages from before the fresh Vindhu launch. */
+  ownerChatResetAfterMessageId(): number {
+    const r = this.db.prepare("SELECT json FROM kv WHERE key = ?").get("owner_chat_reset_vindhu_20260927") as Row | undefined;
+    if (!r) return 0;
+    try {
+      const v = JSON.parse(String(r.json)) as { afterMessageId?: unknown };
+      const n = Number(v.afterMessageId);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    } catch {
+      return 0;
+    }
   }
 
   /** One-time refresh of combo names and prices when MENU_VERSION goes up. */
