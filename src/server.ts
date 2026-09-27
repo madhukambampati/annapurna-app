@@ -322,7 +322,7 @@ export function createServer(d: ServerDeps): Server {
           const before = store.lastMessage(waId)?.id ?? 0;
           const c = store.getCustomer(waId)!;
           const out = await agent.handle({ from: waId, name: c.name, text });
-          return send(req, res, 200, { messages: store.getMessagesAfter(waId, before), orderId: out.orderId ?? null });
+          return send(req, res, 200, { messages: store.getMessagesAfter(waId, before), orderId: out.orderId ?? null, recoverableError: out.route.includes("+model_error") });
         }
 
         if (m === "GET" && path === "/web/history") {

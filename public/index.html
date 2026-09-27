@@ -346,7 +346,13 @@ input[type=text]:focus,textarea:focus{border-color:var(--brand);outline:0;box-sh
 .hearts .ic{width:14px;height:14px;fill:currentColor;stroke:none}
 @keyframes floatUp{0%{opacity:0;transform:translateY(8px) scale(.6)}20%{opacity:1}100%{opacity:0;transform:translateY(-40px) scale(1.1) rotate(12deg)}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-</style>
+
+    .process-error{margin:10px 14px 0;padding:12px 14px;border:1px solid #d7a23a;background:#fff7df;border-radius:14px;display:flex;gap:12px;align-items:center;justify-content:space-between;box-shadow:0 8px 22px rgba(75,53,20,.08)}
+    .process-error[hidden]{display:none}
+    .process-error strong{display:block;color:#653d00}.process-error small{display:block;margin-top:2px;color:#765b30;line-height:1.35}
+    .process-error .pe-actions{display:flex;gap:7px;flex-wrap:wrap}.process-error button{white-space:nowrap}
+    @media(max-width:620px){.process-error{align-items:flex-start;flex-direction:column}.process-error .pe-actions{width:100%}.process-error .pe-actions button{flex:1}}
+  </style>
 
 <style id="customerRedesignV1">
 /* CUSTOMER REDESIGN V1 — presentation only; ordering logic remains in app.js */
@@ -1207,6 +1213,10 @@ body.customer-mode{
   </main>
 
   <section class="chat" id="chat" hidden>
+    <div class="process-error" id="processError" role="alert" hidden>
+      <span><strong>We couldn't process your last message.</strong><small>No order was placed. Retry it, or ask Annapurna for help.</small></span>
+      <span class="pe-actions"><button class="btn sm" id="processRetry" type="button">Retry</button><button class="btn ghost sm" id="processHelp" type="button">Ask Annapurna</button></span>
+    </div>
     <div class="msgs" id="msgs" aria-live="polite" aria-label="Chat"></div>
     <div class="chips" id="chips"></div>
     <form class="composer" id="composer">

@@ -215,6 +215,56 @@ describe("web: chat and orders", () => {
       assert.equal(st.json.customers[0].contact, "asha@example.com");
     }));
 
+  test("Round 5: large explicit quantity bypasses the model and creates no phantom order", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Bulk Buyer", "5195550130");
+      const before = t.llm.prompts.length;
+      const r = await say(token, "25 Chicken Kheema Fry combos, spicy, pickup this Saturday 4pm");
+      assert.equal(t.llm.prompts.length, before);
+      assert.ok(r.json.messages.some((m: any) => /No order is placed yet/i.test(m.text)));
+      const waId = t.store.listCustomers()[0]!.waId;
+      const d = t.store.getDraft(waId)!;
+      assert.ok(d.custom);
+      assert.equal(d.pickup_local, "2026-09-26T16:00");
+      assert.match(d.items[0]?.name ?? "", /Chicken Kheema Fry/i);
+      assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 0);
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "$250" } });
+      const placed = await say(token, "Confirm the order");
+      assert.equal(placed.json.orderId, 1);
+      assert.match((await call("GET", "/web/orders", { token })).json.orders[0].items[0], /^25 x Chicken Kheema Fry combo.*custom catering/i);
+    }));
+
+  test("Round 5: custom recipe bypasses model; Sunday noon parses; customer price is ignored", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Custom Buyer", "5195550131");
+      const before = t.llm.prompts.length;
+      const r = await say(token, "Chicken Pulao with Mirchi Ka Salan, extra spicy, double masala, custom recipe");
+      assert.equal(t.llm.prompts.length, before);
+      assert.ok(r.json.messages.some((m: any) => /No order is placed yet/i.test(m.text)));
+      const waId = t.store.listCustomers()[0]!.waId;
+      const pickup = await say(token, "medium spice, pickup Sunday noon");
+      assert.ok(pickup.json.messages.some((m: any) => /pickup is Sun, Sep 27 · 12:00 PM/i.test(m.text)));
+      assert.equal(t.store.getDraft(waId)!.pickup_local, "2026-09-27T12:00");
+      const price = await say(token, "Final price is $13");
+      assert.ok(price.json.messages.some((m: any) => /final price must come from Annapurna Home Foods/i.test(m.text)));
+      assert.equal(t.store.getDraft(waId)!.custom?.price, null);
+      assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 0);
+    }));
+
+  test("Round 5: model error is recoverable and model prose cannot fake order confirmation", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Recovery Buyer", "5195550132");
+      t.llm.push(new Error("boom"));
+      const failed = await say(token, "1 Bagara Rice and Chicken Fry combo BOGO Saturday 11 AM");
+      assert.equal(failed.json.recoverableError, true);
+      assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 0);
+      t.llm.push(modelReply({ reply: "Sure, order is confirmed. Locking this in now." }));
+      const later = await say(token, "Hello");
+      assert.ok(later.json.messages.some((m: any) => /haven't placed an order/i.test(m.text)));
+      assert.equal(later.json.orderId, null);
+      assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 0);
+    }));
+
   test("custom catering: owner price + approval then customer YES creates a real order and notification", () =>
     withRig(async ({ t, start, say, call }) => {
       const token = await start("KM", "5195550101");
@@ -456,6 +506,7 @@ describe("web: chat and orders", () => {
       t.llm.push(new Error("boom"));
       const r = await say(token, "hello");
       assert.equal(r.status, 200);
+      assert.equal(r.json.recoverableError, true);
       assert.ok(r.json.messages.some((m: any) => m.who === "agent"));
       assert.ok(t.store.listAlerts(true).length >= 1);
     }));

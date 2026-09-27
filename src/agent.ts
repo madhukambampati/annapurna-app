@@ -1,5 +1,5 @@
 import type { Config } from "./config.js";
-import { checkFlags, checkWeekday, draftHash, extrasOnly, friendlyName, mainOrderFor, sanitizeItems, type Issue } from "./guards.js";
+import { checkFlags, checkWeekday, draftHash, extrasOnly, friendlyName, mainOrderFor, sanitizeItems, tokens, type Issue } from "./guards.js";
 import { HeuristicJudge, type Judge, type Judgment } from "./judge.js";
 import type { Llm } from "./llm.js";
 import { findItem, itemLabel, lineAmt, money, total, optionPicks } from "./menu.js";
@@ -7,8 +7,8 @@ import type { Notifier } from "./notify.js";
 import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
 import { route as decideRoute, type Route } from "./router.js";
 import type { Store } from "./store.js";
-import { dayLabel, formatWhen, isLocalIso, pad, zonedParts } from "./time.js";
-import type { Alert, Draft, Order, Settings, Stage } from "./types.js";
+import { dayLabel, formatWhen, isLocalIso, nextDateForDow, pad, zonedParts } from "./time.js";
+import type { Alert, Draft, MenuItem, Order, Settings, Stage } from "./types.js";
 
 /**
  * The turn loop. Code owns the control flow:
@@ -61,15 +61,12 @@ const HUMAN = /\b(real (person|human)|human being|a human|(talk|speak|chat) (to|
 /** Text sent by the web app's "Yes, place order" button. */
 const CONFIRM_BUTTON = /^yes, confirm$/i;
 /** Owner-managed catering/bulk orders. A headcount alone counts as custom only at 8+ people. */
-const CUSTOM_WORDS = /\b(cater(?:ing)?|bulk|party order|large order|full tray|half tray|medium tray|large tray)\b/i;
+const CUSTOM_RECIPE_WORDS = /\b(custom recipe|customi[sz](?:e|ed|ation)|modified recipe)\b/i;
+const CUSTOM_WORDS = /\b(cater(?:ing)?|bulk|party order|large order|full tray|half tray|medium tray|large tray|custom recipe|customi[sz](?:e|ed|ation)|modified recipe)\b/i;
 const CUSTOM_HEADCOUNT = /\b(\d{1,3})\s*(?:people|persons|pax|members|guests)\b/i;
 const CUSTOM_CONFIRM = /(?:^yes\b|^go\s+ahead\b|\bconfirm(?:ing|ed)?\s+(?:(?:the|my)\s+)?order\b|\bplace\s+(?:(?:the|my)\s+)?order\b)/i;
-
-function looksCustom(text: string): boolean {
-  if (CUSTOM_WORDS.test(text)) return true;
-  const m = CUSTOM_HEADCOUNT.exec(text);
-  return !!m && Number(m[1]) >= 8;
-}
+const CUSTOMER_CUSTOM_PRICE = /(?:\$\s*\d{1,5}(?:\.\d{1,2})?|\b\d{1,5}(?:\.\d{1,2})?\s*(?:\$|cad)\b)/i;
+const PLACEMENT_CLAIM = /\b(?:order\s+(?:is\s+|has\s+been\s+)?(?:confirmed|placed|booked)|(?:confirmed|placed|booked)\s+(?:the\s+|your\s+)?order|lock(?:ing|ed)?\s+(?:this|it|the order)\s+in)\b/i;
 
 function customHeadcount(text: string): number | null {
   const m = CUSTOM_HEADCOUNT.exec(text);
@@ -77,20 +74,78 @@ function customHeadcount(text: string): number | null {
   return n > 0 && n < 500 ? n : null;
 }
 
-/** Common catering pickup replies should not depend on an LLM call. */
-function simpleCustomPickup(text: string, now: number, tz: string): string | null {
-  const m = /\b(today|tomorrow)\b[^\d]{0,24}(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i.exec(text);
+function reEscape(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function bulkMenuQuantity(text: string, menu: MenuItem[]): number | null {
+  for (const it of menu) {
+    const base = it.name.replace(/\s+combo$/i, "").trim();
+    const words = base.split(/\s+/).map(reEscape).join("\\s+");
+    const m = new RegExp(`\\b(\\d{1,3})\\s+(?:x\\s+)?${words}\\b`, "i").exec(text);
+    if (!m) continue;
+    const n = Number(m[1]);
+    if (n >= 8 && n < 500) return n;
+  }
+  return null;
+}
+
+function looksCustom(text: string, menu: MenuItem[] = []): boolean {
+  if (CUSTOM_WORDS.test(text)) return true;
+  const m = CUSTOM_HEADCOUNT.exec(text);
+  if (m && Number(m[1]) >= 8) return true;
+  return !!bulkMenuQuantity(text, menu);
+}
+
+/** Only the failure-prone forms bypass Claude: large explicit menu quantities and recipe modifications. */
+function deterministicCustomStart(text: string, menu: MenuItem[]): boolean {
+  return CUSTOM_RECIPE_WORDS.test(text) || bulkMenuQuantity(text, menu) != null;
+}
+
+function deterministicCustomItems(text: string, menu: MenuItem[]): Draft["items"] {
+  const tt = tokens(text);
+  const qty = customHeadcount(text) ?? bulkMenuQuantity(text, menu) ?? 1;
+  const matches = menu.filter((it) => {
+    const mt = tokens(it.name.replace(/\s+combo$/i, ""));
+    return mt.size > 0 && [...mt].every((t) => tt.has(t));
+  }).sort((a, b) => b.name.length - a.name.length);
+  const m = matches[0];
+  return m ? [{ id: m.id, name: m.name, qty, pack: "single", amt: null }] : [];
+}
+
+function parseClock(text: string): { h: number; mi: number } | null {
+  const special = /\b(noon|midnight)\b/i.exec(text);
+  if (special) return { h: special[1]!.toLowerCase() === "noon" ? 12 : 0, mi: 0 };
+  const m = /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i.exec(text);
   if (!m) return null;
-  let h = Number(m[2]);
-  const mi = Number(m[3] ?? "0");
+  let h = Number(m[1]);
+  const mi = Number(m[2] ?? "0");
   if (h < 1 || h > 12 || mi < 0 || mi > 59) return null;
-  const ap = m[4]!.toLowerCase();
+  const ap = m[3]!.toLowerCase();
   if (ap === "pm" && h !== 12) h += 12;
   if (ap === "am" && h === 12) h = 0;
+  return { h, mi };
+}
+
+/** Common custom pickup replies should not depend on an LLM call, including weekday noon/midnight. */
+function simpleCustomPickup(text: string, now: number, tz: string): string | null {
+  const clock = parseClock(text);
+  if (!clock) return null;
   const p = zonedParts(now, tz);
-  const add = m[1]!.toLowerCase() === "tomorrow" ? 1 : 0;
-  const d = new Date(Date.UTC(p.y, p.m - 1, p.d + add));
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(h)}:${pad(mi)}`;
+  const rel = /\b(today|tomorrow)\b/i.exec(text);
+  let d: Date;
+  if (rel) {
+    const add = rel[1]!.toLowerCase() === "tomorrow" ? 1 : 0;
+    d = new Date(Date.UTC(p.y, p.m - 1, p.d + add));
+  } else {
+    const wk = /\b(?:(this|next)\s+)?(sun(?:day)?|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?)\b/i.exec(text);
+    if (!wk) return null;
+    const days: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+    const iso = nextDateForDow(now, tz, days[wk[2]!.slice(0, 3).toLowerCase()]!);
+    d = new Date(`${iso}T00:00:00Z`);
+    if (wk[1]?.toLowerCase() === "next") d.setUTCDate(d.getUTCDate() + 7);
+  }
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(clock.h)}:${pad(clock.mi)}`;
 }
 
 export const HANDOFF_NOTE = "Wants to talk to a person";
@@ -143,8 +198,33 @@ export class Agent {
     // Do not infer custom/catering state from older chat history: customers often place a normal
     // menu order after a catering order in the same conversation.
 
+    // Large explicit quantities and custom-recipe requests are captured before Claude. These are the
+    // failure-prone forms from QA; ordinary catering/headcount flows keep their existing behavior.
+    if (!draft?.custom && deterministicCustomStart(text, menu)) {
+      const parsedPickup = simpleCustomPickup(text, now, settings.tz);
+      const next: Draft = {
+        items: deterministicCustomItems(text, menu),
+        pickup_local: parsedPickup,
+        customer_name: customer.name || msg.name || null,
+        notes: "",
+        readback_hash: null,
+        stage: "collecting",
+        custom: { request: text.slice(0, 300), price: null, approved: false },
+      };
+      store.putDraft(msg.from, next);
+      out.route = "custom_request";
+      out.replies.push(
+        `I've sent this custom/bulk request to Annapurna Home Foods. No order is placed yet. ` +
+        `${parsedPickup ? `Pickup noted for ${formatWhen(parsedPickup)}. ` : ""}` +
+        `Annapurna Home Foods will confirm the final price${parsedPickup ? "" : " and pickup time"} here before you can place it.`
+      );
+      await this.raise(msg.from, customer.name || msg.name || "Customer", `Custom/bulk request: "${text.slice(0, 220)}"`, null, out);
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
+    }
+
     // For an active custom order, parse common pickup replies in code so a transient model failure
-    // cannot lose "tomorrow 6 PM". The kitchen timezone remains the source of truth.
+    // cannot lose "tomorrow 6 PM" or "Sunday noon". The kitchen timezone remains the source of truth.
     if (draft?.custom) {
       const custom = draft.custom;
       const parsedPickup = simpleCustomPickup(text, now, settings.tz);
@@ -160,6 +240,15 @@ export class Agent {
           return out;
         }
       }
+    }
+
+    // Customer-entered prices never populate custom pricing. Only the authenticated owner endpoint
+    // is allowed to set draft.custom.price.
+    if (draft?.custom && draft.custom.price == null && CUSTOMER_CUSTOM_PRICE.test(text)) {
+      out.route = "custom_customer_price_ignored";
+      out.replies.push("Thanks — I've noted your message, but the final price must come from Annapurna Home Foods. No order is placed yet.");
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
     }
 
     // Custom/catering orders are different from menu orders: the owner sets the final price in chat,
@@ -304,7 +393,7 @@ export class Agent {
     const issues: Issue[] = [];
 
     if (!frozen) {
-      const startsCustom = !custom && looksCustom(text);
+      const startsCustom = !custom && looksCustom(text, menu);
       if (custom || startsCustom) {
         // Custom orders are owner-managed. Preserve the structured draft we already have and do not
         // run normal menu-item ambiguity checks on phrases such as "15-person medium tray".
@@ -400,6 +489,15 @@ export class Agent {
         ? "The custom order details are ready. Reply CONFIRM THE ORDER to place it."
         : "I've saved your custom order request. Annapurna Home Foods will confirm the final price and details here in this chat.";
     }
+    // Model prose can never be the authority that an order was placed. Real placement confirmations
+    // are generated by code and contain a real order number.
+    if (!custom && PLACEMENT_CLAIM.test(reply)) {
+      const hasRealOrderNumber = open.some((o) => new RegExp(`#${o.id}\\b`).test(reply));
+      if (!hasRealOrderNumber) {
+        reply = "I haven't placed an order from that message. Tell me what you'd like, and I'll show you a Check your order review before anything is placed.";
+        out.issues.push("false_confirmation_blocked");
+      }
+    }
     out.replies.push(reply);
 
     const ownerNote = typeof raw.owner_note === "string" ? raw.owner_note.trim() : "";
@@ -452,7 +550,7 @@ export class Agent {
       return;
     }
 
-    const people = customHeadcount(custom.request);
+    const people = customHeadcount(custom.request) ?? bulkMenuQuantity(custom.request, store.getMenu());
     const menuNames = [...new Set(draft.items.map((it) => it.name))];
     const requestName = custom.request
       .replace(/^\s*(?:hi\s+)?(?:i\s+(?:would\s+like|want|need)\s+to\s+order\s*)/i, "")

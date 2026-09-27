@@ -34,6 +34,7 @@
   var token = "", lastId = 0, busy = false, seen = {}, orders = [], pollTimer = 0;
   var sheetOpen = "", lastFocus = null, menuData = null, handoff = null, confirmingDelete = false, confirmingEndSession = false;
   var pendingOrderText = "";
+  var failedMessageText = "";
 
   function store(k, v) { try { if (v === null) localStorage.removeItem(k); else if (v !== undefined) localStorage.setItem(k, v); else return localStorage.getItem(k); } catch (e) { /* private mode */ } return null; }
 
@@ -521,6 +522,13 @@
     return e.message || "Couldn't send. Please try again.";
   }
 
+  function setProcessError(show, text) {
+    var bar = $("processError");
+    if (!bar) return;
+    bar.hidden = !show;
+    if (show && text) failedMessageText = text;
+  }
+
   function send(text) {
     text = (text || "").trim();
     if (!text || busy) return;
@@ -533,6 +541,8 @@
       pend.remove();
       addMessages(j.messages || []);
       if (j.orderId) loadOrders();
+      if (j.recoverableError) setProcessError(true, text);
+      else setProcessError(false);
     }).catch(function (e) {
       pend.remove();
       if (e.status === 401) { toBoarding(e.message); return; }
@@ -929,6 +939,15 @@
   $("veil").addEventListener("click", function (e) { if (e.target === $("veil")) closeSheet(); });
 
   $("composer").addEventListener("submit", function (e) { e.preventDefault(); send($("text").value); });
+  if ($("processRetry")) $("processRetry").addEventListener("click", function () { if (!busy && failedMessageText) send(failedMessageText); });
+  if ($("processHelp")) $("processHelp").addEventListener("click", function () {
+    if (busy) return;
+    api("POST", "/web/handoff").then(function (j) {
+      addMessages(j.messages || []);
+      setHandoff(j.handoff || null);
+      setProcessError(false);
+    }).catch(function (e) { toast(errText(e)); });
+  });
   $("text").addEventListener("input", resizeBox);
   $("text").addEventListener("keydown", function (e) {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send($("text").value); }
