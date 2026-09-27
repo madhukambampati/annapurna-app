@@ -27,52 +27,53 @@ jobs:
         run: npm test
       - name: Live health, security, routing, and deployment parity
         run: |
-          set -euo pipefail
+          set -u
           base='https://annapurna-maddy-kw.fly.dev'
+          fail=0
+          pass() { echo "PASS: $1"; }
+          bad() { echo "FAIL: $1"; fail=1; }
           curlx() { curl --retry 3 --retry-all-errors --fail --silent --show-error --max-time 20 "$@"; }
 
-          curlx "$base/health" -o /tmp/health.json
-          grep -q '"ok":true' /tmp/health.json
+          if curlx "$base/health" -o /tmp/health.json && grep -q '"ok":true' /tmp/health.json; then pass health; else bad health; fi
+          if curlx -D /tmp/home.headers "$base/" -o /tmp/index.html; then pass home; else bad home; fi
+          if curlx "$base/desk" -o /tmp/desk.html; then pass desk; else bad desk; fi
+          if curlx "$base/app.js" -o /tmp/app.js; then pass app.js; else bad app.js; fi
+          if curlx "$base/desk.js" -o /tmp/desk.js; then pass desk.js; else bad desk.js; fi
+          if curlx "$base/manifest.webmanifest" -o /tmp/manifest.webmanifest; then pass manifest; else bad manifest; fi
+          if curlx "$base/web/menu" -o /tmp/menu.json; then pass menu-endpoint; else bad menu-endpoint; fi
 
-          curlx -D /tmp/home.headers "$base/" -o /tmp/index.html
-          curlx "$base/desk" -o /tmp/desk.html
-          curlx "$base/app.js" -o /tmp/app.js
-          curlx "$base/desk.js" -o /tmp/desk.js
-          curlx "$base/manifest.webmanifest" -o /tmp/manifest.webmanifest
-          curlx "$base/web/menu" -o /tmp/menu.json
+          echo '--- LIVE SECURITY HEADERS ---'
+          grep -Ei '^(content-security-policy|x-content-type-options|x-frame-options|referrer-policy|cache-control|strict-transport-security):' /tmp/home.headers || true
+          grep -qi '^content-security-policy:' /tmp/home.headers && pass CSP || bad CSP
+          grep -qi '^x-content-type-options: *nosniff' /tmp/home.headers && pass nosniff || bad nosniff
+          grep -qi '^x-frame-options: *DENY' /tmp/home.headers && pass frame-deny || bad frame-deny
+          grep -qi '^referrer-policy: *no-referrer' /tmp/home.headers && pass referrer-policy || bad referrer-policy
+          grep -qi '^cache-control: *no-store' /tmp/home.headers && pass no-store || bad no-store
+          grep -qi '^strict-transport-security:' /tmp/home.headers && pass HSTS || bad HSTS
 
-          grep -qi '^content-security-policy:' /tmp/home.headers
-          grep -qi '^x-content-type-options: *nosniff' /tmp/home.headers
-          grep -qi '^x-frame-options: *DENY' /tmp/home.headers
-          grep -qi '^referrer-policy: *no-referrer' /tmp/home.headers
-          grep -qi '^cache-control: *no-store' /tmp/home.headers
-          grep -qi '^strict-transport-security:' /tmp/home.headers
+          node -e 'const x=require("fs").readFileSync("/tmp/menu.json","utf8"); const j=JSON.parse(x); if(!Array.isArray(j.items)||!j.items.length) process.exit(1)' && pass menu-json || bad menu-json
 
-          node -e 'const x=require("fs").readFileSync("/tmp/menu.json","utf8"); const j=JSON.parse(x); if(!Array.isArray(j.items)||!j.items.length) process.exit(1)'
-          grep -q 'Annapurna' /tmp/index.html
-          grep -q 'Annapurna' /tmp/desk.html
-
-          cmp -s public/index.html /tmp/index.html
-          cmp -s public/desk.html /tmp/desk.html
-          cmp -s public/app.js /tmp/app.js
-          cmp -s public/desk.js /tmp/desk.js
-          cmp -s public/manifest.webmanifest /tmp/manifest.webmanifest
+          for spec in 'public/index.html:/tmp/index.html:index' 'public/desk.html:/tmp/desk.html:desk-html' 'public/app.js:/tmp/app.js:app-js' 'public/desk.js:/tmp/desk.js:desk-js' 'public/manifest.webmanifest:/tmp/manifest.webmanifest:manifest'; do
+            IFS=: read -r localf livef label <<< "$spec"
+            echo "$label local=$(sha256sum "$localf" | cut -d' ' -f1) live=$(sha256sum "$livef" | cut -d' ' -f1)"
+            cmp -s "$localf" "$livef" && pass "deployment-parity-$label" || bad "deployment-parity-$label"
+          done
 
           code=$(curl --silent --show-error --max-time 20 -o /tmp/browser404.html -w '%{http_code}' "$base/definitely-not-a-real-page")
-          test "$code" = '404'
-          grep -q "That page isn't here" /tmp/browser404.html
-          grep -q 'Back to home' /tmp/browser404.html
+          test "$code" = '404' && grep -q "That page isn't here" /tmp/browser404.html && grep -q 'Back to home' /tmp/browser404.html && pass branded-browser-404 || bad branded-browser-404
 
           code=$(curl --silent --show-error --max-time 20 -o /tmp/api404.json -w '%{http_code}' "$base/api/definitely-not-real")
-          test "$code" = '404'
-          grep -q '"error":"Not found"' /tmp/api404.json
+          test "$code" = '404' && grep -q '"error":"Not found"' /tmp/api404.json && pass api-json-404 || bad api-json-404
 
           code=$(curl --silent --show-error --max-time 20 -o /tmp/owner401.json -w '%{http_code}' "$base/api/state")
-          test "$code" = '401'
-          grep -q 'Owner token required' /tmp/owner401.json
+          test "$code" = '401' && grep -q 'Owner token required' /tmp/owner401.json && pass owner-auth || bad owner-auth
 
-          grep -q 'saved chat for a different contact' /tmp/app.js
-          grep -q 'Your saved chat is no longer available' /tmp/app.js
+          grep -q 'saved chat for a different contact' /tmp/app.js && pass live-resume-contact-mismatch-copy || bad live-resume-contact-mismatch-copy
+          grep -q 'Your saved chat is no longer available' /tmp/app.js && pass live-expired-resume-copy || bad live-expired-resume-copy
 
-          echo 'FINAL_CHECK: live assets exactly match ui-redesign-v1 customer/owner frontend'
-          echo 'FINAL_CHECK: security headers, branded 404, API 404, owner auth, menu and health all passed'
+          if [ "$fail" -eq 0 ]; then
+            echo 'FINAL_CHECK: ALL CHECKS PASSED'
+          else
+            echo 'FINAL_CHECK: ONE OR MORE CHECKS FAILED'
+          fi
+          exit "$fail"
