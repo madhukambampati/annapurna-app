@@ -1,0 +1,61 @@
+name: One-time Vindhu production release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  test-and-deploy:
+    if: github.event.head_commit.message == 'Add one-time Vindhu production release workflow'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Apply tested Vindhu rename
+        run: git cherry-pick cf2dedcd778c9d0f779629ad5cc30bc70be4614d
+      - name: Install
+        run: npm ci
+      - name: Browser JavaScript syntax
+        run: |
+          node --check public/app.js
+          node --check public/desk.js
+      - name: Full automated regression suite
+        run: npm test
+      - name: Verify release copy
+        run: |
+          grep -Fq 'Hi! I’m Vindhu, your Annapurna ordering assistant 🍛' public/index.html
+          grep -Fq 'Hi! I’m Vindhu, your Annapurna ordering assistant 🍛' public/app.js
+          grep -Fq 'Chat with Vindhu' public/index.html
+          grep -Fq 'Vindhu will help with the details' public/index.html
+          grep -Fq '"Vindhu"' public/desk.js
+      - name: Push release to main
+        run: git push origin HEAD:main
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy to Fly.io
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Verify live production
+        run: |
+          set -euo pipefail
+          base='https://annapurna-maddy-kw.fly.dev'
+          for i in 1 2 3 4 5 6; do
+            if curl --fail --silent --show-error --max-time 20 "$base/health" | grep -q '"ok":true'; then break; fi
+            sleep 5
+          done
+          curl --fail --silent --show-error --max-time 20 "$base/" -o /tmp/index.html
+          curl --fail --silent --show-error --max-time 20 "$base/app.js" -o /tmp/app.js
+          curl --fail --silent --show-error --max-time 20 "$base/desk.js" -o /tmp/desk.js
+          grep -Fq 'Hi! I’m Vindhu, your Annapurna ordering assistant 🍛' /tmp/index.html
+          grep -Fq 'Hi! I’m Vindhu, your Annapurna ordering assistant 🍛' /tmp/app.js
+          grep -Fq '"Vindhu"' /tmp/desk.js
+          echo 'LIVE_CHECK: Vindhu release is live and healthy'
