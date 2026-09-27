@@ -36,3 +36,5 @@ jobs:
           git add public/desk.html public/desk.js public/app.js src/server.ts test/web.test.ts test/server.test.ts
           git commit -m "Fix owner mobile chat and duplicate confirmation safety"
           git push origin HEAD:ui-redesign-v1
+
+# one-time trigger
