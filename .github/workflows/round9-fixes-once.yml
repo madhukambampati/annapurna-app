@@ -1,0 +1,38 @@
+name: One-time Round 9 state fixes
+on:
+  push:
+    branches: [fix-custom-state-and-chat-artifacts]
+    paths:
+      - '.github/round9-trigger.txt'
+permissions:
+  contents: write
+jobs:
+  fix-and-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply fixes
+        run: python .github/scripts/apply-round9-fixes.py
+      - name: Scope and syntax checks
+        run: |
+          git diff --check
+          node --check public/app.js
+          node --check public/desk.js
+          changed=$(git diff --name-only | sort | tr '\n' ' ')
+          echo "Changed: $changed"
+          test "$changed" = "src/agent.ts src/server.ts test/web.test.ts "
+      - name: Full regression suite
+        run: |
+          npm ci
+          npm test
+      - name: Commit fixes
+        run: |
+          git config user.name 'madhukambampati'
+          git config user.email '85366523+madhukambampati@users.noreply.github.com'
+          git add src/agent.ts src/server.ts test/web.test.ts
+          git commit -m 'Fix stale custom state and misleading confirmations'
+          git push origin HEAD:fix-custom-state-and-chat-artifacts
