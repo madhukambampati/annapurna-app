@@ -987,9 +987,22 @@
         finish(j);
       }).catch(function (e2) {
         token = "";
-        if (e2.status === 401 || e2.status === 409) {
+        // A returning customer's saved-session failure must never silently become a new chat.
+        // In particular, a contact typo (409) must keep the resume token so the customer can
+        // correct the contact and try again without being subject to the new-chat IP quota.
+        if (e2.status === 409) {
+          var mismatch = new Error("This device has a saved chat for a different contact. Enter the same phone number or email used for that chat.");
+          mismatch.status = 409;
+          throw mismatch;
+        }
+        // An expired/deleted token is genuinely no longer resumable. Clear only that unusable
+        // token, explain what happened, and require a second explicit submit to create a new chat.
+        // This keeps the anti-abuse new-chat limit scoped to intentional new sessions.
+        if (e2.status === 401) {
           store(RESUME_TOKEN_KEY, null);
-          return fresh();
+          var expired = new Error("Your saved chat is no longer available. Submit again if you'd like to start a new chat.");
+          expired.status = 401;
+          throw expired;
         }
         throw e2;
       });

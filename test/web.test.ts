@@ -768,6 +768,41 @@ describe("web: abuse limits", () => {
       assert.equal((await call("POST", "/web/session", { body })).status, 200);
     }, { web: { sessionsPerIpHour: 2 } }));
 
+  test("returning customer resume bypasses an exhausted new-chat IP quota", () =>
+    withRig(async ({ call }) => {
+      const existing = { name: "Returning User", contact: "returning@example.com", consent: true };
+      const created = await call("POST", "/web/session", { body: existing });
+      assert.equal(created.status, 200);
+      const token = created.json.token as string;
+
+      // The only allowed new chat from this network has now been consumed.
+      const blocked = await call("POST", "/web/session", { body: { name: "New User", contact: "new@example.com", consent: true } });
+      assert.equal(blocked.status, 429);
+
+      // Resuming the already-authenticated saved chat is not a new session and must still work.
+      const resumed = await call("POST", "/web/resume", { token, body: existing });
+      assert.equal(resumed.status, 200);
+      assert.equal((await call("GET", "/web/orders", { token })).status, 200);
+    }, { web: { sessionsPerIpHour: 1 } }));
+
+  test("wrong contact on resume does not invalidate the existing saved session", () =>
+    withRig(async ({ call }) => {
+      const existing = { name: "Returning User", contact: "returning@example.com", consent: true };
+      const created = await call("POST", "/web/session", { body: existing });
+      const token = created.json.token as string;
+
+      const wrong = await call("POST", "/web/resume", {
+        token,
+        body: { name: "Returning User", contact: "wrong@example.com", consent: true },
+      });
+      assert.equal(wrong.status, 409);
+
+      // The same token is still valid; correcting the contact resumes the original customer.
+      const corrected = await call("POST", "/web/resume", { token, body: existing });
+      assert.equal(corrected.status, 200);
+      assert.equal((await call("GET", "/web/history", { token })).status, 200);
+    }, { web: { sessionsPerIpHour: 1 } }));
+
   test("messages per minute per customer, then it frees up", () =>
     withRig(async ({ t, start, say, advance }) => {
       const token = await start();
