@@ -1,1 +1,0 @@
-Run once to apply the customer-side South Indian presentation polish and execute the full regression suite.
