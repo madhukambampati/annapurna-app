@@ -73,6 +73,13 @@ function send(req: IncomingMessage, res: ServerResponse, status: number, body: u
   res.end(JSON.stringify(body));
 }
 
+
+function sendNotFoundPage(req: IncomingMessage, res: ServerResponse): void {
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Page not found · Annapurna Home Foods</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#efe8d8;color:#1b2a21;font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}.box{width:min(520px,calc(100% - 32px));box-sizing:border-box;padding:34px 28px;text-align:center;background:#fffdf8;border:1px solid #e6dcc6;border-radius:24px;box-shadow:0 18px 50px rgba(30,45,35,.10)}img{width:68px;height:68px;border-radius:18px}h1{margin:16px 0 8px;font:700 30px/1.1 Georgia,serif;color:#1d6b4d}p{margin:0 0 20px;color:#56645a}a{display:inline-block;padding:11px 18px;border-radius:12px;background:#1d6b4d;color:white;text-decoration:none;font-weight:700}</style></head><body><main class="box"><img src="/icon.svg" alt=""><h1>That page isn't here</h1><p>The link may be old or mistyped. Return to Annapurna Home Foods to continue.</p><a href="/">Back to home</a></main></body></html>`;
+  res.writeHead(404, { ...baseHeaders(req), "content-type": "text/html; charset=utf-8" });
+  res.end(html);
+}
+
 async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
   let size = 0;
   const chunks: Buffer[] = [];
@@ -313,6 +320,8 @@ export function createServer(d: ServerDeps): Server {
           limit(`ip:${ip}`, 120, 60_000);
           const b = await readJson(req);
           const text = typeof b.text === "string" ? b.text.trim() : "";
+          const requestId = cleanText(b.requestId, 120);
+          if (requestId && !/^[A-Za-z0-9:_-]+$/.test(requestId)) throw new HttpError(400, "Invalid request id.");
           if (!text) throw new HttpError(400, "Message is empty.");
           if (text.length > MAX_TEXT) throw new HttpError(400, `Message is too long (max ${MAX_TEXT} characters).`);
           limit(`min:${waId}`, w.msgPerMinute, 60_000);
@@ -321,7 +330,7 @@ export function createServer(d: ServerDeps): Server {
           if (!g.ok) throw new HttpError(503, "Our ordering assistant is very busy right now. Please try again later.", g.retryAfter);
           const before = store.lastMessage(waId)?.id ?? 0;
           const c = store.getCustomer(waId)!;
-          const out = await agent.handle({ from: waId, name: c.name, text });
+          const out = await agent.handle({ from: waId, name: c.name, text, messageId: requestId ? `${waId}:${requestId}` : undefined });
           return send(req, res, 200, { messages: store.getMessagesAfter(waId, before), orderId: out.orderId ?? null, recoverableError: out.route.includes("+model_error") });
         }
 
@@ -547,6 +556,9 @@ export function createServer(d: ServerDeps): Server {
       throw new HttpError(404, "Not found");
     } catch (e) {
       if (e instanceof HttpError) {
+        const errorPath = new URL(req.url ?? "/", "http://x").pathname;
+        const browserRoute = !errorPath.startsWith("/api/") && !errorPath.startsWith("/web/") && !errorPath.startsWith("/sim/");
+        if (e.status === 404 && (req.method ?? "GET") === "GET" && browserRoute) return sendNotFoundPage(req, res);
         return send(req, res, e.status, { error: e.message }, e.retryAfter ? { "retry-after": String(e.retryAfter) } : {});
       }
       console.error(e);

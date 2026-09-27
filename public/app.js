@@ -220,7 +220,7 @@
       rows.map(function (r) { return h("div", { class: "row" + (r[0] === "Total" ? " total" : "") }, h("span", {}, r[0]), h("span", {}, r[1])); }),
       warn ? h("div", { class: "warnrow" }, warn) : null,
       h("div", { class: "acts" },
-        h("button", { class: "btn", type: "button", onclick: function () { send("Yes, confirm"); } }, icon("check"), "Yes, place order"),
+        h("button", { class: "btn", type: "button", onclick: function () { send("Yes, confirm", m.id ? "confirm:" + m.id : undefined); } }, icon("check"), "Yes, place order"),
         h("button", { class: "btn ghost", type: "button", onclick: function () { $("text").value = "I'd like to change "; resizeBox(); $("text").focus(); } }, "Change something")),
       h("time", {}, m.ts ? clock(m.ts) : ""));
     return card;
@@ -503,6 +503,7 @@
   function setBusy(b) {
     busy = b;
     $("sendBtn").disabled = b;
+    msgsEl.querySelectorAll(".sum .acts button").forEach(function (x) { x.disabled = b; });
     var t = $("typing");
     if (b && !t) { msgsEl.append(h("div", { class: "typing", id: "typing", "aria-label": "Assistant is typing" }, mascot("sm busy"), h("i"), h("i"), h("i"))); scrollDown(); }
     if (!b && t) t.remove();
@@ -529,7 +530,7 @@
     if (show && text) failedMessageText = text;
   }
 
-  function send(text) {
+  function send(text, requestId) {
     text = (text || "").trim();
     if (!text || busy) return;
     var pend = bubble({ who: "cust", text: text, ts: Date.now() }, true);
@@ -537,7 +538,7 @@
     msgsEl.append(pend); scrollDown();
     $("text").value = ""; resizeBox();
     setBusy(true);
-    api("POST", "/web/message", { text: text }).then(function (j) {
+    api("POST", "/web/message", { text: text, requestId: requestId || undefined }).then(function (j) {
       pend.remove();
       addMessages(j.messages || []);
       if (j.orderId) loadOrders();

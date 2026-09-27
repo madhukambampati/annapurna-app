@@ -215,6 +215,27 @@ describe("web: chat and orders", () => {
       assert.equal(st.json.customers[0].contact, "asha@example.com");
     }));
 
+  test("Round 6: rapid duplicate confirmation requests create exactly one real order", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Double Tap", "double@example.com");
+      t.llm.push(modelReply({ reply: "Ready to review.", items: [{ id: "bagara_chicken_fry", qty: 1, pack: "bogo", asked_for: "bagara chicken fry" }], pickup: "2026-09-26T18:00", stage: "awaiting_confirmation" }));
+      const review = await say(token, "1 Bagara Rice and Chicken Fry combo BOGO Saturday 6 PM");
+      const readback = review.json.messages.find((m: any) => m.who === "agent" && /Please check your order/.test(m.text));
+      assert.ok(readback?.id);
+      const body = { text: "Yes, confirm", requestId: `confirm:${readback.id}` };
+      const [a, b] = await Promise.all([
+        call("POST", "/web/message", { token, body }),
+        call("POST", "/web/message", { token, body }),
+      ]);
+      assert.equal(a.status, 200);
+      assert.equal(b.status, 200);
+      const orders = (await call("GET", "/web/orders", { token })).json.orders;
+      assert.equal(orders.length, 1);
+      assert.equal(orders[0].total, 22);
+      const confirmations = t.store.getMessages(t.store.listCustomers()[0]!.waId, 100).filter((m: any) => /Order #\d+.*is confirmed/.test(m.text));
+      assert.equal(confirmations.length, 1);
+    }));
+
   test("Round 5: large explicit quantity bypasses the model and creates no phantom order", () =>
     withRig(async ({ t, start, say, call }) => {
       const token = await start("Bulk Buyer", "5195550130");

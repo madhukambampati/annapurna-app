@@ -115,9 +115,15 @@ describe("http server", () => {
     assert.equal(t.store.listAlerts(true).length, 0);
   });
 
-  test("unknown routes 404, and errors do not leak internals", async () => {
-    assert.equal((await call("/nope")).status, 404);
-    assert.equal((await call("/api/nope", { token: "secret" })).status, 404);
+  test("unknown browser routes get a branded 404; API routes stay JSON", async () => {
+    const page = await call("/nope");
+    assert.equal(page.status, 404);
+    assert.equal(page.json, null);
+    assert.match(page.text, /Annapurna Home Foods/);
+    assert.match(page.text, /That page isn't here/);
+    const api = await call("/api/nope", { token: "secret" });
+    assert.equal(api.status, 404);
+    assert.deepEqual(api.json, { error: "Not found" });
   });
 });
 

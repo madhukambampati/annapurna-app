@@ -286,25 +286,87 @@ async function sendReply(text) {
   const box = $("thread");
   if (box) box.scrollTop = box.scrollHeight;
 }
+function closeChat() {
+  chat = { waId: "", messages: [], customer: null };
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function customerOrderBadge(waId) {
+  const order = state.orders
+    .filter((o) => o.waId === waId && o.status !== "cancelled")
+    .sort((a, b) => b.id - a.id)[0];
+  if (!order) return null;
+  const labels = { hold: "Needs review", cook: "Confirmed", ready: "Ready", done: "Picked up" };
+  return { id: order.id, status: order.status, label: labels[order.status] || order.status };
+}
+
 function renderChats() {
   const title = h("div", { class: "owner-page-title chat-title" },
     h("div", {}, h("h2", {}, "Customer chats"), h("p", { class: "sub" }, "Read conversations and reply as Annapurna.")),
     h("span", { class: "lane-count" }, String(state.customers.length)));
+
   const list = h("div", { class: "clist" },
-    state.customers.length ? state.customers.map((c) => h("button", { class: "crow", "aria-current": String(c.waId === chat.waId), onclick: () => openChat(c.waId) },
-      h("b", {}, c.name || "Customer"), h("small", {}, (c.contact || c.waId) + " · " + (c.last ? c.last.text : "")))) : h("div", { class: "empty" }, "No chats yet."));
+    state.customers.length ? state.customers.map((c) => {
+      const order = customerOrderBadge(c.waId);
+      const last = c.last || null;
+      return h("button", { class: "crow", "aria-current": String(c.waId === chat.waId), onclick: () => openChat(c.waId) },
+        h("span", { class: "crow-top" },
+          h("b", {}, c.name || "Customer"),
+          last ? h("time", {}, timeOf(last.ts)) : null),
+        h("small", { class: "crow-contact" }, c.contact || (isWeb(c.waId) ? "Website customer" : c.waId)),
+        h("small", { class: "crow-preview" }, last ? last.text : "No messages yet"),
+        order ? h("span", { class: "chat-order-tag status-" + order.status }, "#" + order.id + " · " + order.label) : null);
+    }) : h("div", { class: "empty" }, "No chats yet."));
+
   let right;
-  if (!chat.waId) right = h("div", { class: "empty" }, "Pick a chat on the left.");
-  else {
-    const ta = h("textarea", { placeholder: "Reply to the customer...", "aria-label": "Reply", maxlength: "1000" });
-    const form = h("form", { class: "reply", onsubmit: (e) => { e.preventDefault(); const t = ta.value; ta.value = ""; sendReply(t); } }, ta, h("button", { class: "pri", type: "submit" }, "Send"));
+  if (!chat.waId) {
+    right = h("div", { class: "empty chat-empty" }, "Choose a customer to open the conversation.");
+  } else {
+    const currentOrder = customerOrderBadge(chat.waId);
+    const customerName = chat.customer && chat.customer.name ? chat.customer.name : "Customer";
+    const contact = chat.customer && chat.customer.contact ? chat.customer.contact : "";
+    const initial = customerName.trim().charAt(0).toUpperCase() || "C";
+    const ta = h("textarea", { placeholder: "Reply as Annapurna...", "aria-label": "Reply", maxlength: "1000", rows: "1" });
+    const submit = h("button", { class: "pri chat-send", type: "submit", "aria-label": "Send reply" }, "Send");
+    const form = h("form", { class: "reply chat-reply", onsubmit: (e) => {
+      e.preventDefault();
+      const t = ta.value;
+      if (!t.trim()) return;
+      ta.value = "";
+      ta.style.height = "auto";
+      sendReply(t);
+    } }, ta, submit);
+    ta.addEventListener("input", () => {
+      ta.style.height = "auto";
+      ta.style.height = Math.min(112, ta.scrollHeight) + "px";
+    });
     ta.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
+
+    const head = h("header", { class: "chat-thread-head" },
+      h("button", { class: "chat-back", type: "button", onclick: closeChat, "aria-label": "Back to customer chats" }, "←"),
+      h("span", { class: "chat-avatar", "aria-hidden": "true" }, initial),
+      h("span", { class: "chat-person" },
+        h("b", {}, customerName),
+        contact ? h("small", {}, contact) : h("small", {}, isWeb(chat.waId) ? "Website customer" : "Test customer")),
+      currentOrder ? h("span", { class: "chat-order-tag status-" + currentOrder.status }, "#" + currentOrder.id + " · " + currentOrder.label) : null);
+
+    const messages = h("div", { class: "msgs", id: "thread", role: "log", "aria-live": "polite" },
+      chat.messages.map((m) => {
+        const who = m.who === "cust" ? "Customer" : m.who === "owner" ? "You" : "Annu";
+        return h("div", { class: "b " + m.who },
+          h("small", {}, who + " · " + timeOf(m.ts)),
+          h("span", { class: "chat-message-text" }, m.text));
+      }));
+
     right = h("div", { class: "card thread" },
-      h("div", {}, h("b", {}, chat.customer ? chat.customer.name : ""), " ", h("span", { class: "sub" }, chat.customer ? chat.customer.contact : "")),
-      h("div", { class: "msgs", id: "thread" }, chat.messages.map((m) => h("div", { class: "b " + m.who }, h("small", {}, (m.who === "cust" ? "Customer" : m.who === "agent" ? "Assistant" : "You") + " · " + timeOf(m.ts)), m.text))),
-      isWeb(chat.waId) ? [h("p", { class: "sub" }, "Your reply appears in the customer's chat on the website."), form] : h("p", { class: "sub" }, "This is a test customer, replies are not delivered anywhere."));
+      head,
+      messages,
+      isWeb(chat.waId)
+        ? h("div", { class: "chat-compose" }, h("small", {}, "Replies appear in the customer's chat."), form)
+        : h("div", { class: "chat-compose test-only" }, h("small", {}, "Test customer — replies are not delivered anywhere.")));
   }
-  return [title, h("div", { class: "chatgrid" }, list, right)];
+  return [title, h("div", { class: "chatgrid" + (chat.waId ? " has-thread" : "") }, list, right)];
 }
 
 /* ---------- cook ---------- */
@@ -475,9 +537,10 @@ function renderTabs() {
   const need = state.orders.filter((o) => o.status === "hold").length + state.alerts.filter((a) => !a.done).length;
   const tabs = [["dashboard", "Dashboard"], ["orders", "Orders"], ["cook", "Kitchen"], ["chats", "Chats"], ["more", "More"]];
   const selected = (k) => k === tab || (k === "more" && ["menu", "rules", "sim"].includes(tab));
-  $("tabs").replaceChildren(...tabs.map(([k, t]) => h("button", { role: "tab", "aria-selected": String(selected(k)), onclick: () => { tab = k; cook = null; render(); } }, t, k === "orders" && need ? h("span", { class: "badge" }, need) : null)));
+  $("tabs").replaceChildren(...tabs.map(([k, t]) => h("button", { role: "tab", "aria-selected": String(selected(k)), onclick: () => { tab = k; cook = null; if (k === "chats") chat = { waId: "", messages: [], customer: null }; render(); } }, t, k === "orders" && need ? h("span", { class: "badge" }, need) : null)));
 }
 function render() {
+  document.body.classList.toggle("chat-open-mobile", tab === "chats" && !!chat.waId);
   renderTabs();
   const body = tab === "dashboard" ? renderDashboard() : tab === "orders" ? renderOrders() : tab === "chats" ? renderChats() : tab === "cook" ? renderCook() : tab === "menu" ? renderMenu() : tab === "rules" ? renderRules() : tab === "more" ? renderMore() : renderSim();
   $("panel").replaceChildren(...[body].flat());
