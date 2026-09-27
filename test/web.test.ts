@@ -676,7 +676,7 @@ describe("web: chat and orders", () => {
       assert.equal((await reply("Yes, we can prepare that for tomorrow.")).status, 200);
 
       const history = (await call("GET", "/web/history", { token })).json.messages.filter((m: any) => m.who === "owner");
-      assert.deepEqual(history.map((m: any) => m.text), ["$120", "Yes, we can prepare that for tomorrow."]);
+      assert.deepEqual(history.map((m: any) => m.text), ["Annapurna Home Foods quoted $120 for this custom order.", "Yes, we can prepare that for tomorrow."]);
     }));
 
   test("owner replies and status notes show up in the customer's chat", () =>
@@ -697,10 +697,11 @@ describe("web: chat and orders", () => {
 
       const h = await call("GET", `/web/history?after=${last}`, { token });
       const owner = h.json.messages.filter((m: any) => m.who === "owner").map((m: any) => m.text);
-      assert.equal(owner.length, 3);
-      assert.equal(owner[0], "Monday works, see you then!");
-      assert.match(owner[1], /confirmed your order #1/);
-      assert.match(owner[2], /ready for pickup/);
+      const system = h.json.messages.filter((m: any) => m.who === "agent").map((m: any) => m.text);
+      assert.deepEqual(owner, ["Monday works, see you then!"]);
+      assert.equal(system.length, 2);
+      assert.match(system[0], /confirmed your order #1/);
+      assert.match(system[1], /ready for pickup/);
 
       await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "done", confirm: true } });
       const after = (await call("GET", "/web/history", { token })).json.messages;
@@ -721,15 +722,15 @@ describe("web: chat and orders", () => {
       await say(token, "1 kheema fry friday 6pm");
       const id = (await say(token, "yes")).json.orderId;
       await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "cancelled" } });
-      const owner = (await call("GET", "/web/history", { token })).json.messages.filter((m: any) => m.who === "owner");
-      assert.match(owner.at(-1).text, /cancelled/);
+      const system = (await call("GET", "/web/history", { token })).json.messages.filter((m: any) => m.who === "agent");
+      assert.match(system.at(-1).text, /cancelled/);
 
       // with a reason from the owner, the customer sees it
       t.llm.push(modelReply({ items: [{ id: "fry_piece_pulao", qty: 1, pack: "single", asked_for: "fry piece pulao" }], pickup: FRI_6PM, stage: "awaiting_confirmation" }));
       await say(token, "1 fry piece pulao friday 6pm");
       const id2 = (await say(token, "yes")).json.orderId;
       await call("POST", `/api/orders/${id2}/status`, { token: "secret", body: { status: "cancelled", reason: "Sorry, this dish is sold out for that day.\u0007" } });
-      const last = (await call("GET", "/web/history", { token })).json.messages.filter((m: any) => m.who === "owner").at(-1).text;
+      const last = (await call("GET", "/web/history", { token })).json.messages.filter((m: any) => m.who === "agent").at(-1).text;
       assert.equal(last, `Sorry, order #${id2} has been cancelled.\nSorry, this dish is sold out for that day.`);
       const wa = t.store.listCustomers()[0]!.waId;
       assert.equal((await call("POST", `/api/customers/${encodeURIComponent(wa)}/reply`, { token: "secret", body: { text: "  " } })).status, 400);
@@ -939,3 +940,122 @@ describe("web: menu status, pickup days and human handoff", () => {
       assert.equal(s.contactPhone, "519 555 0100");
     }));
 });
+
+
+test("Round 9: stale custom refusal cannot swallow the next normal order", () =>
+  withRig(async ({ t, start, say, call }) => {
+    const token = await start("Rowan", "rowan@example.com");
+    await say(token, "20 Bagara Rice and Chicken Fry combos, pickup Saturday 5pm");
+    const waId = t.store.listCustomers()[0]!.waId;
+    assert.ok(t.store.getDraft(waId)?.custom);
+    await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "$140" } });
+
+    t.llm.push(modelReply({
+      reply: "Okay, updated to 25 people.",
+      items: [{ id: "bagara_chicken_fry", qty: 25, pack: "single", asked_for: "Bagara rice and chicken fry for 25 people" }],
+      pickup: "2026-09-26T17:00",
+      stage: "collecting",
+    }));
+    await say(token, "Actually make it for 25 people instead");
+    assert.equal(t.store.getDraft(waId)!.custom?.price, null);
+
+    const stale = await say(token, "I confirm the $140 price for this order");
+    assert.equal(stale.json.orderId, null);
+    assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 0);
+
+    t.llm.push(modelReply({
+      reply: "Here is your review.",
+      items: [{ id: "fry_piece_pulao", qty: 1, pack: "single", asked_for: "Gongura Fry Piece Pulao combo" }],
+      pickup: "2026-10-04T13:00",
+      notes: "Medium spice, no extras",
+      stage: "awaiting_confirmation",
+    }));
+    const normal = await say(token, "1 Gongura Fry Piece Pulao combo, medium, pickup Sunday Oct 4 1pm, no extras");
+    assert.equal(t.store.getDraft(waId)?.custom, undefined);
+    assert.ok(normal.json.messages.some((m: any) => /1 x Gongura Fry Piece Pulao combo: \$17/.test(m.text)));
+
+    const placed = await say(token, "YES");
+    assert.equal(placed.json.orderId, 1);
+    const orders = (await call("GET", "/web/orders", { token })).json.orders;
+    assert.equal(orders.length, 1);
+    assert.equal(orders[0].total, 17);
+    assert.deepEqual(orders[0].items, ["1 x Gongura Fry Piece Pulao combo"]);
+  }));
+
+test("Round 9: model cannot say Confirming this now or went through without a real order number", () =>
+  withRig(async ({ t, start, say, call }) => {
+    const token = await start("Rowan", "rowan2@example.com");
+    t.llm.push(modelReply({ reply: "Perfect — Confirming this now!" }));
+    const a = await say(token, "hello");
+    assert.ok(a.json.messages.some((m: any) => /haven't placed an order/i.test(m.text)));
+    t.llm.push(modelReply({ reply: "Yes Rowan, that one went through!" }));
+    const b = await say(token, "did that go through?");
+    assert.ok(b.json.messages.some((m: any) => /haven't placed an order/i.test(m.text)));
+    assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 0);
+  }));
+
+test("Round 9: new 20-person catering request after a confirmed order starts a fresh custom request", () =>
+  withRig(async ({ t, start, say }) => {
+    const token = await start("Repeat Caterer", "repeat@example.com");
+    const waId = t.store.listCustomers()[0]!.waId;
+    t.store.insertOrder({
+      waId,
+      name: "Repeat Caterer",
+      items: [{ id: "custom:1", name: "Bagara Rice and Chicken Fry combo · custom catering", qty: 15, pack: "single", amt: 120 }],
+      pickup: "2026-09-26T17:00",
+      flags: [],
+      status: "cook",
+      notes: "Earlier custom order",
+      createdAt: NOW,
+    });
+
+    const beforePrompts = t.llm.prompts.length;
+    const r = await say(token, "Bagara rice and chicken fry for 20 people, next Saturday 5pm, medium spice");
+    assert.equal(t.llm.prompts.length, beforePrompts);
+    assert.ok(t.store.getDraft(waId)?.custom);
+    assert.equal(t.store.getDraft(waId)!.items[0]?.qty, 20);
+    assert.ok(r.json.messages.some((m: any) => /custom\/bulk request/i.test(m.text)));
+    assert.equal(t.store.listAlerts(true).filter((a) => a.waId === waId && /Custom\/bulk request/.test(a.note)).length, 1);
+    assert.equal(t.store.listAlerts(true).some((a) => /cancel or change order/i.test(a.note)), false);
+  }));
+
+test("Round 9: a fulfilled custom order automatically closes its Needs-you alert", () =>
+  withRig(async ({ t, start, say, call }) => {
+    const token = await start("Alert Clear", "alertclear@example.com");
+    await say(token, "25 Bagara Rice and Chicken Fry combos, pickup Saturday 5pm");
+    const waId = t.store.listCustomers()[0]!.waId;
+    assert.equal(t.store.listAlerts(true).filter((a) => a.waId === waId && /Custom\/bulk request/.test(a.note)).length, 1);
+    await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "$180" } });
+    const placed = await say(token, "CONFIRM THE ORDER");
+    assert.equal(placed.json.orderId, 1);
+    assert.equal(t.store.listAlerts(true).filter((a) => a.waId === waId && /Custom\/bulk request/.test(a.note)).length, 0);
+  }));
+
+test("Round 9: Done on an alert creates no customer chat message", () =>
+  withRig(async ({ t, start, say, call }) => {
+    const token = await start("Alert Done", "alertdone@example.com");
+    await say(token, "25 Bagara Rice and Chicken Fry combos, pickup Saturday 5pm");
+    const waId = t.store.listCustomers()[0]!.waId;
+    const alert = t.store.listAlerts(true).find((a) => a.waId === waId)!;
+    const before = t.store.getMessages(waId, 200).map((m) => [m.who, m.text]);
+    const done = await call("POST", `/api/alerts/${alert.id}/done`, { token: "secret" });
+    assert.equal(done.status, 200);
+    assert.deepEqual(t.store.getMessages(waId, 200).map((m) => [m.who, m.text]), before);
+  }));
+
+test("Round 9: bare owner prices become complete quote messages and lifecycle notes are system-authored", () =>
+  withRig(async ({ t, start, say, call }) => {
+    const token = await start("Clean Bubbles", "cleanbubbles@example.com");
+    await say(token, "25 Bagara Rice and Chicken Fry combos, pickup Saturday 5pm");
+    const waId = t.store.listCustomers()[0]!.waId;
+    const quote = await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "180$" } });
+    assert.equal(quote.status, 200);
+    assert.equal(quote.json.message.text, "Annapurna Home Foods quoted $180 for this custom order.");
+    assert.equal(t.store.getMessages(waId, 200).some((m) => m.text === "180$"), false);
+
+    const placed = await say(token, "CONFIRM THE ORDER");
+    assert.equal(placed.json.orderId, 1);
+    await call("POST", "/api/orders/1/status", { token: "secret", body: { status: "ready", confirm: true } });
+    const ready = t.store.getMessages(waId, 200).filter((m) => /ready for pickup/i.test(m.text)).at(-1)!;
+    assert.equal(ready.who, "agent");
+  }));
