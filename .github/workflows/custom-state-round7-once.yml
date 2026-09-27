@@ -21,7 +21,7 @@ jobs:
           node-version: 22
           cache: npm
       - name: Apply patch
-        run: python3 .github/custom_state_round7_patch.py
+        run: python3 .github/fix_and_run_round7.py
       - run: npm ci
       - name: Syntax check browser JavaScript
         run: |
