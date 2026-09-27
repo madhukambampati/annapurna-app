@@ -1,0 +1,242 @@
+name: One-time reference UI refresh
+
+on:
+  push:
+    branches: [visual-reference-v1]
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.event.head_commit.message == 'Add one-time reference UI workflow'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Apply visual-only reference refresh
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          customer = r'''
+          <style id="referenceVisualTargetV1">
+          /* VISUAL-ONLY REFERENCE REFRESH — no IDs, handlers, API calls, or ordering logic changed */
+          :root{
+            color-scheme:light;
+            --bg:#e9e0cd;--page:#f7f3e9;--surface:#fffdf7;--surface2:#f3eddf;--ink:#173126;--muted:#647168;--dim:#879087;
+            --line:#e3dac7;--line2:#cfc3aa;--brand:#087b50;--brand2:#075c3d;--on-brand:#fff;--brand-soft:#dff2e9;
+            --accent:#ff9f1c;--accent-soft:#fff0d6;--on-accent:#3b2600;--chilli:#e65339;--chilli-soft:#ffe6df;
+            --cust:#07905b;--on-cust:#fff;--agent:#fffdf7;--owner:#fff1d8;
+            --shadow:0 20px 55px rgba(22,49,38,.13);
+          }
+          body.customer-mode{
+            background:
+              radial-gradient(540px 360px at 50% -80px,rgba(70,151,83,.24),transparent 70%),
+              linear-gradient(180deg,#164f36 0 220px,#ece4d4 460px,#efe8dc 100%);
+          }
+          .customer-mode .app{background:var(--page);border-color:rgba(10,91,60,.12);box-shadow:0 28px 70px rgba(15,52,38,.18)}
+          .customer-mode .top{
+            min-height:70px;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;
+            background:#fffdf8;color:#15372a;border-bottom:1px solid #e8dfcf;box-shadow:0 5px 18px rgba(32,52,41,.05);z-index:20;
+          }
+          .customer-mode .seal{width:42px;height:42px;border-radius:13px;box-shadow:0 6px 16px rgba(8,86,56,.12)}
+          .customer-mode .brand h1{font-size:20px;color:#173a2b}.customer-mode .brand small{color:#758078}
+          .customer-mode .tab{color:#78837b}.customer-mode .tab[aria-current=true]{background:#e2f3ea;color:#08714a}
+          .customer-mode .handoff{background:#fff0d7;border-color:#f0dcc0}
+
+          /* Onboarding / splash-like entrance */
+          .customer-mode .onboard{gap:14px;background:linear-gradient(180deg,#0d5137 0 330px,#f5efe4 330px);padding:14px 14px calc(108px + env(safe-area-inset-bottom))}
+          .customer-mode .onboard .hero{
+            min-height:300px;border-radius:28px;padding:26px 22px;background:
+              radial-gradient(210px 170px at 76% 18%,rgba(255,184,61,.36),transparent 70%),
+              radial-gradient(190px 170px at 8% 82%,rgba(142,210,99,.18),transparent 70%),
+              linear-gradient(155deg,#073d2a,#0c6a43 70%,#0b5337);
+            box-shadow:0 24px 52px rgba(1,45,28,.30);border:1px solid rgba(255,255,255,.12)
+          }
+          .customer-mode .heroTop{min-height:136px;align-items:center}.customer-mode .hero .mascot{filter:drop-shadow(0 16px 14px rgba(0,0,0,.22))}
+          .customer-mode .hero .bubble{background:#fff;color:#14362a;border:0;box-shadow:0 10px 24px rgba(0,0,0,.15);font-weight:800}
+          .customer-mode .hero .kick{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.12)}
+          .customer-mode .hero h2{font-size:31px;letter-spacing:-.02em}.customer-mode .hero p{font-size:14px}
+          .customer-mode .steps{gap:9px}.customer-mode .steps li{border-radius:18px;box-shadow:0 8px 20px rgba(25,48,36,.06)}
+          .customer-mode .onboard .card{border-radius:22px;border-color:#e5dbc7;box-shadow:0 16px 36px rgba(25,48,36,.09)}
+          .customer-mode .onboard .btn{min-height:48px;border-radius:15px}
+
+          /* Home mirrors the approved green/cream mobile reference */
+          .customer-mode .customer-home{background:#f5efe4;padding:14px 14px calc(106px + env(safe-area-inset-bottom))}
+          .customer-mode .home-hero{
+            min-height:300px;grid-template-columns:minmax(0,1.1fr) minmax(170px,.9fr);padding:26px;border-radius:28px;
+            background:radial-gradient(280px 220px at 88% 20%,rgba(255,170,42,.34),transparent 68%),linear-gradient(140deg,#073d2a,#0b6943 68%,#0c5238);
+            box-shadow:0 22px 48px rgba(8,64,42,.24)
+          }
+          .customer-mode .home-copy h2{font-size:clamp(31px,7vw,46px)}
+          .customer-mode .home-eyebrow{background:rgba(255,255,255,.14)}
+          .customer-mode .home-primary{background:#ffab2d;border-radius:17px;box-shadow:0 12px 24px rgba(0,0,0,.16)}
+          .customer-mode .home-secondary{border-radius:17px;background:rgba(255,255,255,.12)}
+          .customer-mode .home-annuwrap .mascot{width:165px}.customer-mode .home-bubble{border-radius:15px 15px 15px 5px}
+          .customer-mode .home-section-head h3{font-size:23px}.customer-mode .home-grid{gap:10px}
+          .customer-mode .home-tile{min-height:114px;border-radius:19px;padding:14px;box-shadow:0 8px 22px rgba(35,53,42,.07)}
+          .customer-mode .tile-icon{border-radius:15px}.customer-mode .home-active{border-radius:20px}
+
+          /* Menu / combos: visual food cards, category pills, orange price accents */
+          .customer-mode .sheet{background:#f8f4eb}.customer-mode .sheet>header{background:#fffdf8}
+          .customer-mode .sheet[data-kind="menu"] .body{background:#f8f4eb}
+          .customer-mode .seg{background:#e9f2eb;border:0;box-shadow:none;padding:4px}
+          .customer-mode .seg button[aria-selected=true]{background:#087b50;color:#fff;box-shadow:0 5px 12px rgba(8,123,80,.18)}
+          .customer-mode .dish{
+            position:relative;display:grid!important;grid-template-columns:82px minmax(0,1fr) auto;gap:13px;align-items:center;
+            min-height:116px;padding:12px;border-radius:18px;background:#fffdf8;border:1px solid #e7dece;box-shadow:0 8px 20px rgba(30,48,38,.065);overflow:hidden
+          }
+          .customer-mode .dish::before{
+            content:"🍛";display:grid;place-items:center;width:82px;height:82px;border-radius:15px;font-size:38px;
+            background:radial-gradient(circle at 35% 28%,#ffe098,#f7ad42 48%,#a7481d 100%);box-shadow:inset 0 0 0 4px rgba(255,255,255,.38),0 7px 14px rgba(82,45,20,.13)
+          }
+          .customer-mode .dish.off::before{filter:grayscale(.8);opacity:.55}.customer-mode .dish>div:first-of-type{min-width:0}
+          .customer-mode .dish h3,.customer-mode .dish h4{font-family:var(--f-display);font-size:17px;margin-bottom:3px}
+          .customer-mode .dish p{font-size:12px;color:#6a756d}
+          .customer-mode .dprice{min-width:94px;align-items:flex-end}.customer-mode .dprice strong{color:#d66820}
+          .customer-mode .dprice .btn{background:#ff8e24;color:#fff;border-radius:999px;min-height:36px}
+          .customer-mode .day{position:relative;padding:13px 14px 13px 58px;border-radius:15px;background:#fffdf8}
+          .customer-mode .day::before{content:"🍱";position:absolute;left:13px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:#fff0d7}
+
+          /* Chat / confirmation */
+          .customer-mode .chat{background:linear-gradient(180deg,#f3f8f4,#f8f4ec)}
+          .customer-mode .msgs{padding:16px 13px 12px}.customer-mode .b{border-radius:18px;padding:11px 13px 7px;box-shadow:0 5px 14px rgba(27,47,37,.045)}
+          .customer-mode .b.cust{background:#09895a;border-bottom-right-radius:6px}.customer-mode .b.agent{background:#fffdf8;border-color:#e2dacb}
+          .customer-mode .b.owner{background:#fff0d4;border-color:#efd4a6}
+          .customer-mode .sum{border-radius:19px;border:1px solid #dcd4c4;box-shadow:0 14px 28px rgba(28,50,39,.10)}
+          .customer-mode .sum h3{background:#0b7a50}.customer-mode .sum .row.total{background:#f8f2e7}
+          .customer-mode .sum .acts .btn:first-child{background:#0a8c59}.customer-mode .chips button{border-radius:14px;background:#fffdf8}
+          .customer-mode .composer{background:#fffdf8;border-top:1px solid #e7dece;padding-top:9px}.customer-mode .composer textarea{background:#f7f3ea;border-radius:22px}
+          .customer-mode .send{background:#07824f;box-shadow:0 7px 16px rgba(7,130,79,.22)}
+
+          /* Orders becomes the rich live-tracking visual surface */
+          .customer-mode .ord{background:#fffdf8;border-color:#ded5c5;border-radius:20px;box-shadow:0 10px 25px rgba(26,49,37,.08)}
+          .customer-mode .ord::before{width:4px;background:#0a8b58}.customer-mode .ord-head b{color:#173b2c}
+          .customer-mode .ord .steps4{padding-top:7px}.customer-mode .ord .steps4 li::before{background:#d8e2db}.customer-mode .ord .steps4 li.done-step::before,.customer-mode .ord .steps4 li.current-step::before{background:#0a9b62}
+          .customer-mode .ord-items{background:#f8f2e8}.customer-mode .ord-meta>div{background:#fff}
+          .customer-mode .st{border-radius:999px;font-weight:800}.customer-mode .btn{border-radius:13px}
+          .customer-mode .links .btn{background:#0a8c59}
+
+          /* Make sheets feel like dedicated mobile screens rather than modal popups */
+          @media(max-width:699px){
+            body.customer-mode{padding:0;background:#f5efe4}.customer-mode .app{height:100dvh;border-radius:0;box-shadow:none}
+            .customer-mode .top{position:sticky;top:0;z-index:25;padding-inline:13px}.customer-mode .brand h1{font-size:18px}.customer-mode .brand small{font-size:11px}
+            .customer-mode .top .tabs{
+              position:fixed;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));z-index:70;
+              display:flex;justify-content:space-around;gap:2px;padding:6px;border:1px solid rgba(223,216,201,.95);border-radius:20px;
+              background:rgba(255,253,248,.96);box-shadow:0 14px 34px rgba(25,48,36,.20);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)
+            }
+            .customer-mode .top .tab{flex:1;min-width:0;padding:7px 4px 5px;border-radius:14px;font-size:10px}
+            .customer-mode .top .tab[aria-current=true]::after{display:none}
+            .customer-mode .customer-home,.customer-mode .onboard{padding-bottom:calc(104px + env(safe-area-inset-bottom))}
+            .customer-mode .home-hero{grid-template-columns:1fr 132px;min-height:270px;padding:22px 18px}.customer-mode .home-annuwrap .mascot{width:128px}.customer-mode .home-bubble{font-size:10px;padding:7px 9px}
+            .customer-mode .home-copy h2{font-size:31px}.customer-mode .home-copy>p{font-size:13px}.customer-mode .home-primary{min-width:0;width:100%}.customer-mode .home-secondary{width:100%;justify-content:center}
+            .customer-mode .home-grid{grid-template-columns:1fr 1fr}.customer-mode .home-tile{grid-template-columns:42px 1fr;min-height:112px;padding:12px;gap:10px}.customer-mode .tile-icon{width:42px;height:42px}.customer-mode .tile-arrow{display:none}.customer-mode .tile-copy b{font-size:16px}
+            .customer-mode .veil{align-items:stretch;background:#f8f4eb;backdrop-filter:none}.customer-mode .sheet{height:100dvh;max-height:none;border-radius:0;max-width:none;padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+            .customer-mode .sheet>header{padding-top:calc(12px + env(safe-area-inset-top));min-height:70px}.customer-mode .sheet .body{padding-bottom:22px}
+            .customer-mode .dish{grid-template-columns:72px minmax(0,1fr);}.customer-mode .dish::before{width:72px;height:72px;font-size:33px}.customer-mode .dprice{grid-column:2;display:flex!important;flex-direction:row!important;align-items:center!important;justify-content:space-between!important;width:100%}
+            .customer-mode .chat{padding-bottom:calc(78px + env(safe-area-inset-bottom))}.customer-mode .composer{padding-bottom:12px}
+          }
+          @media(max-width:430px){
+            .customer-mode .home-hero{grid-template-columns:1fr 112px}.customer-mode .home-annuwrap .mascot{width:110px}.customer-mode .home-copy h2{font-size:28px}
+            .customer-mode .home-grid{gap:8px}.customer-mode .home-tile{grid-template-columns:38px 1fr}.customer-mode .tile-icon{width:38px;height:38px;border-radius:12px}.customer-mode .tile-copy small{font-size:10.5px}
+          }
+          </style>
+          '''
+
+          owner = r'''
+          <style id="ownerReferenceVisualV1">
+          /* VISUAL-ONLY OWNER REFRESH — same DOM IDs and desk.js behavior */
+          body.owner-mode{
+            color-scheme:light;--bg:#f2ebdf;--panel:#fffdf8;--panel2:#f6f0e6;--line:#e8dfd0;--line2:#d8cbb5;
+            --cream:#1f3128;--muted:#748078;--gold:#07905b;--on-gold:#fff;--chilli:#ef6b37;--leaf:#09925c;
+            --me:#e3f3ea;--agent:#f6f0e6;--maddy:#fff0d8;--paper:#fffdf8;--ink:#1f3128;--flag:#ed7a30;--bad:#d84d42;
+            max-width:1180px;background:#f3ecdf;padding-top:12px
+          }
+          body.owner-mode .owner-head{
+            background:#fffdf8;color:#1e3428;border:1px solid #e8dfd0;border-radius:18px;box-shadow:0 8px 24px rgba(42,54,46,.07);padding:12px 15px
+          }
+          body.owner-mode .owner-brand-home:hover{background:#f5efe5}.owner-brand img{background:#e5f4eb;box-shadow:none}.owner-brand h1{color:#19372a;font-size:22px}.owner-brand .sub{color:#7a837d!important}
+          .owner-pill{width:38px;height:38px;padding:0;display:grid;place-items:center;border-radius:50%;background:#0b5e41;border:0;color:#fff;font-size:0;letter-spacing:0}
+          .owner-pill::before{content:"👩🏽‍🍳";font-size:19px}
+          body.owner-mode .tabs{top:6px;background:rgba(255,253,248,.94);border-color:#e5ddcf;box-shadow:0 8px 22px rgba(37,52,43,.07)}
+          body.owner-mode .tabs button[aria-selected=true]{background:#078b58;border-color:#078b58;box-shadow:0 6px 16px rgba(7,139,88,.17)}
+          body.owner-mode #panel{animation:ownerReferenceIn .22s ease both}
+          @keyframes ownerReferenceIn{from{opacity:.7;transform:translateY(2px)}to{opacity:1;transform:none}}
+          body.owner-mode .owner-kpis{gap:9px}.owner-kpi{min-height:100px;border-radius:16px;padding:13px;box-shadow:none;border-color:#e8dfd0}
+          .owner-kpi small{color:#7d857e}.owner-kpi strong{font-size:28px}.owner-callout{border-radius:14px;background:#fff3df;border-color:#f0d9b8}
+          body.owner-mode h2{color:#21382c;font-size:21px}.owner-page-title h2{font-size:25px!important}
+          body.owner-mode .card{background:#fffdf8;border-color:#e7dece;border-radius:17px;box-shadow:0 6px 18px rgba(37,52,43,.045)}
+          body.owner-mode .ticket{background:#fffdf8;border-color:#e7dece;border-radius:15px;box-shadow:0 6px 16px rgba(37,52,43,.05);padding:13px 13px 12px 17px}
+          body.owner-mode .ticket::before{background:#ff7e2e;width:4px}.ticket-title b{color:#1f372a}.ticket .when{background:#fff1df!important;color:#e56d25!important;border-radius:999px!important;padding:4px 8px!important}
+          body.owner-mode .ticket button{background:#08905b;border-radius:999px;min-height:36px}.ticket button.ghost{background:#fff!important;border-color:#d8cdbb!important;color:#30453a!important}
+          .flag{background:#f07b34;border-radius:999px}.custom-flag{background:#9d6939}.need{background:#fff3e3;border-color:#efb583;border-radius:15px}
+          .owner-lane{background:#f8f3ea!important;border-color:#e8dfd0!important;border-radius:18px!important}.owner-lane .ticket:last-child{margin-bottom:0}
+          .owner-attention{background:#fff8ea!important;border-color:#edcf9f!important}
+          body.owner-mode table{border-radius:14px;overflow:hidden}.kitchen-day th,.buy-card th,body.owner-mode th{background:#f5efe5;color:#7d857e}
+          .more-card{border-radius:16px;min-height:104px;box-shadow:none;background:#fffdf8}.more-icon{background:#e4f3ea;color:#087d50}
+          body.owner-mode .chatgrid{background:#fffdf8;border-color:#e7dece;border-radius:18px;box-shadow:0 7px 20px rgba(35,52,42,.05)}
+          body.owner-mode .crow[aria-current=true]{background:#e8f5ee;border-color:#b8ddc9}.chat-avatar{background:#087b50}.chat-order-tag{background:#f5efe5}
+          body.owner-mode .thread .b.cust{background:#f3eee5;border-color:#e3dacb}.thread .b.owner{background:#e5f4eb;border-color:#bcdcc9}.thread .b.agent{background:#fff0d6}
+          .chat-send{background:#07905b!important;color:#fff!important;border-color:#07905b!important}
+          dialog.cancel{background:#fffdf8}
+
+          @media(max-width:620px){
+            body.owner-mode{padding:8px 10px calc(94px + env(safe-area-inset-bottom));background:#f3ecdf}
+            body.owner-mode .owner-head{position:sticky;top:0;z-index:24;margin:0 -2px 8px;border-radius:15px;padding-top:calc(10px + env(safe-area-inset-top));box-shadow:0 5px 16px rgba(31,50,39,.08)}
+            .owner-brand img{width:38px;height:38px}.owner-brand h1{font-size:19px}.owner-brand .sub{font-size:10.5px}
+            body.owner-mode .tabs{
+              position:fixed;left:8px;right:8px;top:auto;bottom:calc(8px + env(safe-area-inset-bottom));z-index:70;margin:0;
+              display:flex;flex-wrap:nowrap;padding:6px;border-radius:19px;background:rgba(255,253,248,.97);box-shadow:0 14px 34px rgba(35,52,42,.18)
+            }
+            body.owner-mode .tabs button{min-height:50px;padding:6px 4px;font-size:10px;line-height:1.1;border-radius:13px}
+            body.owner-mode .tabs button[aria-selected=true]{background:#e2f3e9!important;color:#08754c!important;border-color:#e2f3e9!important;box-shadow:none!important}
+            .owner-kpis{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.owner-kpi{min-height:86px;padding:10px}.owner-kpi strong{font-size:24px}.owner-kpi span{display:none}.owner-kpi small{font-size:9px}
+            .owner-callout{padding:11px 12px}.owner-page-title{margin-top:4px}.owner-page-title h2{font-size:24px!important}
+            body.owner-mode .ticket{padding:12px 12px 12px 16px}.ticket .row{gap:7px}.ticket .row button{flex:1}
+            body.owner-mode.chat-open-mobile{padding:0;background:#fffdf8}.chat-thread-head{background:#fffdf8!important}.chat-compose{background:#fffdf8!important}
+          }
+          </style>
+          '''
+
+          def inject(path, block, marker):
+              p = Path(path)
+              s = p.read_text()
+              if marker in s:
+                  raise SystemExit(f'{marker} already present in {path}')
+              if '</head>' not in s:
+                  raise SystemExit(f'no </head> in {path}')
+              p.write_text(s.replace('</head>', block + '\n</head>', 1))
+
+          inject('public/index.html', customer, 'referenceVisualTargetV1')
+          inject('public/desk.html', owner, 'ownerReferenceVisualV1')
+          PY
+      - name: Prove visual-only scope
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only HEAD)
+          printf '%s\n' "$changed"
+          test "$changed" = $'public/desk.html\npublic/index.html'
+          git diff --check
+          grep -q 'referenceVisualTargetV1' public/index.html
+          grep -q 'ownerReferenceVisualV1' public/desk.html
+          grep -q 'Hi! I’m Vindhu, your Annapurna ordering assistant 🍛' public/index.html
+          node --check public/app.js
+          node --check public/desk.js
+      - name: Full regression suite
+        run: |
+          npm ci
+          npm test
+      - name: Commit visual refresh
+        run: |
+          git config user.name 'madhukambampati'
+          git config user.email '85366523+madhukambampati@users.noreply.github.com'
+          git add public/index.html public/desk.html
+          git commit -m 'Match customer and owner UI to approved visual reference'
+          git push origin HEAD:visual-reference-v1
