@@ -1,0 +1,38 @@
+name: One-time Round 6 owner chat hotfix
+
+on:
+  push:
+    branches: [ui-redesign-v1]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'Run Round 6 owner chat hotfix'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ui-redesign-v1
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply patch
+        run: python3 .github/owner_chat_round6_patch.py
+      - run: npm ci
+      - name: Syntax check browser JavaScript
+        run: |
+          node --check public/app.js
+          node --check public/desk.js
+      - run: git diff --check
+      - run: npm test
+      - name: Commit tested Round 6 fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/desk.html public/desk.js public/app.js src/server.ts test/web.test.ts test/server.test.ts
+          git commit -m "Fix owner mobile chat and duplicate confirmation safety"
+          git push origin HEAD:ui-redesign-v1
