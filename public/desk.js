@@ -353,7 +353,7 @@ function renderChats() {
 
     const messages = h("div", { class: "msgs", id: "thread", role: "log", "aria-live": "polite" },
       chat.messages.length ? chat.messages.map((m) => {
-        const who = m.who === "cust" ? "Customer" : m.who === "owner" ? "You" : "Annu";
+        const who = m.who === "cust" ? "Customer" : m.who === "owner" ? "You" : "Vindhu";
         return h("div", { class: "b " + m.who },
           h("small", {}, who + " · " + timeOf(m.ts)),
           h("span", { class: "chat-message-text" }, m.text));
