@@ -21,7 +21,9 @@ jobs:
           node-version: 22
           cache: npm
       - name: Apply Round 5 patch
-        run: python3 .github/round5_patch.py
+        run: |
+          python3 .github/round5_patch.py
+          python3 .github/round5_patch2.py
       - run: npm ci
       - run: git diff --check
       - run: npm test
