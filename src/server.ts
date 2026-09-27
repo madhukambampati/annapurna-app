@@ -3,6 +3,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { Agent } from "./agent.js";
 import type { Config } from "./config.js";
+import { customTermsKey } from "./custom.js";
 import { cookSummary } from "./cook.js";
 import { RateLimiter } from "./limiter.js";
 import { dayRange, itemDays, itemLabel, total } from "./menu.js";
@@ -469,14 +470,18 @@ export function createServer(d: ServerDeps): Server {
               const quoted = ownerQuotedPrice(text);
               const approved = ownerApprovesCustom(text);
               if (quoted != null || approved) {
-                store.putDraft(waId, {
+                const next = {
                   ...draft,
                   custom: {
                     ...draft.custom,
                     ...(quoted != null ? { price: quoted, approved: true } : {}),
                     ...(approved ? { approved: true } : {}),
                   },
-                });
+                };
+                // Bind the authenticated owner's price to these exact custom terms. A later item/qty
+                // change makes this key mismatch and the customer must receive a fresh owner quote.
+                if (quoted != null) next.custom.quote_key = customTermsKey(next);
+                store.putDraft(waId, next);
               }
             }
 

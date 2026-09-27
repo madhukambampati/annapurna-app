@@ -40,6 +40,8 @@ export interface CustomOrderDraft {
   price: number | null;
   /** Owner has supplied/finalized custom terms. A quoted price sets this true. */
   approved: boolean;
+  /** Exact custom terms the owner priced. Confirmation is blocked if those terms later change. */
+  quote_key?: string | null;
 }
 
 export interface Draft {

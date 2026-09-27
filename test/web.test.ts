@@ -255,6 +255,70 @@ describe("web: chat and orders", () => {
       assert.match((await call("GET", "/web/orders", { token })).json.orders[0].items[0], /^25 x Chicken Kheema Fry combo.*custom catering/i);
     }));
 
+  test("Round 7: abandoning a quoted bulk request cannot contaminate the next normal order", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Bulk Reset", "bulk-reset@example.com");
+      await say(token, "25 Chicken Kheema Fry combos, spicy, pickup this Saturday 4pm");
+      const waId = t.store.listCustomers()[0]!.waId;
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "$180" } });
+      assert.equal(t.store.getDraft(waId)!.custom?.price, 180);
+      assert.ok(t.store.getDraft(waId)!.custom?.quote_key);
+
+      const abandoned = await say(token, "Never mind the bulk one");
+      assert.ok(abandoned.json.messages.some((m: any) => /cleared that pending custom\/bulk request/i.test(m.text)));
+      assert.equal(t.store.getDraft(waId), null);
+      assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 0);
+
+      t.llm.push(modelReply({
+        reply: "Sure.",
+        items: [{ id: "fry_piece_pulao", qty: 1, pack: "single", asked_for: "Gongura Fry Piece Pulao combo" }],
+        pickup: "2026-09-26T18:00",
+        stage: "awaiting_confirmation",
+      }));
+      const review = await say(token, "1 Gongura Fry Piece Pulao combo, Saturday 6 PM");
+      const text = review.json.messages.map((m: any) => m.text).join("\n");
+      assert.match(text, /1 x Gongura Fry Piece Pulao combo: \$17/);
+      assert.doesNotMatch(text, /\$180|25 x|custom catering/i);
+
+      const placed = await say(token, "YES");
+      assert.equal(placed.json.orderId, 1);
+      const orders = (await call("GET", "/web/orders", { token })).json.orders;
+      assert.equal(orders.length, 1);
+      assert.equal(orders[0].total, 17);
+      assert.deepEqual(orders[0].items, ["1 x Gongura Fry Piece Pulao combo"]);
+
+      const stored = (await call("GET", "/api/state", { token: "secret" })).json.orders[0];
+      assert.deepEqual([stored.items[0].id, stored.items[0].qty, stored.items[0].pack, stored.items[0].amt], ["fry_piece_pulao", 1, "single", 17]);
+      assert.doesNotMatch(stored.notes, /Custom order/i);
+    }));
+
+  test("Round 7: changing custom terms after an owner quote invalidates that quote", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Quote Safety", "quote-safety@example.com");
+      await say(token, "25 Chicken Kheema Fry combos, pickup this Saturday 4pm");
+      const waId = t.store.listCustomers()[0]!.waId;
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "$180" } });
+      assert.equal(t.store.getDraft(waId)!.custom?.price, 180);
+
+      t.llm.push(modelReply({
+        reply: "Okay, changed.",
+        items: [{ id: "fry_piece_pulao", qty: 1, pack: "single", asked_for: "Gongura Fry Piece Pulao combo" }],
+        pickup: "2026-09-26T16:00",
+        stage: "collecting",
+      }));
+      const changed = await say(token, "Actually make that 1 Gongura Fry Piece Pulao combo instead");
+      assert.ok(changed.json.messages.some((m: any) => /cleared the old quoted price/i.test(m.text)));
+      const d = t.store.getDraft(waId)!;
+      assert.ok(d.custom);
+      assert.equal(d.custom!.price, null);
+      assert.equal(d.custom!.approved, false);
+
+      const confirm = await say(token, "YES");
+      assert.equal(confirm.json.orderId, null);
+      assert.ok(confirm.json.messages.some((m: any) => /still need the final price/i.test(m.text)));
+      assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 0);
+    }));
+
   test("Round 5: custom recipe bypasses model; Sunday noon parses; customer price is ignored", () =>
     withRig(async ({ t, start, say, call }) => {
       const token = await start("Custom Buyer", "5195550131");

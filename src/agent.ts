@@ -1,4 +1,5 @@
 import type { Config } from "./config.js";
+import { clearCustomQuote, customQuoteIsCurrent, customTermsKey } from "./custom.js";
 import { checkFlags, checkWeekday, draftHash, extrasOnly, friendlyName, mainOrderFor, sanitizeItems, tokens, type Issue } from "./guards.js";
 import { HeuristicJudge, type Judge, type Judgment } from "./judge.js";
 import type { Llm } from "./llm.js";
@@ -65,6 +66,8 @@ const CUSTOM_RECIPE_WORDS = /\b(custom recipe|customi[sz](?:e|ed|ation)|modified
 const CUSTOM_WORDS = /\b(cater(?:ing)?|bulk|party order|large order|full tray|half tray|medium tray|large tray|custom recipe|customi[sz](?:e|ed|ation)|modified recipe)\b/i;
 const CUSTOM_HEADCOUNT = /\b(\d{1,3})\s*(?:people|persons|pax|members|guests)\b/i;
 const CUSTOM_CONFIRM = /(?:^yes\b|^go\s+ahead\b|\bconfirm(?:ing|ed)?\s+(?:(?:the|my)\s+)?order\b|\bplace\s+(?:(?:the|my)\s+)?order\b)/i;
+/** Explicitly abandoning an unplaced custom/bulk request must destroy every bit of its draft state. */
+const CUSTOM_ABANDON = /(?:\bnever\s*mind\b|\bnevermind\b|\bforget\s+(?:it|that|the\s+(?:bulk|custom|catering|tray)(?:\s+(?:one|order|request))?)\b|\b(?:cancel|drop|skip)\s+(?:the\s+)?(?:bulk|custom|catering|tray)(?:\s+(?:one|order|request))?\b|\b(?:don\'?t|do not|no longer)\s+want\s+(?:the\s+)?(?:bulk|custom|catering|tray)\b)/i;
 const CUSTOMER_CUSTOM_PRICE = /(?:\$\s*\d{1,5}(?:\.\d{1,2})?|\b\d{1,5}(?:\.\d{1,2})?\s*(?:\$|cad)\b)/i;
 const PLACEMENT_CLAIM = /\b(?:order\s+(?:is\s+|has\s+been\s+)?(?:confirmed|placed|booked)|(?:confirmed|placed|booked)\s+(?:the\s+|your\s+)?order|lock(?:ing|ed)?\s+(?:this|it|the order)\s+in)\b/i;
 
@@ -198,6 +201,27 @@ export class Agent {
     // Do not infer custom/catering state from older chat history: customers often place a normal
     // menu order after a catering order in the same conversation.
 
+    // A pending custom request is not a placed order. If the customer abandons it, clear the
+    // entire draft immediately so its item, quantity and owner quote cannot contaminate a later order.
+    if (draft?.custom && CUSTOM_ABANDON.test(text)) {
+      const hadQuote = draft.custom.price != null;
+      store.clearDraft(msg.from);
+      for (const a of store.listAlerts(true)) {
+        if (a.waId === msg.from && a.orderId == null && a.note.startsWith("Custom/bulk request:")) store.markAlertDone(a.id);
+      }
+      out.route = "custom_abandoned";
+      out.replies.push(
+        `No problem — I cleared that pending custom/bulk request${hadQuote ? " and its old quoted price" : ""}. ` +
+        `Nothing from it will carry into your next order. Any already-confirmed orders are unchanged.`
+      );
+      await this.d.notifier.notify(
+        "Custom/bulk request withdrawn",
+        `${customer.name || msg.name || "Customer"} withdrew the pending custom/bulk request. Do not prepare or price that request.`,
+      );
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
+    }
+
     // Large explicit quantities and custom-recipe requests are captured before Claude. These are the
     // failure-prone forms from QA; ordinary catering/headcount flows keep their existing behavior.
     if (!draft?.custom && deterministicCustomStart(text, menu)) {
@@ -255,12 +279,20 @@ export class Agent {
     // then the customer confirms. Handle confirmation/acknowledgements deterministically so the model
     // can never invent a custom-order confirmation or lose the pending terms.
     if (draft?.custom && CUSTOM_CONFIRM.test(text)) {
-      if (draft.custom.price != null && draft.pickup_local) {
+      const staleQuote = draft.custom.price != null && !customQuoteIsCurrent(draft);
+      if (staleQuote) {
+        draft = clearCustomQuote(draft);
+        store.putDraft(msg.from, draft);
+      }
+      if (draft.custom?.price != null && draft.pickup_local && customQuoteIsCurrent(draft)) {
         out.route = "confirm_custom_order";
         await this.placeCustomOrder(msg.from, draft, settings, out);
+      } else if (staleQuote) {
+        out.route = "confirm_custom_order+stale_quote";
+        out.replies.push("I won't place that custom order with an old quote. The requested items changed after that price was given, so Annapurna Home Foods needs to quote the current request again. No order was placed.");
       } else {
         const missing = [
-          draft.custom.price == null ? "the final price" : "",
+          draft.custom?.price == null ? "the final price" : "",
           !draft.pickup_local ? "the pickup day and time" : "",
         ].filter(Boolean);
         out.route = "confirm_custom_order+waiting";
@@ -271,7 +303,7 @@ export class Agent {
     }
     if (draft?.custom && (THANKS.test(text) || CUSTOM_ACK.test(text))) {
       out.route = "custom_ack";
-      const ready = draft.custom.price != null && !!draft.pickup_local;
+      const ready = customQuoteIsCurrent(draft) && !!draft.pickup_local;
       out.replies.push(ready
         ? "You're welcome! Your custom order details are ready. Reply CONFIRM THE ORDER when you want me to place it."
         : "You're welcome! Your custom order request is saved. Annapurna Home Foods will finalize the remaining details here.");
@@ -422,10 +454,28 @@ export class Agent {
         pickup = null;
       }
     }
+
+    // An owner quote belongs to the exact custom food terms that existed when it was sent. If the
+    // customer changes the dish, quantity, pack or custom notes, invalidate that quote immediately.
+    // Pickup can change without invalidating price because it is intentionally excluded from the key.
+    let staleCustomQuote = false;
+    if (!frozen && custom?.price != null) {
+      const candidate: Draft = {
+        items, pickup_local: pickup, customer_name: custName, notes, readback_hash: null, stage: "collecting", custom,
+      };
+      if (!custom.quote_key || custom.quote_key !== customTermsKey(candidate)) {
+        custom = { ...custom, price: null, approved: false, quote_key: null };
+        staleCustomQuote = true;
+      }
+    }
     out.issues.push(...issues.map((i) => i.kind));
 
     // Deterministic replies win over the model when code found a problem.
     const fixes: string[] = [];
+    if (staleCustomQuote) {
+      fixes.push("The custom request changed, so I cleared the old quoted price. No order is placed. Annapurna Home Foods needs to quote the updated request before you can confirm it.");
+      out.issues.push("stale_custom_quote");
+    }
     const notLive = issues.filter((i): i is Extract<Issue, { kind: "not_live" }> => i.kind === "not_live");
     const unclear = issues.filter((i): i is Extract<Issue, { kind: "unclear_item" }> => i.kind === "unclear_item");
     const weekday = issues.find((i): i is Extract<Issue, { kind: "weekday_mismatch" }> => i.kind === "weekday_mismatch");
@@ -536,6 +586,15 @@ export class Agent {
     const now = this.now();
     const custom = draft.custom;
     if (!custom || custom.price == null || !draft.pickup_local) return;
+    // Last line of defence: even a stale/corrupt draft cannot create a custom order using a quote
+    // that was issued for different items or quantities.
+    if (!customQuoteIsCurrent(draft)) {
+      store.putDraft(waId, clearCustomQuote(draft));
+      out.route = "confirm_custom_order+stale_quote";
+      out.issues.push("stale_custom_quote");
+      out.replies.push("I won't place that custom order with an old quote. Annapurna Home Foods needs to quote the current request again. No order was placed.");
+      return;
+    }
 
     const already = store.openOrdersFor(waId).find((o) =>
       o.pickup === draft.pickup_local &&
