@@ -160,6 +160,9 @@ export class Store {
     this.db.prepare("DELETE FROM messages WHERE wa_id = ?").run(waId);
     this.db.prepare("DELETE FROM drafts WHERE wa_id = ?").run(waId);
     this.db.prepare("DELETE FROM web_sessions WHERE wa_id = ?").run(waId);
+    // Non-order alerts depend on chat context. Once the customer deletes the chat they must not
+    // remain as orphaned "Open chat" tasks for the owner. Order-linked alerts stay for kitchen safety.
+    this.db.prepare("UPDATE alerts SET done = 1 WHERE wa_id = ? AND order_id IS NULL").run(waId);
     this.db.prepare("UPDATE customers SET profile = '', uncertain_streak = 0 WHERE wa_id = ?").run(waId);
   }
 

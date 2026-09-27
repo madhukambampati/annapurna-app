@@ -3,6 +3,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { Agent } from "./agent.js";
 import type { Config } from "./config.js";
+import { customTermsKey } from "./custom.js";
 import { cookSummary } from "./cook.js";
 import { RateLimiter } from "./limiter.js";
 import { dayRange, itemDays, itemLabel, total } from "./menu.js";
@@ -73,6 +74,13 @@ function send(req: IncomingMessage, res: ServerResponse, status: number, body: u
   res.end(JSON.stringify(body));
 }
 
+
+function sendNotFoundPage(req: IncomingMessage, res: ServerResponse): void {
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Page not found · Annapurna Home Foods</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#efe8d8;color:#1b2a21;font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}.box{width:min(520px,calc(100% - 32px));box-sizing:border-box;padding:34px 28px;text-align:center;background:#fffdf8;border:1px solid #e6dcc6;border-radius:24px;box-shadow:0 18px 50px rgba(30,45,35,.10)}img{width:68px;height:68px;border-radius:18px}h1{margin:16px 0 8px;font:700 30px/1.1 Georgia,serif;color:#1d6b4d}p{margin:0 0 20px;color:#56645a}a{display:inline-block;padding:11px 18px;border-radius:12px;background:#1d6b4d;color:white;text-decoration:none;font-weight:700}</style></head><body><main class="box"><img src="/icon.svg" alt=""><h1>That page isn't here</h1><p>The link may be old or mistyped. Return to Annapurna Home Foods to continue.</p><a href="/">Back to home</a></main></body></html>`;
+  res.writeHead(404, { ...baseHeaders(req), "content-type": "text/html; charset=utf-8" });
+  res.end(html);
+}
+
 async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
   let size = 0;
   const chunks: Buffer[] = [];
@@ -115,11 +123,46 @@ function cleanText(v: unknown, max: number): string {
   return typeof v === "string" ? v.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "").trim().slice(0, max) : "";
 }
 
+/** Price explicitly typed by the owner, e.g. "$120", "120$" or "120 CAD". */
+function ownerQuotedPrice(text: string): number | null {
+  const m = /(?:\$\s*(\d{1,5}(?:\.\d{1,2})?)|(\d{1,5}(?:\.\d{1,2})?)\s*(?:\$|cad\b))/i.exec(text);
+  if (!m) return null;
+  const n = Number(m[1] ?? m[2]);
+  return Number.isFinite(n) && n > 0 && n < 100_000 ? Math.round(n * 100) / 100 : null;
+}
+
+function bareOwnerPrice(text: string): boolean {
+  return /^(?:\$\s*\d{1,5}(?:\.\d{1,2})?|\d{1,5}(?:\.\d{1,2})?\s*(?:\$|cad))$/i.test(text.trim());
+}
+
+/** Owner wording that explicitly approves a custom order, not merely quotes a price. */
+function ownerApprovesCustom(text: string): boolean {
+  return /\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\b.*\border\b|\border\b.*\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\b|\b(?:sure\s+)?we\s+can\s+(?:make|prepare|do)\b|\bwe(?:'|’)ll\s+(?:make|prepare)\b|\bwill\s+(?:make|prepare)\s+(?:the\s+)?order\b/i.test(text);
+}
+
+/** Very short acknowledgements are ambiguous and should never become customer-visible owner messages. */
+function lowValueOwnerReply(text: string): boolean {
+  return /^(?:ok(?:ay)?|yes|no|sure|thanks|thank you|no thank you|yes please|got it|fine|alright)[\s.!?]*$/i.test(text.trim());
+}
+
+/** A display name is plain text. HTML-like names are rejected for customer-facing polish. */
+export function validName(n: string): boolean {
+  return n.length > 0 && n.length <= 60 && !/[<>]/.test(n);
+}
+
 /** A phone number (7+ digits) or something that looks like an email. */
 export function validContact(c: string): boolean {
   if (c.length < 5 || c.length > 80) return false;
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) return true;
   return /^[+()\-.\s\d]+$/.test(c) && c.replace(/\D/g, "").length >= 7;
+}
+
+function contactKey(c: string): string {
+  const v = c.trim();
+  if (v.includes("@")) return "email:" + v.toLowerCase();
+  let digits = v.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
+  return "phone:" + digits;
 }
 
 export interface ServerDeps {
@@ -246,12 +289,28 @@ export function createServer(d: ServerDeps): Server {
           });
         }
 
+        if (m === "POST" && path === "/web/resume") {
+          const waId = webSession(req);
+          const b = await readJson(req);
+          const name = cleanText(b.name, 61);
+          const contact = cleanText(b.contact, 80);
+          if (!validName(name)) throw new HttpError(400, "Please enter a valid name.");
+          if (!validContact(contact)) throw new HttpError(400, "Please enter a phone number or email so Annapurna Home Foods can reach you.");
+          if (b.consent !== true) throw new HttpError(400, "Please tick the box to continue.");
+          const customer = store.getCustomer(waId);
+          if (!customer || contactKey(customer.contact) !== contactKey(contact)) {
+            throw new HttpError(409, "That saved session belongs to a different contact.");
+          }
+          store.updateCustomer(waId, { name, contact });
+          return send(req, res, 200, { ok: true, name });
+        }
+
         if (m === "POST" && path === "/web/session") {
           limit(`sess:${ip}`, w.sessionsPerIpHour, HOUR);
           const b = await readJson(req);
-          const name = cleanText(b.name, 60);
+          const name = cleanText(b.name, 61);
           const contact = cleanText(b.contact, 80);
-          if (!name) throw new HttpError(400, "Please enter your name.");
+          if (!validName(name)) throw new HttpError(400, "Please enter a valid name.");
           if (!validContact(contact)) throw new HttpError(400, "Please enter a phone number or email so Annapurna Home Foods can reach you.");
           if (b.consent !== true) throw new HttpError(400, "Please tick the box to continue.");
           const waId = `web:${randomBytes(8).toString("hex")}`;
@@ -266,6 +325,8 @@ export function createServer(d: ServerDeps): Server {
           limit(`ip:${ip}`, 120, 60_000);
           const b = await readJson(req);
           const text = typeof b.text === "string" ? b.text.trim() : "";
+          const requestId = cleanText(b.requestId, 120);
+          if (requestId && !/^[A-Za-z0-9:_-]+$/.test(requestId)) throw new HttpError(400, "Invalid request id.");
           if (!text) throw new HttpError(400, "Message is empty.");
           if (text.length > MAX_TEXT) throw new HttpError(400, `Message is too long (max ${MAX_TEXT} characters).`);
           limit(`min:${waId}`, w.msgPerMinute, 60_000);
@@ -274,8 +335,8 @@ export function createServer(d: ServerDeps): Server {
           if (!g.ok) throw new HttpError(503, "Our ordering assistant is very busy right now. Please try again later.", g.retryAfter);
           const before = store.lastMessage(waId)?.id ?? 0;
           const c = store.getCustomer(waId)!;
-          const out = await agent.handle({ from: waId, name: c.name, text });
-          return send(req, res, 200, { messages: store.getMessagesAfter(waId, before), orderId: out.orderId ?? null });
+          const out = await agent.handle({ from: waId, name: c.name, text, messageId: requestId ? `${waId}:${requestId}` : undefined });
+          return send(req, res, 200, { messages: store.getMessagesAfter(waId, before), orderId: out.orderId ?? null, recoverableError: out.route.includes("+model_error") });
         }
 
         if (m === "GET" && path === "/web/history") {
@@ -296,6 +357,26 @@ export function createServer(d: ServerDeps): Server {
           const before = store.lastMessage(waId)?.id ?? 0;
           const { created, alert } = await agent.requestHuman(waId, c.name || "Customer", "Pressed the Talk to a person button");
           store.addMessage(waId, "agent", agent.handoffReply(created, alert, s), now());
+          return send(req, res, 200, { messages: store.getMessagesAfter(waId, before), handoff: { at: alert.createdAt } });
+        }
+
+        let customerOrder = /^\/web\/orders\/(\d+)\/cancel-request$/.exec(path);
+        if (m === "POST" && customerOrder) {
+          const waId = webSession(req);
+          const order = store.getOrder(Number(customerOrder[1]));
+          if (!order || order.waId !== waId) throw new HttpError(404, "No such order");
+          if (order.status === "done" || order.status === "cancelled") throw new HttpError(400, "This order is already closed.");
+          const customer = store.getCustomer(waId)!;
+          const before = store.lastMessage(waId)?.id ?? 0;
+          const { created, alert } = await agent.requestOrderCancellation(waId, customer.name || "Customer", order.id);
+          store.addMessage(
+            waId,
+            "agent",
+            created
+              ? `I've sent your cancellation request for order #${order.id} to Annapurna Home Foods. The order stays active until the team confirms the cancellation here.`
+              : `Your cancellation request for order #${order.id} is already with Annapurna Home Foods. The order stays active until the team confirms it here.`,
+            now(),
+          );
           return send(req, res, 200, { messages: store.getMessagesAfter(waId, before), handoff: { at: alert.createdAt } });
         }
 
@@ -381,7 +462,38 @@ export function createServer(d: ServerDeps): Server {
           if (m === "POST" && mt[2] === "reply") {
             const text = cleanText((await readJson(req)).text, MAX_TEXT);
             if (!text) throw new HttpError(400, "Reply is empty");
+            const draft = store.getDraft(waId);
+            const quoted = ownerQuotedPrice(text);
+            const approved = ownerApprovesCustom(text);
+            if (lowValueOwnerReply(text) && quoted == null) {
+              throw new HttpError(400, "Please send a more complete reply so the customer has enough context.");
+            }
+            // A stale owner screen must not leak a bare price from an abandoned custom request into
+            // the customer's chat. Bare quotes are meaningful only while a custom draft is active.
+            if (quoted != null && bareOwnerPrice(text) && !draft?.custom) {
+              throw new HttpError(409, "There is no active custom/bulk request for this customer. Refresh the chat before quoting a price.");
+            }
             const id = store.addMessage(waId, "owner", text, now());
+
+            // Custom/catering orders keep the owner's quoted total in the draft.
+            // A quoted price finalizes the owner's terms; the customer's later confirmation creates the real order.
+            if (draft?.custom) {
+              if (quoted != null || approved) {
+                const next = {
+                  ...draft,
+                  custom: {
+                    ...draft.custom,
+                    ...(quoted != null ? { price: quoted, approved: true } : {}),
+                    ...(approved ? { approved: true } : {}),
+                  },
+                };
+                // Bind the authenticated owner's price to these exact custom terms. A later item/qty
+                // change makes this key mismatch and the customer must receive a fresh owner quote.
+                if (quoted != null) next.custom.quote_key = customTermsKey(next);
+                store.putDraft(waId, next);
+              }
+            }
+
             store.closeHandoffs(waId);
             return send(req, res, 200, { message: { id, who: "owner", text, ts: now() } });
           }
@@ -394,6 +506,9 @@ export function createServer(d: ServerDeps): Server {
           const to = body.status as OrderStatus;
           // The owner can say why an order is cancelled. It goes to the customer with the cancel message.
           const reason = to === "cancelled" ? cleanText(body.reason, 300) : "";
+          if ((to === "ready" || to === "done") && body.confirm !== true) {
+            throw new HttpError(400, to === "ready" ? "Explicit confirmation is required before telling the customer an order is ready." : "Explicit confirmation is required before marking an order picked up.");
+          }
           if (!ALLOWED[o.status]?.includes(to)) throw new HttpError(400, `Cannot move an order from ${o.status} to ${String(to)}`);
           const updated = store.setOrderStatus(o.id, to, o.status === "hold" && to === "cook");
           const s = store.getSettings();
@@ -455,6 +570,9 @@ export function createServer(d: ServerDeps): Server {
       throw new HttpError(404, "Not found");
     } catch (e) {
       if (e instanceof HttpError) {
+        const errorPath = new URL(req.url ?? "/", "http://x").pathname;
+        const browserRoute = !errorPath.startsWith("/api/") && !errorPath.startsWith("/web/") && !errorPath.startsWith("/sim/");
+        if (e.status === 404 && (req.method ?? "GET") === "GET" && browserRoute) return sendNotFoundPage(req, res);
         return send(req, res, e.status, { error: e.message }, e.retryAfter ? { "retry-after": String(e.retryAfter) } : {});
       }
       console.error(e);

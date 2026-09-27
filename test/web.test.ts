@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import { describe, test } from "node:test";
 import { loadConfig, type Config } from "../src/config.js";
 import { RateLimiter } from "../src/limiter.js";
-import { createServer, validContact } from "../src/server.js";
+import { createServer, validContact, validName } from "../src/server.js";
 import { FRI_6PM, NOW, modelReply, setup } from "./helpers.js";
 
 const ASSETS = { "index.html": "<html>shop</html>", "desk.html": "<html>desk</html>", "app.js": "//app", "desk.js": "//desk" };
@@ -86,9 +86,11 @@ describe("limiter", () => {
   });
 });
 
-test("validContact accepts phones and emails, rejects junk", () => {
+test("customer identity validation accepts real values and rejects junk", () => {
   for (const ok of ["519-555-0101", "+1 (519) 555 0101", "maddy@example.com", "5195550101"]) assert.equal(validContact(ok), true, ok);
   for (const bad of ["", "abc", "12345", "not an email@", "a@b", "<script>alert(1)</script>", "x".repeat(81)]) assert.equal(validContact(bad), false, bad);
+  for (const ok of ["Asha", "M. Kiran", "Siva-Parvathi", "José"]) assert.equal(validName(ok), true, ok);
+  for (const bad of ["", "<script>alert(1)</script>", "A < B", "x".repeat(61)]) assert.equal(validName(bad), false, bad);
 });
 
 describe("web: files and headers", () => {
@@ -213,6 +215,413 @@ describe("web: chat and orders", () => {
       assert.equal(st.json.customers[0].contact, "asha@example.com");
     }));
 
+  test("Round 6: rapid duplicate confirmation requests create exactly one real order", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Double Tap", "double@example.com");
+      t.llm.push(modelReply({ reply: "Ready to review.", items: [{ id: "bagara_chicken_fry", qty: 1, pack: "bogo", asked_for: "bagara chicken fry" }], pickup: "2026-09-26T18:00", stage: "awaiting_confirmation" }));
+      const review = await say(token, "1 Bagara Rice and Chicken Fry combo BOGO Saturday 6 PM");
+      const readback = review.json.messages.find((m: any) => m.who === "agent" && /Please check your order/.test(m.text));
+      assert.ok(readback?.id);
+      const body = { text: "Yes, confirm", requestId: `confirm:${readback.id}` };
+      const [a, b] = await Promise.all([
+        call("POST", "/web/message", { token, body }),
+        call("POST", "/web/message", { token, body }),
+      ]);
+      assert.equal(a.status, 200);
+      assert.equal(b.status, 200);
+      const orders = (await call("GET", "/web/orders", { token })).json.orders;
+      assert.equal(orders.length, 1);
+      assert.equal(orders[0].total, 22);
+      const confirmations = t.store.getMessages(t.store.listCustomers()[0]!.waId, 100).filter((m: any) => /Order #\d+.*is confirmed/.test(m.text));
+      assert.equal(confirmations.length, 1);
+    }));
+
+  test("Round 5: large explicit quantity bypasses the model and creates no phantom order", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Bulk Buyer", "5195550130");
+      const before = t.llm.prompts.length;
+      const r = await say(token, "25 Chicken Kheema Fry combos, spicy, pickup this Saturday 4pm");
+      assert.equal(t.llm.prompts.length, before);
+      assert.ok(r.json.messages.some((m: any) => /No order is placed yet/i.test(m.text)));
+      const waId = t.store.listCustomers()[0]!.waId;
+      const d = t.store.getDraft(waId)!;
+      assert.ok(d.custom);
+      assert.equal(d.pickup_local, "2026-09-26T16:00");
+      assert.match(d.items[0]?.name ?? "", /Chicken Kheema Fry/i);
+      assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 0);
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "$250" } });
+      const placed = await say(token, "Confirm the order");
+      assert.equal(placed.json.orderId, 1);
+      assert.match((await call("GET", "/web/orders", { token })).json.orders[0].items[0], /^25 x Chicken Kheema Fry combo.*custom catering/i);
+    }));
+
+  test("Round 7: abandoning a quoted bulk request cannot contaminate the next normal order", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Bulk Reset", "bulk-reset@example.com");
+      await say(token, "25 Chicken Kheema Fry combos, spicy, pickup this Saturday 4pm");
+      const waId = t.store.listCustomers()[0]!.waId;
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "$180" } });
+      assert.equal(t.store.getDraft(waId)!.custom?.price, 180);
+      assert.ok(t.store.getDraft(waId)!.custom?.quote_key);
+
+      const abandoned = await say(token, "Never mind the bulk one");
+      assert.ok(abandoned.json.messages.some((m: any) => /cleared that pending custom\/bulk request/i.test(m.text)));
+      assert.equal(t.store.getDraft(waId), null);
+      assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 0);
+
+      t.llm.push(modelReply({
+        reply: "Sure.",
+        items: [{ id: "fry_piece_pulao", qty: 1, pack: "single", asked_for: "Gongura Fry Piece Pulao combo" }],
+        pickup: "2026-09-26T18:00",
+        stage: "awaiting_confirmation",
+      }));
+      const review = await say(token, "1 Gongura Fry Piece Pulao combo, Saturday 6 PM");
+      const text = review.json.messages.map((m: any) => m.text).join("\n");
+      assert.match(text, /1 x Gongura Fry Piece Pulao combo: \$17/);
+      assert.doesNotMatch(text, /\$180|25 x|custom catering/i);
+
+      const placed = await say(token, "YES");
+      assert.equal(placed.json.orderId, 1);
+      const orders = (await call("GET", "/web/orders", { token })).json.orders;
+      assert.equal(orders.length, 1);
+      assert.equal(orders[0].total, 17);
+      assert.deepEqual(orders[0].items, ["1 x Gongura Fry Piece Pulao combo"]);
+
+      const stored = (await call("GET", "/api/state", { token: "secret" })).json.orders[0];
+      assert.deepEqual([stored.items[0].id, stored.items[0].qty, stored.items[0].pack, stored.items[0].amt], ["fry_piece_pulao", 1, "single", 17]);
+      assert.doesNotMatch(stored.notes, /Custom order/i);
+    }));
+
+  test("Round 7: changing custom terms after an owner quote invalidates that quote", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Quote Safety", "quote-safety@example.com");
+      await say(token, "25 Chicken Kheema Fry combos, pickup this Saturday 4pm");
+      const waId = t.store.listCustomers()[0]!.waId;
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "$180" } });
+      assert.equal(t.store.getDraft(waId)!.custom?.price, 180);
+
+      t.llm.push(modelReply({
+        reply: "Okay, changed.",
+        items: [{ id: "fry_piece_pulao", qty: 1, pack: "single", asked_for: "Gongura Fry Piece Pulao combo" }],
+        pickup: "2026-09-26T16:00",
+        stage: "collecting",
+      }));
+      const changed = await say(token, "Actually make that 1 Gongura Fry Piece Pulao combo instead");
+      assert.ok(changed.json.messages.some((m: any) => /cleared the old quoted price/i.test(m.text)));
+      const d = t.store.getDraft(waId)!;
+      assert.ok(d.custom);
+      assert.equal(d.custom!.price, null);
+      assert.equal(d.custom!.approved, false);
+
+      const confirm = await say(token, "YES");
+      assert.equal(confirm.json.orderId, null);
+      assert.ok(confirm.json.messages.some((m: any) => /still need the final price/i.test(m.text)));
+      assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 0);
+    }));
+
+  test("Round 8: abandon plus a replacement order in the same message becomes a normal $17 order", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Robin Shaw", "robin.shaw@example.com");
+      await say(token, "25 Chicken Kheema Fry combos, spicy, pickup this Saturday 4pm");
+      const waId = t.store.listCustomers()[0]!.waId;
+      assert.ok(t.store.getDraft(waId)?.custom);
+
+      t.llm.push(modelReply({
+        reply: "Sure.",
+        items: [{ id: "fry_piece_pulao", qty: 1, pack: "single", asked_for: "Gongura Fry Piece Pulao combo" }],
+        pickup: "2026-09-27T13:00",
+        notes: "Medium spice, no extras",
+        stage: "awaiting_confirmation",
+      }));
+      const switched = await say(token, "Never mind the bulk one. Just 1 Gongura Fry Piece Pulao combo, medium, pickup Sunday 1pm, no extras");
+      const switchedText = switched.json.messages.map((m: any) => m.text).join("\n");
+      assert.match(switchedText, /cleared that pending custom\/bulk request/i);
+      assert.match(switchedText, /1 x Gongura Fry Piece Pulao combo: \$17/);
+      assert.doesNotMatch(switchedText, /price to be confirmed|custom catering|\$200/i);
+      assert.equal(t.store.getDraft(waId)?.custom, undefined);
+      assert.equal(t.store.listAlerts(true).filter((a) => a.waId === waId && a.note.startsWith("Custom/bulk request:")).length, 0);
+
+      // A stale owner tab cannot inject an old bare bulk quote after the reset.
+      const staleQuote = await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "200$" } });
+      assert.equal(staleQuote.status, 409);
+      assert.equal(t.store.getMessages(waId, 100).some((m) => m.who === "owner" && m.text === "200$"), false);
+
+      const placed = await say(token, "Yes, please confirm the $17 Gongura Fry Piece Pulao combo");
+      assert.equal(placed.json.orderId, 1);
+      const orders = (await call("GET", "/web/orders", { token })).json.orders;
+      assert.equal(orders.length, 1);
+      assert.equal(orders[0].total, 17);
+      assert.deepEqual(orders[0].items, ["1 x Gongura Fry Piece Pulao combo"]);
+      assert.equal(t.store.listAlerts(true).some((a) => /Custom\/bulk request/.test(a.note)), false);
+    }));
+
+  test("Round 8: $17 before a menu name is a price, never bulk quantity 17", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Price Words", "price@example.com");
+      t.llm.push(modelReply({
+        items: [{ id: "fry_piece_pulao", qty: 1, pack: "single", asked_for: "Gongura Fry Piece Pulao combo" }],
+        pickup: "2026-09-27T13:00",
+        stage: "awaiting_confirmation",
+      }));
+      const r = await say(token, "Please order the $17 Gongura Fry Piece Pulao combo for Sunday 1pm");
+      const waId = t.store.listCustomers()[0]!.waId;
+      assert.equal(t.store.getDraft(waId)?.custom, undefined);
+      assert.match(r.json.messages.map((m: any) => m.text).join("\n"), /1 x Gongura Fry Piece Pulao combo: \$17/);
+      assert.equal(t.store.listAlerts(true).some((a) => /Custom\/bulk request/.test(a.note)), false);
+      const placed = await say(token, "YES");
+      assert.equal(placed.json.orderId, 1);
+      assert.equal((await call("GET", "/web/orders", { token })).json.orders[0].total, 17);
+    }));
+
+  test("Round 8: explicit Oct 3 custom pickup is not collapsed to the nearest Saturday", () =>
+    withRig(async ({ t, start, say }) => {
+      const token = await start("Calendar Safety", "calendar@example.com");
+      await say(token, "25 Chicken Kheema Fry combos");
+      const r = await say(token, "pickup Saturday Oct 3 2pm");
+      const waId = t.store.listCustomers()[0]!.waId;
+      assert.equal(t.store.getDraft(waId)!.pickup_local, "2026-10-03T14:00");
+      assert.ok(r.json.messages.some((m: any) => /Sat, Oct 3.*2:00 PM/i.test(m.text)));
+    }));
+
+  test("Round 5: custom recipe bypasses model; Sunday noon parses; customer price is ignored", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Custom Buyer", "5195550131");
+      const before = t.llm.prompts.length;
+      const r = await say(token, "Chicken Pulao with Mirchi Ka Salan, extra spicy, double masala, custom recipe");
+      assert.equal(t.llm.prompts.length, before);
+      assert.ok(r.json.messages.some((m: any) => /No order is placed yet/i.test(m.text)));
+      const waId = t.store.listCustomers()[0]!.waId;
+      const pickup = await say(token, "medium spice, pickup Sunday noon");
+      assert.ok(pickup.json.messages.some((m: any) => /pickup is Sun, Sep 27 · 12:00 PM/i.test(m.text)));
+      assert.equal(t.store.getDraft(waId)!.pickup_local, "2026-09-27T12:00");
+      const price = await say(token, "Final price is $13");
+      assert.ok(price.json.messages.some((m: any) => /final price must come from Annapurna Home Foods/i.test(m.text)));
+      assert.equal(t.store.getDraft(waId)!.custom?.price, null);
+      assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 0);
+    }));
+
+  test("Round 5: model error is recoverable and model prose cannot fake order confirmation", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Recovery Buyer", "5195550132");
+      t.llm.push(new Error("boom"));
+      const failed = await say(token, "1 Bagara Rice and Chicken Fry combo BOGO Saturday 11 AM");
+      assert.equal(failed.json.recoverableError, true);
+      assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 0);
+      t.llm.push(modelReply({ reply: "Sure, order is confirmed. Locking this in now." }));
+      const later = await say(token, "Hello");
+      assert.ok(later.json.messages.some((m: any) => /haven't placed an order/i.test(m.text)));
+      assert.equal(later.json.orderId, null);
+      assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 0);
+    }));
+
+  test("custom catering: owner price + approval then customer YES creates a real order and notification", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("KM", "5195550101");
+
+      t.llm.push(modelReply({
+        reply: "Thanks! Annapurna Home Foods will confirm this custom catering request here.",
+        items: [{ id: "bagara_chicken_fry", qty: 15, pack: "single", asked_for: "Bagara rice and chicken fry for 15 people" }],
+        pickup: null,
+        stage: "collecting",
+        needs_owner: true,
+        owner_note: "Custom catering: Bagara rice and chicken fry for 15 people",
+      }));
+      await say(token, "Hi I would like to order Bagara rice and chicken fry for 15 people");
+
+      t.llm.push(modelReply({
+        reply: "Thanks for the pickup time. Annapurna Home Foods will confirm the exact price here.",
+        items: [{ id: "bagara_chicken_fry", qty: 15, pack: "single", asked_for: "Bagara rice and chicken fry for 15 people" }],
+        pickup: FRI_6PM,
+        stage: "collecting",
+        needs_owner: true,
+        owner_note: "Custom catering pickup Friday 6 PM; price needs owner confirmation",
+      }));
+      await say(token, "Friday at 6 PM, may I know the price?");
+
+      const waId = t.store.listCustomers()[0]!.waId;
+      assert.equal((await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "$120" } })).status, 200);
+      assert.equal((await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "Thank you, I am confirming the order." } })).status, 200);
+
+      const d = t.store.getDraft(waId)!;
+      assert.deepEqual([d.custom?.price, d.custom?.approved, d.pickup_local], [120, true, FRI_6PM]);
+
+      const confirmed = await say(token, "Yes please confirm");
+      assert.equal(confirmed.status, 200);
+      assert.equal(confirmed.json.orderId, 1);
+      assert.ok(confirmed.json.messages.some((m: any) => /Order #1 is confirmed:/.test(m.text)));
+
+      const orders = (await call("GET", "/web/orders", { token })).json.orders;
+      assert.equal(orders.length, 1);
+      assert.deepEqual([orders[0].status, orders[0].total], ["cook", 120]);
+      assert.match(orders[0].items[0], /15 x .*custom catering/i);
+
+      const owner = await call("GET", "/api/state", { token: "secret" });
+      assert.equal(owner.json.orders.length, 1);
+      assert.equal(owner.json.orders[0].items[0].amt, 120);
+      assert.match(t.notifier.sent.at(-1)!.title, /Custom order #1 confirmed/);
+      assert.equal(t.store.getDraft(waId), null);
+    }));
+
+  test("custom catering: pickup + owner price + customer confirmation creates the order", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("KM", "5195550101");
+
+      t.llm.push(modelReply({
+        reply: "A tray order for 15 people is a custom catering request. Annapurna Home Foods will confirm the details and pricing here.",
+        items: [{ id: "bagara_chicken_fry", qty: 15, pack: "single", asked_for: "Bagara rice and chicken fry for 15 people" }],
+        pickup: null,
+        stage: "collecting",
+        needs_owner: true,
+        owner_note: "Custom tray order for 15 people: Bagara rice and chicken fry",
+      }));
+      await say(token, "I would like to place a tray order of bagara rice and chicken fry for 15 people");
+
+      const waId = t.store.listCustomers()[0]!.waId;
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, {
+        token: "secret",
+        body: { text: "Sure thank you, what is the date and time?" },
+      });
+
+      // Common custom pickup replies are parsed by code, not by the LLM.
+      const promptsBeforePickup = t.llm.prompts.length;
+      const pickup = await say(token, "Tomorrow 6:00 PM EST, may I know the price?");
+      assert.equal(t.llm.prompts.length, promptsBeforePickup);
+      assert.ok(pickup.json.messages.some((m: any) => /pickup is Thu, Sep 24 · 6:00 PM/i.test(m.text)));
+
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, {
+        token: "secret",
+        body: { text: "15 people is a medium tray so it would be around 110$" },
+      });
+
+      const d = t.store.getDraft(waId)!;
+      assert.deepEqual([d.custom?.price, d.pickup_local], [110, "2026-09-24T18:00"]);
+
+      // No separate owner-approval message is required. The quoted price is the owner's terms;
+      // the customer's explicit confirmation places the real order.
+      const promptsBeforeConfirm = t.llm.prompts.length;
+      const confirmed = await say(token, "Sure thank you, I am confirming the order");
+      assert.equal(t.llm.prompts.length, promptsBeforeConfirm);
+      assert.equal(confirmed.json.orderId, 1);
+      assert.ok(confirmed.json.messages.some((m: any) => /Order #1 is confirmed:/.test(m.text)));
+
+      const orders = (await call("GET", "/web/orders", { token })).json.orders;
+      assert.equal(orders.length, 1);
+      assert.deepEqual([orders[0].status, orders[0].total], ["cook", 110]);
+      assert.match(orders[0].items[0], /15 x Bagara Rice and Chicken Fry combo.*custom catering/i);
+      assert.match(orders[0].pickupText, /Thu, Sep 24 · 6:00 PM/);
+
+      const owner = await call("GET", "/api/state", { token: "secret" });
+      assert.equal(owner.json.orders.length, 1);
+      assert.equal(owner.json.orders[0].status, "cook");
+      assert.match(t.notifier.sent.at(-1)!.title, /Custom order #1 confirmed/);
+
+      // After confirmation it follows the ordinary order lifecycle.
+      await call("POST", "/api/orders/1/status", { token: "secret", body: { status: "ready", confirm: true } });
+      let customerOrders = (await call("GET", "/web/orders", { token })).json.orders;
+      assert.equal(customerOrders[0].status, "ready");
+
+      await call("POST", "/api/orders/1/status", { token: "secret", body: { status: "done", confirm: true } });
+      customerOrders = (await call("GET", "/web/orders", { token })).json.orders;
+      assert.equal(customerOrders[0].status, "done");
+    }));
+
+  test("a normal menu order after a custom order stays normal and uses menu pricing", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("KM", "5195550101");
+
+      // First place a real custom order for 15 people.
+      t.llm.push(modelReply({
+        reply: "Saved as a custom order.",
+        items: [{ id: "bagara_chicken_fry", qty: 15, pack: "single", asked_for: "Bagara rice and chicken fry for 15 people" }],
+        pickup: FRI_6PM,
+        stage: "collecting",
+        needs_owner: true,
+        owner_note: "Custom catering for 15 people",
+      }));
+      await say(token, "Bagara rice and chicken fry tray order for 15 people Friday 6 PM");
+      const waId = t.store.listCustomers()[0]!.waId;
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "$120" } });
+      await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "I am confirming the order" } });
+      const custom = await say(token, "Confirm the order");
+      assert.equal(custom.json.orderId, 1);
+      assert.equal(t.store.getDraft(waId), null);
+
+      // Same customer now places an ordinary BOGO menu order.
+      t.llm.push(modelReply({
+        reply: "Perfect.",
+        items: [{ id: "bagara_chicken_fry", qty: 1, pack: "bogo", asked_for: "Bagara Rice and Chicken Fry combo" }],
+        pickup: "2026-09-26T11:00",
+        notes: "Spicy, no extras",
+        stage: "awaiting_confirmation",
+      }));
+      const rb = await say(token, "I'd like Bagara Rice and Chicken Fry combo BOGO, spicy, no extras, Saturday 11 AM");
+      const readback = rb.json.messages.map((m: any) => m.text).join("\n");
+      assert.match(readback, /1 x Bagara Rice and Chicken Fry combo \(Buy 1 Get 1\): \$22/);
+      assert.doesNotMatch(readback, /custom catering/i);
+
+      const normal = await say(token, "yes confirm");
+      assert.equal(normal.json.orderId, 2);
+
+      const orders = (await call("GET", "/web/orders", { token })).json.orders;
+      const latest = orders.find((o: any) => o.id === 2);
+      assert.ok(latest);
+      assert.equal(latest.total, 22);
+      assert.deepEqual(latest.items, ["1 x Bagara Rice and Chicken Fry combo (Buy 1 Get 1)"]);
+
+      const owner = await call("GET", "/api/state", { token: "secret" });
+      const stored = owner.json.orders.find((o: any) => o.id === 2);
+      assert.deepEqual(
+        [stored.items[0].id, stored.items[0].qty, stored.items[0].pack, stored.items[0].amt],
+        ["bagara_chicken_fry", 1, "bogo", 22],
+      );
+      assert.doesNotMatch(stored.notes, /Custom order/i);
+    }));
+
+  test("ended-session resume keeps the same customer and existing orders", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Test User", "test@example.com");
+      t.llm.push(modelReply({ items: [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "kheema fry" }], pickup: FRI_6PM, stage: "awaiting_confirmation" }));
+      await say(token, "1 kheema fry friday 6pm");
+      await say(token, "yes");
+      assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 1);
+      const resumed = await call("POST", "/web/resume", { token, body: { name: "Test User", contact: "test@example.com", consent: true } });
+      assert.equal(resumed.status, 200);
+      assert.equal(t.store.listCustomers().length, 1);
+      assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 1);
+      const wrong = await call("POST", "/web/resume", { token, body: { name: "Other", contact: "other@example.com", consent: true } });
+      assert.equal(wrong.status, 409);
+    }));
+
+  test("customer can request cancellation without the order being auto-cancelled", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Asha", "5195550101");
+      t.llm.push(modelReply({ items: [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "kheema fry" }], pickup: FRI_6PM, stage: "awaiting_confirmation" }));
+      await say(token, "1 kheema fry friday 6pm");
+      const id = (await say(token, "yes")).json.orderId;
+      const r = await call("POST", `/web/orders/${id}/cancel-request`, { token });
+      assert.equal(r.status, 200);
+      assert.equal(t.store.getOrder(id)!.status, "cook");
+      const alert = t.store.listAlerts(true).find((a) => a.orderId === id);
+      assert.ok(alert);
+      assert.match(alert!.note, /Cancellation requested/);
+      assert.ok(r.json.messages.some((m: any) => /cancellation request/i.test(m.text)));
+      assert.match(t.notifier.sent.at(-1)!.title, /Cancellation request/);
+    }));
+
+  test("ready and picked-up transitions require explicit owner confirmation", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Asha");
+      t.llm.push(modelReply({ items: [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "kheema fry" }], pickup: FRI_6PM, stage: "awaiting_confirmation" }));
+      await say(token, "1 kheema fry friday 6pm");
+      const id = (await say(token, "yes")).json.orderId;
+      assert.equal((await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "ready" } })).status, 400);
+      assert.equal(t.store.getOrder(id)!.status, "cook");
+      assert.equal((await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "ready", confirm: true } })).status, 200);
+      assert.equal((await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "done" } })).status, 400);
+      assert.equal(t.store.getOrder(id)!.status, "ready");
+      assert.equal((await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "done", confirm: true } })).status, 200);
+    }));
+
   test("customers cannot see each other's chats or orders", () =>
     withRig(async ({ t, start, say, call }) => {
       const a = await start("Asha", "5195550101");
@@ -246,8 +655,28 @@ describe("web: chat and orders", () => {
       t.llm.push(new Error("boom"));
       const r = await say(token, "hello");
       assert.equal(r.status, 200);
+      assert.equal(r.json.recoverableError, true);
       assert.ok(r.json.messages.some((m: any) => m.who === "agent"));
       assert.ok(t.store.listAlerts(true).length >= 1);
+    }));
+
+  test("terse owner filler replies are rejected and bare prices require an active custom request", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Asha");
+      const waId = t.store.listCustomers()[0]!.waId;
+      const reply = (text: string) => call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text } });
+
+      for (const filler of ["Yes", "Ok", "No thank you", "Sure", "Thanks"]) {
+        const r = await reply(filler);
+        assert.equal(r.status, 400, filler);
+      }
+      assert.equal((await reply("$120")).status, 409, "a stale bare price cannot leak into an ordinary chat");
+      await say(token, "25 Chicken Kheema Fry combos");
+      assert.equal((await reply("$120")).status, 200, "a bare quoted price is allowed for an active custom request");
+      assert.equal((await reply("Yes, we can prepare that for tomorrow.")).status, 200);
+
+      const history = (await call("GET", "/web/history", { token })).json.messages.filter((m: any) => m.who === "owner");
+      assert.deepEqual(history.map((m: any) => m.text), ["$120", "Yes, we can prepare that for tomorrow."]);
     }));
 
   test("owner replies and status notes show up in the customer's chat", () =>
@@ -264,7 +693,7 @@ describe("web: chat and orders", () => {
       const rep = await call("POST", `/api/customers/${encodeURIComponent(t.store.listCustomers()[0]!.waId)}/reply`, { token: "secret", body: { text: "Monday works, see you then!" } });
       assert.equal(rep.status, 200);
       await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "cook" } });
-      await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "ready" } });
+      await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "ready", confirm: true } });
 
       const h = await call("GET", `/web/history?after=${last}`, { token });
       const owner = h.json.messages.filter((m: any) => m.who === "owner").map((m: any) => m.text);
@@ -273,14 +702,14 @@ describe("web: chat and orders", () => {
       assert.match(owner[1], /confirmed your order #1/);
       assert.match(owner[2], /ready for pickup/);
 
-      await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "done" } });
+      await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "done", confirm: true } });
       const after = (await call("GET", "/web/history", { token })).json.messages;
       const thanks = after.at(-1);
       assert.equal(thanks.who, "agent");
       assert.match(thanks.text, /Thank you for your order, Asha! Enjoy your food/);
       assert.match(thanks.text, /instagram\.com\/annapurna_hometaste/);
       // moving back and forth does not send it twice
-      await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "done" } }).catch(() => null);
+      await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "done", confirm: true } }).catch(() => null);
       const count = (await call("GET", "/web/history", { token })).json.messages.filter((m: any) => /Enjoy your food/.test(m.text)).length;
       assert.equal(count, 1);
     }));
@@ -316,8 +745,12 @@ describe("web: chat and orders", () => {
       await say(token, "yes");
       const wa = t.store.listCustomers()[0]!.waId;
       assert.ok(t.store.getMessages(wa, 50).length > 0);
+      // A chat-only alert would otherwise leave the owner with a stale Open chat card and a blank thread.
+      t.store.insertAlert({ waId: wa, cust: "Asha", note: "Custom/bulk request: old pending request", orderId: null, createdAt: Date.now() });
+      assert.ok(t.store.listAlerts(true).some((a) => a.waId === wa && a.orderId == null));
       assert.equal((await call("DELETE", "/web/me", { token })).status, 200);
       assert.equal(t.store.getMessages(wa, 50).length, 0);
+      assert.equal(t.store.listAlerts(true).some((a) => a.waId === wa && a.orderId == null), false);
       assert.equal((await call("GET", "/web/history", { token })).status, 401);
       assert.equal(t.store.listOrders().length, 1);
     }));
@@ -334,6 +767,41 @@ describe("web: abuse limits", () => {
       advance(3_600_001);
       assert.equal((await call("POST", "/web/session", { body })).status, 200);
     }, { web: { sessionsPerIpHour: 2 } }));
+
+  test("returning customer resume bypasses an exhausted new-chat IP quota", () =>
+    withRig(async ({ call }) => {
+      const existing = { name: "Returning User", contact: "returning@example.com", consent: true };
+      const created = await call("POST", "/web/session", { body: existing });
+      assert.equal(created.status, 200);
+      const token = created.json.token as string;
+
+      // The only allowed new chat from this network has now been consumed.
+      const blocked = await call("POST", "/web/session", { body: { name: "New User", contact: "new@example.com", consent: true } });
+      assert.equal(blocked.status, 429);
+
+      // Resuming the already-authenticated saved chat is not a new session and must still work.
+      const resumed = await call("POST", "/web/resume", { token, body: existing });
+      assert.equal(resumed.status, 200);
+      assert.equal((await call("GET", "/web/orders", { token })).status, 200);
+    }, { web: { sessionsPerIpHour: 1 } }));
+
+  test("wrong contact on resume does not invalidate the existing saved session", () =>
+    withRig(async ({ call }) => {
+      const existing = { name: "Returning User", contact: "returning@example.com", consent: true };
+      const created = await call("POST", "/web/session", { body: existing });
+      const token = created.json.token as string;
+
+      const wrong = await call("POST", "/web/resume", {
+        token,
+        body: { name: "Returning User", contact: "wrong@example.com", consent: true },
+      });
+      assert.equal(wrong.status, 409);
+
+      // The same token is still valid; correcting the contact resumes the original customer.
+      const corrected = await call("POST", "/web/resume", { token, body: existing });
+      assert.equal(corrected.status, 200);
+      assert.equal((await call("GET", "/web/history", { token })).status, 200);
+    }, { web: { sessionsPerIpHour: 1 } }));
 
   test("messages per minute per customer, then it frees up", () =>
     withRig(async ({ t, start, say, advance }) => {
