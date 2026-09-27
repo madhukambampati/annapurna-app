@@ -104,7 +104,7 @@
     m.classList.remove("jump"); void m.getBoundingClientRect(); m.classList.add("jump");
     setTimeout(function () { m.classList.remove("jump"); }, 900);
   }
-  var GREETS = ["Namaste! I'm Annu.", "Hungry? Let's get you some food.", "Fresh from our Kitchener kitchen.", "Tell me what you'd like. I'll do the rest."];
+  var GREETS = ["Hi! I’m Vindhu, your Annapurna ordering assistant 🍛", "Hungry? Let's get you some food.", "Fresh from our Kitchener kitchen.", "Tell me what you'd like. I'll do the rest."];
   var TAPS = ["Hehe, that tickles!", "Ready when you are!", "Pulao or kheema today?", "Psst, ask me about weekend combos."];
   function initHero() {
     var slot = $("heroMascot"), bub = $("bubble");
