@@ -16,7 +16,9 @@ jobs:
           node-version: 22
           cache: npm
       - name: Apply fixes
-        run: python .github/scripts/apply-round9-fixes.py
+        run: |
+          python .github/scripts/apply-round9-fixes.py
+          python .github/scripts/adjust-round9-tests.py
       - name: Scope and syntax checks
         run: |
           git diff --check
