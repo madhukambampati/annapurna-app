@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   test-and-deploy:
-    if: github.event.head_commit.message == 'Add one-time Vindhu production release workflow'
+    if: github.event.head_commit.message == 'Fix one-time Vindhu production release workflow'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,6 +20,10 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - name: Configure Git identity
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
       - name: Apply tested Vindhu rename
         run: git cherry-pick cf2dedcd778c9d0f779629ad5cc30bc70be4614d
       - name: Install
