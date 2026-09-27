@@ -6,7 +6,7 @@ import type { Config } from "./config.js";
 import { customTermsKey } from "./custom.js";
 import { cookSummary } from "./cook.js";
 import { RateLimiter } from "./limiter.js";
-import { dayRange, itemDays, itemLabel, total } from "./menu.js";
+import { dayRange, itemDays, itemLabel, money, total } from "./menu.js";
 import { friendlyName } from "./guards.js";
 import type { Store } from "./store.js";
 import { DAYN, dayLabel, formatWhen, nextDateForDow } from "./time.js";
@@ -142,7 +142,7 @@ function ownerApprovesCustom(text: string): boolean {
 
 /** Very short acknowledgements are ambiguous and should never become customer-visible owner messages. */
 function lowValueOwnerReply(text: string): boolean {
-  return /^(?:ok(?:ay)?|yes|no|sure|thanks|thank you|no thank you|yes please|got it|fine|alright)[\s.!?]*$/i.test(text.trim());
+  return /^(?:ok(?:ay)?|yes|no|sure|thanks|thank you|no thank you|yes please|got it|fine|alright|order\s+confirm(?:ed|ing)|confirm(?:ed|ing)\s+ord\w*)[\s.!?]*$/i.test(text.trim());
 }
 
 /** A display name is plain text. HTML-like names are rejected for customer-facing polish. */
@@ -477,7 +477,12 @@ export function createServer(d: ServerDeps): Server {
             if (quoted != null && bareOwnerPrice(text) && !draft?.custom) {
               throw new HttpError(409, "There is no active custom/bulk request for this customer. Refresh the chat before quoting a price.");
             }
-            const id = store.addMessage(waId, "owner", text, now());
+            // Bare numeric quotes are valid owner input, but do not leak a fragment such as "120$"
+            // into the customer's chat. Store a complete, customer-readable quote instead.
+            const customerText = draft?.custom && quoted != null && bareOwnerPrice(text)
+              ? `Annapurna Home Foods quoted ${money(quoted)} for this custom order.`
+              : text;
+            const id = store.addMessage(waId, "owner", customerText, now());
 
             // Custom/catering orders keep the owner's quoted total in the draft.
             // A quoted price finalizes the owner's terms; the customer's later confirmation creates the real order.
@@ -499,7 +504,7 @@ export function createServer(d: ServerDeps): Server {
             }
 
             store.closeHandoffs(waId);
-            return send(req, res, 200, { message: { id, who: "owner", text, ts: now() } });
+            return send(req, res, 200, { message: { id, who: "owner", text: customerText, ts: now() } });
           }
         }
         mt = /^\/api\/orders\/(\d+)\/status$/.exec(path);
@@ -517,7 +522,7 @@ export function createServer(d: ServerDeps): Server {
           const updated = store.setOrderStatus(o.id, to, o.status === "hold" && to === "cook");
           const s = store.getSettings();
           const note = orderNote(o, o.status, to, s, reason);
-          if (note) store.addMessage(o.waId, "owner", note, now());
+          if (note) store.addMessage(o.waId, "agent", note, now());
           // After pickup the assistant thanks the customer and asks for feedback, once per order.
           if (to === "done" && o.status !== "done") store.addMessage(o.waId, "agent", thanksNote(o, s), now());
           return send(req, res, 200, { order: updated });

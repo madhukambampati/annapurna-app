@@ -71,7 +71,8 @@ const CUSTOM_ABANDON = /(?:\bnever\s*mind\b|\bnevermind\b|\bforget\s+(?:it|that|
 /** Explicit reset of the current unplaced draft. Placed orders are never touched. */
 const DRAFT_RESET = /\b(?:forget\s+everything\s+before\s+this|start\s+over|reset\s+(?:this|the|my)?\s*order|fresh\s+order)\b/i;
 const CUSTOMER_CUSTOM_PRICE = /(?:\$\s*\d{1,5}(?:\.\d{1,2})?|\b\d{1,5}(?:\.\d{1,2})?\s*(?:\$|cad)\b)/i;
-const PLACEMENT_CLAIM = /\b(?:order\s+(?:is\s+|has\s+been\s+)?(?:confirmed|placed|booked)|(?:confirmed|placed|booked)\s+(?:the\s+|your\s+)?order|lock(?:ing|ed)?\s+(?:this|it|the order)\s+in)\b/i;
+const PLACEMENT_CLAIM = /\b(?:order\s+(?:is\s+|has\s+been\s+|was\s+)?(?:confirm(?:ed|ing)|placed|booked)|(?:confirm(?:ed|ing)|placed|booked)\s+(?:this|it|the\s+order|your\s+order)|(?:this|it|that|the\s+order|your\s+order)\s+(?:went|has\s+gone|is\s+going)\s+through|(?:went|gone|going)\s+through|successfully\s+(?:placed|confirmed|booked)|lock(?:ing|ed)?\s+(?:this|it|the order)\s+in)\b/i;
+const PLACED_ORDER_CHANGE = /\b(?:change|modify|cancel|update|edit|replace)\b/i;
 
 function customHeadcount(text: string): number | null {
   const m = CUSTOM_HEADCOUNT.exec(text);
@@ -107,6 +108,18 @@ function looksCustom(text: string, menu: MenuItem[] = []): boolean {
 /** Only the failure-prone forms bypass Claude: large explicit menu quantities and recipe modifications. */
 function deterministicCustomStart(text: string, menu: MenuItem[]): boolean {
   return CUSTOM_RECIPE_WORDS.test(text) || bulkMenuQuantity(text, menu) != null;
+}
+
+/** A clearly unrelated normal menu order can safely replace a stale custom draft. */
+function clearlyNormalMenuOrder(text: string, menu: MenuItem[]): boolean {
+  if (looksCustom(text, menu) || CUSTOM_CONFIRM.test(text)) return false;
+  const orderSignal = /^\s*\d+\b/.test(text) || /\b(?:order|want|need|would like|add|get me|give me|take)\b/i.test(text);
+  if (!orderSignal) return false;
+  const tt = tokens(text);
+  return menu.some((it) => {
+    const mt = tokens(it.name.replace(/\s+combo$/i, ""));
+    return mt.size > 0 && [...mt].every((t) => tt.has(t));
+  });
 }
 
 function deterministicCustomItems(text: string, menu: MenuItem[]): Draft["items"] {
@@ -260,9 +273,25 @@ export class Agent {
       text = remainder;
     }
 
-    // Large explicit quantities and custom-recipe requests are captured before Claude. These are the
-    // failure-prone forms from QA; ordinary catering/headcount flows keep their existing behavior.
-    if (!draft?.custom && deterministicCustomStart(text, menu)) {
+    // After a stale custom quote has been refused, a clearly unrelated normal menu order starts cleanly.
+    // This prevents old custom state from swallowing the next normal confirmation. The old custom alert
+    // is also closed so the owner cannot later quote an abandoned/stale request from an old screen.
+    const afterStaleCustomRefusal = !!draft?.custom && draft.custom.price == null &&
+      /(?:old quote|quote the current request again|final price must come from Annapurna Home Foods|still need the final price)/i.test(lastShop ?? "");
+    if (afterStaleCustomRefusal && clearlyNormalMenuOrder(text, menu)) {
+      store.clearDraft(msg.from);
+      for (const a of store.listAlerts(true)) {
+        if (a.waId === msg.from && a.orderId == null && a.note.startsWith("Custom/bulk request:")) store.markAlertDone(a.id);
+      }
+      draft = null;
+      out.issues.push("stale_custom_cleared_for_normal_order");
+    }
+
+    // Large explicit quantities and custom-recipe requests are captured before Claude. A fresh
+    // catering/headcount request immediately after an already-placed order is also forced down this
+    // path so it cannot be mistaken for a change/cancel request for that earlier order.
+    const freshCustomAfterPlaced = !draft?.custom && open.length > 0 && looksCustom(text, menu) && !PLACED_ORDER_CHANGE.test(text);
+    if (!draft?.custom && (deterministicCustomStart(text, menu) || freshCustomAfterPlaced)) {
       const parsedPickup = simpleCustomPickup(text, now, settings.tz);
       const next: Draft = {
         items: deterministicCustomItems(text, menu),
@@ -678,6 +707,11 @@ export class Agent {
     const order = store.insertOrder({
       waId, name, items: [item], pickup: draft.pickup_local, flags: [], status: "cook", notes, createdAt: now,
     });
+    // The Needs-you custom request is fulfilled by this real order. Close every still-open
+    // unlinked custom request alert for this customer so the owner desk does not retain stale work.
+    for (const a of store.listAlerts(true)) {
+      if (a.waId === waId && a.orderId == null && a.note.startsWith("Custom/bulk request:")) store.markAlertDone(a.id);
+    }
     store.clearDraft(waId);
     if (!customer.name && draft.customer_name) store.updateCustomer(waId, { name: draft.customer_name });
     store.updateCustomer(waId, { profile: `Has ordered before. Last order: ${itemLabel(item)}, pickup ${formatWhen(draft.pickup_local)}.` });
