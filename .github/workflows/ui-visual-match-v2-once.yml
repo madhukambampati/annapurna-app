@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   refresh:
-    if: ${{ github.event.head_commit.message == 'Use CSS source files for visual refresh' }}
+    if: ${{ github.event.head_commit.message == 'Normalize visual style blocks' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,6 +21,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
           pairs = [
               ('public/index.html', '.github/ui/customer-visual-v3.css', 'visualReferenceMatchV3'),
               ('public/desk.html', '.github/ui/owner-visual-v3.css', 'ownerVisualReferenceMatchV3'),
@@ -28,13 +29,16 @@ jobs:
           for target, source, marker in pairs:
               p = Path(target)
               s = p.read_text()
-              if marker in s:
-                  raise SystemExit(f'{target}: already patched')
               css = Path(source).read_text()
-              block = f'\n<style id="{marker}">\n{css}\n</style>\n'
-              if '</head>' not in s:
-                  raise SystemExit(f'{target}: missing head')
-              p.write_text(s.replace('</head>', block + '</head>', 1))
+              block = f'<style id="{marker}">\n{css}\n</style>'
+              pattern = re.compile(r'<style id="' + re.escape(marker) + r'">.*?</style>', re.S)
+              if pattern.search(s):
+                  s = pattern.sub(block, s, count=1)
+              else:
+                  if '</head>' not in s:
+                      raise SystemExit(f'{target}: missing head')
+                  s = s.replace('</head>', '\n' + block + '\n</head>', 1)
+              p.write_text(s)
           PY
       - name: Verify frontend-only scope
         run: |
@@ -43,6 +47,9 @@ jobs:
           git diff --check
           node --check public/app.js
           node --check public/desk.js
+          grep -q 'visualReferenceMatchV3' public/index.html
+          grep -q 'ownerVisualReferenceMatchV3' public/desk.html
+          ! grep -q 'dark)zZroot' public/desk.html
       - name: Full regression suite
         run: |
           npm ci
