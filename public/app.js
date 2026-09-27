@@ -739,7 +739,7 @@
     var byKind = function (k) { return (m.items || []).filter(function (x) { return x.kind === k; }); };
     var panels = [];
     var combos = byKind("combo"), plans = byKind("plan"), other = byKind("item"), extras = byKind("addon");
-    if (combos.length) panels.push(["Weekend combos", h("div", { class: "panel" },
+    if (combos.length) panels.push(["Combos", h("div", { class: "panel" },
       h("p", { class: "lead" }, "Cooked fresh for weekend pickup. Order at least " + m.noticeHrs + " hours ahead."),
       combos.map(dish))]);
     if (plans.length || other.length) panels.push(["Weekly plans", h("div", { class: "panel" },
@@ -907,7 +907,7 @@
     var bar = h("div", { class: "customer-actions", id: "customerActions", "aria-label": "Quick actions" });
     var actions = [
       ["bowl", "Order food", true, function () { fillComposer("I'd like to order "); $("text").focus(); }],
-      ["sun", "Weekend combos", false, function () { if (!busy) send("What weekend combos are running?"); }],
+      ["sun", "Combos", false, function () { if (!busy) send("What weekend combos are running?"); }],
       ["clock", "Weekly plans", false, function () { if (!busy) send("Tell me about the weekly plans"); }],
       ["bag", "My orders", false, function (e) { showOrders({ currentTarget: e.currentTarget }); }]
     ];
@@ -932,7 +932,7 @@
   $("startMenu").addEventListener("click", showMenu);
   $("homeOrder").addEventListener("click", function () { openChat(); });
   $("homeContinue").addEventListener("click", function () { openChat(); });
-  $("homeCombos").addEventListener("click", function (e) { showMenu(e, "Weekend combos"); });
+  $("homeCombos").addEventListener("click", function (e) { showMenu(e, "Combos"); });
   $("homePlans").addEventListener("click", function (e) { showMenu(e, "Weekly plans"); });
   $("homeOrders").addEventListener("click", function (e) { showOrders(e); });
   $("homeMenu").addEventListener("click", showMenu);
