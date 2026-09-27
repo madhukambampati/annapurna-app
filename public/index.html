@@ -169,11 +169,12 @@ input[type=text]:focus,textarea:focus{border-color:var(--brand);outline:0;box-sh
 .pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:12.5px;font-weight:700;background:var(--brand-soft);color:var(--brand2)}
 .pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
 .pill.off{background:var(--surface2);color:var(--muted);border:1px solid var(--line2)}
-.dprice{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex:none;text-align:right;font-family:var(--f-body)}
-.dprice .lab{font-size:13px;line-height:1.25;color:var(--muted)}
-.dprice .amt{font:700 17px/1.25 var(--f-body);font-variant-numeric:tabular-nums}
-.dprice .amt.alt{font-size:17px;color:var(--brand2)}
-.dprice .btn{margin-top:6px}
+.dprice{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex:none;min-width:154px;text-align:right;font-family:var(--f-body)}
+.dprice .price-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:14px;width:100%}
+.dprice .lab{font-size:13px;line-height:1.25;color:var(--muted);font-weight:600;white-space:nowrap}
+.dprice .amt{font:700 16px/1.25 var(--f-body);font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--ink)}
+.dprice .amt.alt{font-size:16px;color:var(--brand2)}
+.dprice .btn{margin-top:7px}
 .day{padding:11px 14px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
 .day b{display:block;font:700 16px/1.2 var(--f-display);color:var(--brand2);margin-bottom:2px}
 .day p{margin:0;color:var(--ink);font-size:14.5px}
@@ -633,8 +634,9 @@ body.customer-mode{
   .customer-mode .ord-actions{width:100%}
   .customer-mode .ord-actions .btn{flex:1}
   .customer-mode .dish{flex-direction:column}
-  .customer-mode .dprice{align-items:flex-start;text-align:left;display:grid;grid-template-columns:auto auto;gap:4px 10px}
-  .customer-mode .dprice .btn{grid-column:1/-1;width:100%;margin-top:8px}
+  .customer-mode .dprice{align-items:stretch;text-align:left;display:flex;min-width:0;width:100%;gap:5px}
+  .customer-mode .dprice .price-row{width:100%;max-width:250px}
+  .customer-mode .dprice .btn{width:100%;margin-top:8px}
 }
 @media(prefers-reduced-motion:reduce){
   .customer-mode .ord .steps4 li.current-step::after{animation:none}

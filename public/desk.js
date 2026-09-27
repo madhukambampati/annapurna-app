@@ -3,7 +3,7 @@ const $ = (id) => document.getElementById(id);
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const CHIPS = ["What's on the menu?", "2 chicken kheema fry combos, buy 1 get 1, pickup Friday 6pm", "Full meal plan for 2 people, pickup Monday 5pm", "yes", "I want to cancel my order"];
 
-let state = { orders: [], alerts: [], menu: [], settings: {}, customers: [], features: {} };
+let state = { orders: [], alerts: [], menu: [], settings: {}, customers: [], features: {}, ownerLaunchAt: 0 };
 let tab = "dashboard";
 let cook = null;
 let chat = { waId: "", messages: [], customer: null };
@@ -58,6 +58,13 @@ function when(p) {
   return dt.toLocaleDateString("en-CA", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" }) + " · " + dt.toLocaleTimeString("en-US", { timeZone: "UTC", hour: "numeric", minute: "2-digit" });
 }
 const timeOf = (ts) => new Date(ts).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+function localDateKey(ts, tz) {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: tz || "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ts));
+  } catch {
+    return new Date(ts).toISOString().slice(0, 10);
+  }
+}
 const isWeb = (id) => String(id).startsWith("web:");
 
 /* ---------- data ---------- */
@@ -124,18 +131,21 @@ function renderDashboard() {
   const ready = state.orders.filter((o) => o.status === "ready").length;
   const done = state.orders.filter((o) => o.status === "done").length;
   const active = state.orders.filter((o) => ["hold","cook","ready"].includes(o.status));
+  const launchAt = Number(state.ownerLaunchAt) || 0;
+  const tz = state.settings && state.settings.tz ? state.settings.tz : "America/Toronto";
+  const today = localDateKey(Date.now(), tz);
   const sales = state.orders
-    .filter((o) => o.status !== "cancelled")
+    .filter((o) => o.status !== "cancelled" && Number(o.createdAt || 0) >= launchAt && localDateKey(o.createdAt, tz) === today)
     .reduce((sum, o) => {
       const t = totalOf(o.items);
       return sum + (t == null ? 0 : t);
     }, 0);
 
   const kpis = h("section", { class: "owner-kpis", "aria-label": "Kitchen overview" },
-    h("div", { class: "owner-kpi", style: "--tone:#1d6b4d" }, h("small", {}, "To cook"), h("strong", {}, cooking), h("span", {}, "Confirmed orders")),
-    h("div", { class: "owner-kpi", style: "--tone:#2f8fb0" }, h("small", {}, "Ready"), h("strong", {}, ready), h("span", {}, "Waiting for pickup")),
-    h("div", { class: "owner-kpi", style: "--tone:#e7882b" }, h("small", {}, "Needs attention"), h("strong", {}, activeAlerts + held), h("span", {}, "Alerts + held orders")),
-    h("div", { class: "owner-kpi", style: "--tone:#6d5537" }, h("small", {}, "Order value"), h("strong", {}, money(sales)), h("span", {}, done + " picked up"))
+    h("div", { class: "owner-kpi kpi-cook", style: "--tone:#1d6b4d", "data-icon": "♨" }, h("small", {}, "To cook"), h("strong", {}, cooking), h("span", {}, "Confirmed orders")),
+    h("div", { class: "owner-kpi kpi-ready", style: "--tone:#2f8fb0", "data-icon": "✓" }, h("small", {}, "Ready"), h("strong", {}, ready), h("span", {}, "Waiting for pickup")),
+    h("div", { class: "owner-kpi kpi-attn", style: "--tone:#e7882b", "data-icon": "!" }, h("small", {}, "Needs attention"), h("strong", {}, activeAlerts + held), h("span", {}, "Alerts + held orders")),
+    h("div", { class: "owner-kpi kpi-sales", style: "--tone:#8b5a2b", "data-icon": "$" }, h("small", {}, "Today's sales"), h("strong", {}, money(sales)), h("span", {}, "Fresh orders today"))
   );
 
   const out = [
@@ -157,11 +167,11 @@ function renderDashboard() {
     .map(ticket)));
 
   out.push(h("h2", {}, "Quick actions"),
-    h("div", { class: "card", style: "display:flex;gap:8px;flex-wrap:wrap" },
-      h("button", { class: "pri", onclick: () => { tab = "orders"; render(); } }, "Manage orders"),
-      h("button", { onclick: () => { tab = "cook"; cook = null; render(); } }, "Open kitchen list"),
-      h("button", { onclick: () => { tab = "chats"; render(); } }, "Customer chats"),
-      h("button", { onclick: () => { tab = "menu"; render(); } }, "Update menu")));
+    h("div", { class: "card owner-quick-actions" },
+      h("button", { class: "quick quick-orders", onclick: () => { tab = "orders"; render(); } }, "Manage orders"),
+      h("button", { class: "quick quick-kitchen", onclick: () => { tab = "cook"; cook = null; render(); } }, "Open kitchen list"),
+      h("button", { class: "quick quick-chats", onclick: () => { tab = "chats"; render(); } }, "Customer chats"),
+      h("button", { class: "quick quick-menu", onclick: () => { tab = "menu"; render(); } }, "Update menu")));
   return out;
 }
 
