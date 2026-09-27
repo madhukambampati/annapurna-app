@@ -25,7 +25,9 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
       - name: Apply combo availability change
-        run: python3 .github/combo-anyday-owner-confirm-v2.py
+        run: |
+          python3 .github/combo-anyday-owner-confirm-v2.py || true
+          python3 .github/combo-anyday-owner-confirm-tail.py
       - name: Install
         run: npm ci
       - name: Browser syntax
@@ -41,6 +43,7 @@ jobs:
           grep -Fq 'Reply YES to send this availability request' src/agent.ts
           grep -Fq 'Availability check needed for' src/guards.ts
           grep -Fq '["Combos", h("div"' public/app.js
+          grep -Fq 'A customer may request a combo for any pickup day' src/prompt.ts
           if grep -Fqi 'Weekend combos' public/app.js public/index.html; then
             echo 'Old weekend-only customer UI wording still present' >&2
             exit 1
