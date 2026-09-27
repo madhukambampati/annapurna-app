@@ -1,1 +1,0 @@
-Apply the targeted custom-state, confirmation-safety, alert-cleanup and chat-bubble fixes once, then run the full regression suite. Retry 2.
