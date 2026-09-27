@@ -90,7 +90,7 @@
   }
 
 
-  /* ---------- Vindhu, the tiffin mascot ---------- */
+  /* ---------- Annu, the tiffin mascot ---------- */
   var REDUCED = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   function mascot(cls) {
     var tpl = $("tplMascot");
@@ -104,7 +104,7 @@
     m.classList.remove("jump"); void m.getBoundingClientRect(); m.classList.add("jump");
     setTimeout(function () { m.classList.remove("jump"); }, 900);
   }
-  var GREETS = ["Hi! I’m Vindhu, your Annapurna ordering assistant 🍛", "Hungry? Let's get you some food.", "Fresh from our Kitchener kitchen.", "Tell me what you'd like. I'll do the rest."];
+  var GREETS = ["Namaste! I'm Annu.", "Hungry? Let's get you some food.", "Fresh from our Kitchener kitchen.", "Tell me what you'd like. I'll do the rest."];
   var TAPS = ["Hehe, that tickles!", "Ready when you are!", "Pulao or kheema today?", "Psst, ask me about weekend combos."];
   function initHero() {
     var slot = $("heroMascot"), bub = $("bubble");
@@ -250,7 +250,7 @@
       h("time", {}, m.ts ? clock(m.ts) : ""));
   }
 
-  /* The thank-you after pickup: Vindhu waves, a few hearts float up. */
+  /* The thank-you after pickup: Annu waves, a few hearts float up. */
   function thanksCard(m) {
     if (m.who !== "agent" || !/^Thank you for your order/.test(m.text)) return null;
     var hearts = h("div", { class: "hearts", "aria-hidden": "true" });
