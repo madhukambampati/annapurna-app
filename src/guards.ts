@@ -213,7 +213,10 @@ export function checkFlags(items: OrderItem[], pickupLocal: string | null, s: Se
   if (mins < s.noticeHrs * 60) f.push(mins < 0 ? "Pickup in the past" : `Under ${s.noticeHrs}h notice`);
   const dow = dowOfLocal(pickupLocal);
   const bad = items.filter((it) => !itemDays(findItem(menu, it.id), s).includes(dow));
-  if (bad.length) f.push(`${DAYN[dow]} is not a pickup day for ${bad.map((b) => b.name).join(", ")}`);
+  const comboChecks = bad.filter((it) => findItem(menu, it.id)?.kind === "combo");
+  const hardBad = bad.filter((it) => findItem(menu, it.id)?.kind !== "combo");
+  if (comboChecks.length) f.push(`Availability check needed for ${DAYN[dow]} pickup: ${comboChecks.map((b) => b.name).join(", ")}`);
+  if (hardBad.length) f.push(`${DAYN[dow]} is not a pickup day for ${hardBad.map((b) => b.name).join(", ")}`);
   else if (!items.length && !s.days.includes(dow)) f.push(`${DAYN[dow]} is not a pickup day`);
   if (items.some((it) => it.amt == null)) f.push("Price not set");
   if (extrasOnly(items, menu) && !mainOrderFor(pickupLocal, open)) f.push("Extras need a main dish picked up the same day");

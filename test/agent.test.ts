@@ -182,12 +182,14 @@ test("short notice puts the order on hold, and the read-back says so before the 
   assert.deepEqual([o.status, o.flags], ["hold", ["Under 2h notice"]]);
 });
 
-test("a non-pickup day puts the order on hold", async () => {
+test("an off-schedule combo day becomes an owner availability check", async () => {
   const t = setup({ judge: yesJudge });
-  await orderAndReadBack(t, [KHEEMA_BOGO], "2026-09-28T12:00", "2 kheema fry combos monday at noon"); // Monday, not a combo day
+  const r = await orderAndReadBack(t, [KHEEMA_BOGO], "2026-09-28T12:00", "2 kheema fry combos monday at noon");
+  assert.match(r.replies[0]!, /check availability for your requested pickup day/);
+  assert.match(r.replies[0]!, /Reply YES to send this availability request/);
   await t.say("yes");
   const o = t.store.listOrders()[0]!;
-  assert.deepEqual([o.status, o.flags], ["hold", ["Monday is not a pickup day for Chicken Kheema Fry combo"]]);
+  assert.deepEqual([o.status, o.flags], ["hold", ["Availability check needed for Monday pickup: Chicken Kheema Fry combo"]]);
 });
 
 test("weekend combos can be picked up on Saturday and Sunday, no hold", async () => {
@@ -197,8 +199,9 @@ test("weekend combos can be picked up on Saturday and Sunday, no hold", async ()
   await t.say("yes");
   const o = t.store.listOrders()[0]!;
   assert.deepEqual([o.status, o.flags], ["cook", []]);
-  assert.match(t.llm.prompts[0]!, /never say it is impossible/);
-  assert.match(t.llm.prompts[0]!, /"pickup_days":\["Friday","Saturday","Sunday"\]/);
+  assert.match(t.llm.prompts[0]!, /combo customers may request any day/);
+  assert.match(t.llm.prompts[0]!, /"pickup_days":"customer may request any day; Annapurna confirms availability when needed"/);
+  assert.match(t.llm.prompts[0]!, /"usual_pickup_days":\["Friday","Saturday","Sunday"\]/);
 });
 
 test("cancel of a placed order: alert with the order id, the order stays, nothing is claimed as cancelled, no model call", async () => {
