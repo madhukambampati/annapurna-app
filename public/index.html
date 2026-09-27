@@ -1099,10 +1099,7 @@ body{background:#e8f0e1;color:var(--ink)}
 .customer-mode .seal{width:42px;height:42px;border-radius:13px;box-shadow:0 6px 16px rgba(16,79,50,.12)}
 .customer-mode .brand h1{font-size:21px;color:#123521}.customer-mode .brand small{color:#718078}
 .customer-home{background:linear-gradient(180deg,#f9f4e9,#f3f7ee);padding-top:14px}
-.home-hero{min-height:320px;border-radius:28px;padding:30px;background:
- radial-gradient(290px 240px at 82% 28%,rgba(255,173,68,.38),transparent 68%),
- radial-gradient(210px 170px at 10% 100%,rgba(255,255,255,.17),transparent 72%),
- linear-gradient(145deg,#073b27,#0d6b44 55%,#0b5a39);box-shadow:0 22px 44px rgba(7,75,45,.22)}
+.home-hero{min-height:320px;border-radius:28px;padding:30px;background:radial-gradient(290px 240px at 82% 28%,rgba(255,173,68,.38),transparent 68%),radial-gradient(210px 170px at 10% 100%,rgba(255,255,255,.17),transparent 72%),linear-gradient(145deg,#073b27,#0d6b44 55%,#0b5a39);box-shadow:0 22px 44px rgba(7,75,45,.22)}
 .home-copy h2{font-size:clamp(31px,6vw,46px);line-height:1.03}.home-copy>p{font-size:14px;color:#e4f3e9}
 .home-eyebrow{background:#ffffff18;border-color:#ffffff30}
 .home-primary{background:#ff9c2f;color:#342000;border-radius:17px;box-shadow:0 10px 22px rgba(0,0,0,.16)}
@@ -1130,19 +1127,20 @@ body{background:#e8f0e1;color:var(--ink)}
 .customer-mode .ord .steps4 li.current-step::after{display:none}
 .customer-mode .ord-meta>div{background:#fbf8f1}
 @media(max-width:699px){
- .customer-mode .app{max-width:none;border:0}
- .customer-mode .top{padding:calc(8px + env(safe-area-inset-top)) 12px 8px}
- .customer-mode .brand h1{font-size:18px}.customer-mode .brand small{font-size:11px}
- .customer-mode .tabs{position:fixed;z-index:40;left:50%;bottom:0;transform:translateX(-50%);width:min(100%,600px);display:grid;grid-template-columns:repeat(4,1fr);gap:0;padding:7px 8px calc(7px + env(safe-area-inset-bottom));background:#fffdf8fa;border-top:1px solid #e6dece;box-shadow:0 -10px 30px rgba(31,57,41,.10);backdrop-filter:blur(18px)}
- .customer-mode .tab{min-width:0;border-radius:13px;padding:7px 3px;color:#718078}
- .customer-mode .tab[aria-current=true]{background:#e4f3e8;color:#0c7d4e}.customer-mode .tab[aria-current=true]::after{display:none}
- .customer-home,.customer-mode .onboard,.customer-mode .chat{padding-bottom:calc(82px + env(safe-area-inset-bottom))}
- .customer-mode .composer{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
- .home-hero{grid-template-columns:1fr;min-height:0;padding:23px 20px 12px;border-radius:24px}
- .home-copy h2{font-size:35px} .home-annuwrap{min-height:180px;margin-top:-8px}.home-annuwrap .mascot{width:142px}
- .home-grid{grid-template-columns:repeat(2,1fr)}.home-tile{grid-template-columns:42px 1fr;min-height:104px;padding:13px}.home-tile>.home-arrow{display:none}
- .customer-mode .dish{padding-left:82px}.customer-mode .dish::before{width:56px;height:56px;font-size:29px}
+  .customer-mode .app{max-width:none;border:0}
+  .customer-mode .top{padding:calc(8px + env(safe-area-inset-top)) 12px 8px}
+  .customer-mode .brand h1{font-size:18px}.customer-mode .brand small{font-size:11px}
+  .customer-mode .tabs{position:fixed;z-index:40;left:50%;bottom:0;transform:translateX(-50%);width:min(100%,600px);display:grid;grid-template-columns:repeat(4,1fr);gap:0;padding:7px 8px calc(7px + env(safe-area-inset-bottom));background:#fffdf8fa;border-top:1px solid #e6dece;box-shadow:0 -10px 30px rgba(31,57,41,.10);backdrop-filter:blur(18px)}
+  .customer-mode .tab{min-width:0;border-radius:13px;padding:7px 3px;color:#718078}
+  .customer-mode .tab[aria-current=true]{background:#e4f3e8;color:#0c7d4e}.customer-mode .tab[aria-current=true]::after{display:none}
+  .customer-home,.customer-mode .onboard,.customer-mode .chat{padding-bottom:calc(82px + env(safe-area-inset-bottom))}
+  .customer-mode .composer{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+  .home-hero{grid-template-columns:1fr;min-height:0;padding:23px 20px 12px;border-radius:24px}
+  .home-copy h2{font-size:35px}.home-annuwrap{min-height:180px;margin-top:-8px}.home-annuwrap .mascot{width:142px}
+  .home-grid{grid-template-columns:repeat(2,1fr)}.home-tile{grid-template-columns:42px 1fr;min-height:104px;padding:13px}.home-tile>.home-arrow{display:none}
+  .customer-mode .dish{padding-left:82px}.customer-mode .dish::before{width:56px;height:56px;font-size:29px}
 }
+
 </style>
 
 </head>
