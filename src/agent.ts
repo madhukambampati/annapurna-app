@@ -617,8 +617,10 @@ export class Agent {
       `Pickup: ${formatWhen(d.pickup_local)} at ${s.address}`,
     ];
     if (d.notes) out.push(`Note: ${d.notes}`);
-    if (flags.length) out.push(`Annapurna Home Foods needs to confirm this order first (${flags.join("; ").toLowerCase()}).`);
-    out.push("Reply YES to confirm, or tell me what to change.");
+    const availabilityCheck = flags.some((x) => x.startsWith("Availability check needed"));
+    if (availabilityCheck) out.push("Annapurna Home Foods needs to check availability for your requested pickup day before we can accept this request.");
+    if (flags.length && !availabilityCheck) out.push(`Annapurna Home Foods needs to confirm this order first (${flags.join("; ").toLowerCase()}).`);
+    out.push(availabilityCheck ? "Reply YES to send this availability request, or tell me what to change." : "Reply YES to confirm, or tell me what to change.");
     return out.join("\n");
   }
 

@@ -272,9 +272,9 @@ export function createServer(d: ServerDeps): Server {
           const items = store.getMenu().map((x, i) => {
             const live = x.kind === "combo" ? x.live : true;
             const days = itemDays(x, s);
-            // One availability status per dish. A single-day offer also shows its next date.
-            let label = days.length === 1 ? dayRange(days) : `Pickup ${dayRange(days)}`;
-            if (days.length === 1) label += ` · ${dayLabel(nextDateForDow(now(), s.tz, days[0]!)).replace(/^\w+, /, "")}`;
+            // Combo customers may ask for any day; the shop confirms off-schedule availability in chat.
+            let label = x.kind === "combo" ? "Ask us for your preferred pickup day" : days.length === 1 ? dayRange(days) : `Pickup ${dayRange(days)}`;
+            if (x.kind !== "combo" && days.length === 1) label += ` · ${dayLabel(nextDateForDow(now(), s.tz, days[0]!)).replace(/^\w+, /, "")}`;
             if (!live) label = "Not running right now";
             if (x.kind === "addon") label = "Add to any order";
             return {
