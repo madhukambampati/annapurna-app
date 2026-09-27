@@ -1,0 +1,48 @@
+name: Remove resume contact block once
+
+on:
+  push:
+    branches:
+      - remove-resume-contact-block-v1
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: remove-resume-contact-block-v1
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Configure Git
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Apply safe UX change
+        run: python3 .github/remove-resume-contact-block.py
+      - name: Install
+        run: npm ci
+      - name: Browser syntax
+        run: node --check public/app.js
+      - name: Full regression suite
+        run: npm test
+      - name: Validate patch
+        run: |
+          git diff --check
+          grep -Fq 'return fresh();' public/app.js
+          if grep -Fq 'This device has a saved chat for a different contact' public/app.js; then
+            echo 'Old blocking message still present' >&2
+            exit 1
+          fi
+          git diff --name-only
+      - name: Commit change
+        run: |
+          git add public/app.js
+          git commit -m 'Start fresh chat when saved contact differs'
+          git push origin HEAD:remove-resume-contact-block-v1
