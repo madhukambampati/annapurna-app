@@ -352,12 +352,12 @@ function renderChats() {
       currentOrder ? h("span", { class: "chat-order-tag status-" + currentOrder.status }, "#" + currentOrder.id + " · " + currentOrder.label) : null);
 
     const messages = h("div", { class: "msgs", id: "thread", role: "log", "aria-live": "polite" },
-      chat.messages.map((m) => {
+      chat.messages.length ? chat.messages.map((m) => {
         const who = m.who === "cust" ? "Customer" : m.who === "owner" ? "You" : "Annu";
         return h("div", { class: "b " + m.who },
           h("small", {}, who + " · " + timeOf(m.ts)),
           h("span", { class: "chat-message-text" }, m.text));
-      }));
+      }) : h("div", { class: "empty" }, "No chat messages are available. The customer may have deleted this chat or started a new session."));
 
     right = h("div", { class: "card thread" },
       head,

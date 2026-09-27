@@ -319,6 +319,70 @@ describe("web: chat and orders", () => {
       assert.equal((await call("GET", "/web/orders", { token })).json.orders.length, 0);
     }));
 
+  test("Round 8: abandon plus a replacement order in the same message becomes a normal $17 order", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Robin Shaw", "robin.shaw@example.com");
+      await say(token, "25 Chicken Kheema Fry combos, spicy, pickup this Saturday 4pm");
+      const waId = t.store.listCustomers()[0]!.waId;
+      assert.ok(t.store.getDraft(waId)?.custom);
+
+      t.llm.push(modelReply({
+        reply: "Sure.",
+        items: [{ id: "fry_piece_pulao", qty: 1, pack: "single", asked_for: "Gongura Fry Piece Pulao combo" }],
+        pickup: "2026-09-27T13:00",
+        notes: "Medium spice, no extras",
+        stage: "awaiting_confirmation",
+      }));
+      const switched = await say(token, "Never mind the bulk one. Just 1 Gongura Fry Piece Pulao combo, medium, pickup Sunday 1pm, no extras");
+      const switchedText = switched.json.messages.map((m: any) => m.text).join("\n");
+      assert.match(switchedText, /cleared that pending custom\/bulk request/i);
+      assert.match(switchedText, /1 x Gongura Fry Piece Pulao combo: \$17/);
+      assert.doesNotMatch(switchedText, /price to be confirmed|custom catering|\$200/i);
+      assert.equal(t.store.getDraft(waId)?.custom, undefined);
+      assert.equal(t.store.listAlerts(true).filter((a) => a.waId === waId && a.note.startsWith("Custom/bulk request:")).length, 0);
+
+      // A stale owner tab cannot inject an old bare bulk quote after the reset.
+      const staleQuote = await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text: "200$" } });
+      assert.equal(staleQuote.status, 409);
+      assert.equal(t.store.getMessages(waId, 100).some((m) => m.who === "owner" && m.text === "200$"), false);
+
+      const placed = await say(token, "Yes, please confirm the $17 Gongura Fry Piece Pulao combo");
+      assert.equal(placed.json.orderId, 1);
+      const orders = (await call("GET", "/web/orders", { token })).json.orders;
+      assert.equal(orders.length, 1);
+      assert.equal(orders[0].total, 17);
+      assert.deepEqual(orders[0].items, ["1 x Gongura Fry Piece Pulao combo"]);
+      assert.equal(t.store.listAlerts(true).some((a) => /Custom\/bulk request/.test(a.note)), false);
+    }));
+
+  test("Round 8: $17 before a menu name is a price, never bulk quantity 17", () =>
+    withRig(async ({ t, start, say, call }) => {
+      const token = await start("Price Words", "price@example.com");
+      t.llm.push(modelReply({
+        items: [{ id: "fry_piece_pulao", qty: 1, pack: "single", asked_for: "Gongura Fry Piece Pulao combo" }],
+        pickup: "2026-09-27T13:00",
+        stage: "awaiting_confirmation",
+      }));
+      const r = await say(token, "Please order the $17 Gongura Fry Piece Pulao combo for Sunday 1pm");
+      const waId = t.store.listCustomers()[0]!.waId;
+      assert.equal(t.store.getDraft(waId)?.custom, undefined);
+      assert.match(r.json.messages.map((m: any) => m.text).join("\n"), /1 x Gongura Fry Piece Pulao combo: \$17/);
+      assert.equal(t.store.listAlerts(true).some((a) => /Custom\/bulk request/.test(a.note)), false);
+      const placed = await say(token, "YES");
+      assert.equal(placed.json.orderId, 1);
+      assert.equal((await call("GET", "/web/orders", { token })).json.orders[0].total, 17);
+    }));
+
+  test("Round 8: explicit Oct 3 custom pickup is not collapsed to the nearest Saturday", () =>
+    withRig(async ({ t, start, say }) => {
+      const token = await start("Calendar Safety", "calendar@example.com");
+      await say(token, "25 Chicken Kheema Fry combos");
+      const r = await say(token, "pickup Saturday Oct 3 2pm");
+      const waId = t.store.listCustomers()[0]!.waId;
+      assert.equal(t.store.getDraft(waId)!.pickup_local, "2026-10-03T14:00");
+      assert.ok(r.json.messages.some((m: any) => /Sat, Oct 3.*2:00 PM/i.test(m.text)));
+    }));
+
   test("Round 5: custom recipe bypasses model; Sunday noon parses; customer price is ignored", () =>
     withRig(async ({ t, start, say, call }) => {
       const token = await start("Custom Buyer", "5195550131");
@@ -596,8 +660,8 @@ describe("web: chat and orders", () => {
       assert.ok(t.store.listAlerts(true).length >= 1);
     }));
 
-  test("terse owner filler replies are rejected and never reach customer history", () =>
-    withRig(async ({ t, start, call }) => {
+  test("terse owner filler replies are rejected and bare prices require an active custom request", () =>
+    withRig(async ({ t, start, say, call }) => {
       const token = await start("Asha");
       const waId = t.store.listCustomers()[0]!.waId;
       const reply = (text: string) => call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, { token: "secret", body: { text } });
@@ -606,7 +670,9 @@ describe("web: chat and orders", () => {
         const r = await reply(filler);
         assert.equal(r.status, 400, filler);
       }
-      assert.equal((await reply("$120")).status, 200, "a short quoted price is meaningful and remains allowed");
+      assert.equal((await reply("$120")).status, 409, "a stale bare price cannot leak into an ordinary chat");
+      await say(token, "25 Chicken Kheema Fry combos");
+      assert.equal((await reply("$120")).status, 200, "a bare quoted price is allowed for an active custom request");
       assert.equal((await reply("Yes, we can prepare that for tomorrow.")).status, 200);
 
       const history = (await call("GET", "/web/history", { token })).json.messages.filter((m: any) => m.who === "owner");
@@ -679,8 +745,12 @@ describe("web: chat and orders", () => {
       await say(token, "yes");
       const wa = t.store.listCustomers()[0]!.waId;
       assert.ok(t.store.getMessages(wa, 50).length > 0);
+      // A chat-only alert would otherwise leave the owner with a stale Open chat card and a blank thread.
+      t.store.insertAlert({ waId: wa, cust: "Asha", note: "Custom/bulk request: old pending request", orderId: null, createdAt: Date.now() });
+      assert.ok(t.store.listAlerts(true).some((a) => a.waId === wa && a.orderId == null));
       assert.equal((await call("DELETE", "/web/me", { token })).status, 200);
       assert.equal(t.store.getMessages(wa, 50).length, 0);
+      assert.equal(t.store.listAlerts(true).some((a) => a.waId === wa && a.orderId == null), false);
       assert.equal((await call("GET", "/web/history", { token })).status, 401);
       assert.equal(t.store.listOrders().length, 1);
     }));

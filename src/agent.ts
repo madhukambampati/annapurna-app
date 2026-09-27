@@ -68,6 +68,8 @@ const CUSTOM_HEADCOUNT = /\b(\d{1,3})\s*(?:people|persons|pax|members|guests)\b/
 const CUSTOM_CONFIRM = /(?:^yes\b|^go\s+ahead\b|\bconfirm(?:ing|ed)?\s+(?:(?:the|my)\s+)?order\b|\bplace\s+(?:(?:the|my)\s+)?order\b)/i;
 /** Explicitly abandoning an unplaced custom/bulk request must destroy every bit of its draft state. */
 const CUSTOM_ABANDON = /(?:\bnever\s*mind\b|\bnevermind\b|\bforget\s+(?:it|that|the\s+(?:bulk|custom|catering|tray)(?:\s+(?:one|order|request))?)\b|\b(?:cancel|drop|skip)\s+(?:the\s+)?(?:bulk|custom|catering|tray)(?:\s+(?:one|order|request))?\b|\b(?:don\'?t|do not|no longer)\s+want\s+(?:the\s+)?(?:bulk|custom|catering|tray)\b)/i;
+/** Explicit reset of the current unplaced draft. Placed orders are never touched. */
+const DRAFT_RESET = /\b(?:forget\s+everything\s+before\s+this|start\s+over|reset\s+(?:this|the|my)?\s*order|fresh\s+order)\b/i;
 const CUSTOMER_CUSTOM_PRICE = /(?:\$\s*\d{1,5}(?:\.\d{1,2})?|\b\d{1,5}(?:\.\d{1,2})?\s*(?:\$|cad)\b)/i;
 const PLACEMENT_CLAIM = /\b(?:order\s+(?:is\s+|has\s+been\s+)?(?:confirmed|placed|booked)|(?:confirmed|placed|booked)\s+(?:the\s+|your\s+)?order|lock(?:ing|ed)?\s+(?:this|it|the order)\s+in)\b/i;
 
@@ -85,7 +87,9 @@ function bulkMenuQuantity(text: string, menu: MenuItem[]): number | null {
   for (const it of menu) {
     const base = it.name.replace(/\s+combo$/i, "").trim();
     const words = base.split(/\s+/).map(reEscape).join("\\s+");
-    const m = new RegExp(`\\b(\\d{1,3})\\s+(?:x\\s+)?${words}\\b`, "i").exec(text);
+    // Do not read a menu price such as "$17 Gongura ..." as quantity 17.
+    // A bulk quantity must start the string or be preceded by a non-word, non-currency character.
+    const m = new RegExp(`(?:^|[^\\w$])(\\d{1,3})\\s+(?:x\\s+)?${words}\\b`, "i").exec(text);
     if (!m) continue;
     const n = Number(m[1]);
     if (n >= 8 && n < 500) return n;
@@ -116,6 +120,16 @@ function deterministicCustomItems(text: string, menu: MenuItem[]): Draft["items"
   return m ? [{ id: m.id, name: m.name, qty, pack: "single", amt: null }] : [];
 }
 
+/** If a reset message also contains a replacement order, return only that fresh-order part. */
+function resetRemainder(text: string): string {
+  const fresh = /\bfresh\s+order\s*:\s*(.+)$/i.exec(text);
+  if (fresh?.[1]?.trim()) return fresh[1].trim();
+  const swap = /\b(?:instead|just)\b[\s,:-]*(.+)$/i.exec(text);
+  if (swap?.[1]?.trim()) return swap[1].trim();
+  const sentence = /^[^.!?]*[.!?]+\s*(.+)$/.exec(text);
+  return sentence?.[1]?.trim() ?? "";
+}
+
 function parseClock(text: string): { h: number; mi: number } | null {
   const special = /\b(noon|midnight)\b/i.exec(text);
   if (special) return { h: special[1]!.toLowerCase() === "noon" ? 12 : 0, mi: 0 };
@@ -135,6 +149,21 @@ function simpleCustomPickup(text: string, now: number, tz: string): string | nul
   const clock = parseClock(text);
   if (!clock) return null;
   const p = zonedParts(now, tz);
+  // An explicit calendar date wins over a weekday. This prevents "Saturday Oct 3" from
+  // being collapsed to the nearest Saturday (for example Sep 26).
+  const md = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|sept|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\b/i.exec(text);
+  if (md) {
+    const months: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 };
+    const key = md[1]!.toLowerCase().slice(0, md[1]!.toLowerCase().startsWith("sept") ? 4 : 3);
+    const mo = months[key]!;
+    const day = Number(md[2]);
+    let y = md[3] ? Number(md[3]) : p.y;
+    if (!md[3] && (mo < p.m || (mo === p.m && day < p.d))) y += 1;
+    const check = new Date(Date.UTC(y, mo - 1, day));
+    if (check.getUTCFullYear() === y && check.getUTCMonth() === mo - 1 && check.getUTCDate() === day) {
+      return `${y}-${pad(mo)}-${pad(day)}T${pad(clock.h)}:${pad(clock.mi)}`;
+    }
+  }
   const rel = /\b(today|tomorrow)\b/i.exec(text);
   let d: Date;
   if (rel) {
@@ -182,7 +211,7 @@ export class Agent {
   private async process(msg: Inbound): Promise<Outcome> {
     const { store, cfg } = this.d;
     const out: Outcome = { replies: [], route: "", alertIds: [], issues: [] };
-    const text = msg.text.trim().slice(0, MAX_TEXT);
+    let text = msg.text.trim().slice(0, MAX_TEXT);
     if (!text) return { ...out, route: "empty" };
     if (msg.messageId && !store.markSeen(msg.messageId, this.now())) return { ...out, route: "duplicate" };
 
@@ -201,25 +230,34 @@ export class Agent {
     // Do not infer custom/catering state from older chat history: customers often place a normal
     // menu order after a catering order in the same conversation.
 
-    // A pending custom request is not a placed order. If the customer abandons it, clear the
-    // entire draft immediately so its item, quantity and owner quote cannot contaminate a later order.
-    if (draft?.custom && CUSTOM_ABANDON.test(text)) {
-      const hadQuote = draft.custom.price != null;
+    // A pending draft can be reset without deleting the whole chat. If the same message also
+    // contains a replacement order, continue processing only that fresh-order part in this turn.
+    const abandoningCustom = !!draft?.custom && CUSTOM_ABANDON.test(text);
+    const resettingDraft = !!draft && DRAFT_RESET.test(text);
+    if (abandoningCustom || resettingDraft) {
+      const wasCustom = !!draft?.custom;
+      const hadQuote = draft?.custom?.price != null;
+      const remainder = resetRemainder(text);
       store.clearDraft(msg.from);
-      for (const a of store.listAlerts(true)) {
-        if (a.waId === msg.from && a.orderId == null && a.note.startsWith("Custom/bulk request:")) store.markAlertDone(a.id);
+      if (wasCustom) {
+        for (const a of store.listAlerts(true)) {
+          if (a.waId === msg.from && a.orderId == null && a.note.startsWith("Custom/bulk request:")) store.markAlertDone(a.id);
+        }
+        await this.d.notifier.notify(
+          "Custom/bulk request withdrawn",
+          `${customer.name || msg.name || "Customer"} withdrew the pending custom/bulk request. Do not prepare or price that request.`,
+        );
       }
-      out.route = "custom_abandoned";
-      out.replies.push(
-        `No problem — I cleared that pending custom/bulk request${hadQuote ? " and its old quoted price" : ""}. ` +
-        `Nothing from it will carry into your next order. Any already-confirmed orders are unchanged.`
-      );
-      await this.d.notifier.notify(
-        "Custom/bulk request withdrawn",
-        `${customer.name || msg.name || "Customer"} withdrew the pending custom/bulk request. Do not prepare or price that request.`,
-      );
-      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
-      return out;
+      out.replies.push(wasCustom
+        ? `No problem — I cleared that pending custom/bulk request${hadQuote ? " and its old quoted price" : ""}. Nothing from it will carry into your next order. Any already-confirmed orders are unchanged.`
+        : "No problem — I cleared the current unplaced order. Any already-confirmed orders are unchanged.");
+      draft = null;
+      if (!remainder) {
+        out.route = wasCustom ? "custom_abandoned" : "draft_reset";
+        for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+        return out;
+      }
+      text = remainder;
     }
 
     // Large explicit quantities and custom-recipe requests are captured before Claude. These are the
@@ -393,9 +431,14 @@ export class Agent {
     const frozen = r.kind === "clarify" || (r.kind === "normal" && r.freeze === true);
     const hint = r.kind === "clarify" ? r.hint : frozen ? "The customer is only asking a question or chatting. Answer it. Do not start or change the order, and keep stage as it is." : r.kind === "owner_topic" ? "This is a topic only Maddy can settle (payment, delivery, refund, allergy, custom or complaint). Do not answer it yourself. Say warmly that Annapurna Home Foods will reach out to them here in this chat. Never name Maddy to the customer." : undefined;
 
+    const promptHistory = store.getMessages(msg.from, 40);
+    // When a reset message contains a replacement order, the stored transcript keeps the customer's
+    // full wording for audit, but Claude sees only the fresh-order remainder as the newest turn.
+    const newest = promptHistory.at(-1);
+    if (newest?.who === "cust" && newest.text !== text) promptHistory[promptHistory.length - 1] = { ...newest, text };
     const prompt = buildPrompt({
       now, settings, menu, customer: { waId: msg.from, name: customer.name, contact: "", profile: customer.profile, uncertainStreak: streak },
-      draft, history: store.getMessages(msg.from, 40), hint: [pickHint, hint].filter(Boolean).join(" ") || undefined,
+      draft, history: promptHistory, hint: [pickHint, hint].filter(Boolean).join(" ") || undefined,
       placed: open.map((o) => `#${o.id} (${o.status}) ${o.items.map(itemLabel).join(", ")}, pickup ${formatWhen(o.pickup)}`),
     });
 

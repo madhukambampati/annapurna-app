@@ -131,6 +131,10 @@ function ownerQuotedPrice(text: string): number | null {
   return Number.isFinite(n) && n > 0 && n < 100_000 ? Math.round(n * 100) / 100 : null;
 }
 
+function bareOwnerPrice(text: string): boolean {
+  return /^(?:\$\s*\d{1,5}(?:\.\d{1,2})?|\d{1,5}(?:\.\d{1,2})?\s*(?:\$|cad))$/i.test(text.trim());
+}
+
 /** Owner wording that explicitly approves a custom order, not merely quotes a price. */
 function ownerApprovesCustom(text: string): boolean {
   return /\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\b.*\border\b|\border\b.*\b(?:confirm(?:ed|ing)?|approv(?:e|ed|ing)|book(?:ed|ing)?)\b|\b(?:sure\s+)?we\s+can\s+(?:make|prepare|do)\b|\bwe(?:'|’)ll\s+(?:make|prepare)\b|\bwill\s+(?:make|prepare)\s+(?:the\s+)?order\b/i.test(text);
@@ -458,17 +462,22 @@ export function createServer(d: ServerDeps): Server {
           if (m === "POST" && mt[2] === "reply") {
             const text = cleanText((await readJson(req)).text, MAX_TEXT);
             if (!text) throw new HttpError(400, "Reply is empty");
-            if (lowValueOwnerReply(text) && ownerQuotedPrice(text) == null) {
+            const draft = store.getDraft(waId);
+            const quoted = ownerQuotedPrice(text);
+            const approved = ownerApprovesCustom(text);
+            if (lowValueOwnerReply(text) && quoted == null) {
               throw new HttpError(400, "Please send a more complete reply so the customer has enough context.");
+            }
+            // A stale owner screen must not leak a bare price from an abandoned custom request into
+            // the customer's chat. Bare quotes are meaningful only while a custom draft is active.
+            if (quoted != null && bareOwnerPrice(text) && !draft?.custom) {
+              throw new HttpError(409, "There is no active custom/bulk request for this customer. Refresh the chat before quoting a price.");
             }
             const id = store.addMessage(waId, "owner", text, now());
 
             // Custom/catering orders keep the owner's quoted total in the draft.
             // A quoted price finalizes the owner's terms; the customer's later confirmation creates the real order.
-            const draft = store.getDraft(waId);
             if (draft?.custom) {
-              const quoted = ownerQuotedPrice(text);
-              const approved = ownerApprovesCustom(text);
               if (quoted != null || approved) {
                 const next = {
                   ...draft,
