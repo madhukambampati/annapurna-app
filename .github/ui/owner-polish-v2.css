@@ -1,0 +1,83 @@
+/* Owner/Admin presentation polish only. No API, order, status, menu, chat, session or database behavior changes. */
+body.owner-mode{
+  --owner-green:#123f2e;--owner-green-2:#1d6b4d;--owner-blue:#2f8fb0;--owner-orange:#e7882b;--owner-red:#c94f45;--owner-gold:#d99a29;
+  --owner-shadow-soft:0 8px 24px rgba(20,48,34,.07);--owner-shadow-float:0 18px 46px rgba(11,31,22,.16);
+  scroll-padding-bottom:150px;
+}
+body.owner-mode .owner-head{margin:0 0 16px;padding:14px 16px;border-radius:18px;background:radial-gradient(260px 120px at 92% -15%,rgba(228,161,27,.24),transparent 72%),linear-gradient(135deg,#0f3a2a 0%,#176247 62%,#1d6b4d 100%);box-shadow:0 14px 36px rgba(12,53,36,.18)}
+body.owner-mode .owner-brand{gap:11px}
+body.owner-mode .owner-brand img{width:44px;height:44px;border-radius:13px}
+body.owner-mode .owner-brand h1{font-size:23px;letter-spacing:-.01em}
+body.owner-mode .owner-brand .sub{font-size:12.5px;color:rgba(255,255,255,.80)}
+body.owner-mode .owner-pill{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.18)}
+body.owner-mode h2{margin:20px 0 6px;font-size:22px;line-height:1.15;letter-spacing:-.01em}
+body.owner-mode h2 + .sub{margin-bottom:12px;font-size:13px}
+body.owner-mode .owner-section-head{gap:10px}
+body.owner-mode .owner-kpis{gap:10px;margin-bottom:18px}
+body.owner-mode .owner-kpi{min-height:106px;padding:14px;border-radius:17px;box-shadow:var(--owner-shadow-soft)}
+body.owner-mode .owner-kpi small{font-size:10.5px;letter-spacing:.10em}
+body.owner-mode .owner-kpi strong{margin-top:7px;font-size:30px;letter-spacing:-.03em}
+body.owner-mode .owner-kpi span{margin-top:6px;font-size:12px;line-height:1.35}
+body.owner-mode .owner-kpi::before{width:32px;height:32px;border-radius:10px}
+body.owner-mode .owner-kpi::after{opacity:.7}
+body.owner-mode .card,body.owner-mode .ticket,body.owner-mode .kitchen-day,body.owner-mode .buy-card{border-color:color-mix(in srgb,var(--line) 88%,var(--owner-green-2) 12%);box-shadow:var(--owner-shadow-soft)}
+body.owner-mode .card{border-radius:18px}
+body.owner-mode .ticket{margin-bottom:12px;padding:14px 14px 14px 18px;border-radius:17px;box-shadow:0 7px 22px rgba(20,48,34,.065)}
+body.owner-mode .ticket:hover{transform:none;box-shadow:0 9px 26px rgba(20,48,34,.09)}
+body.owner-mode .ticket b{font-size:16px}
+body.owner-mode .ticket .contact{font-size:12.5px;line-height:1.35}
+body.owner-mode .ticket ul{margin:8px 0;padding-left:19px}
+body.owner-mode .ticket .row{gap:7px;margin-top:10px}
+body.owner-mode .ticket button{min-height:40px;padding:8px 13px;border-radius:11px}
+body.owner-mode .ticket button.ghost{background:color-mix(in srgb,var(--panel) 96%,var(--panel2))}
+body.owner-mode button{transition:background .16s ease,border-color .16s ease,transform .12s ease,box-shadow .16s ease}
+body.owner-mode button:active{transform:scale(.98)}
+body.owner-mode button.pri,body.owner-mode .ticket button:not(.ghost){box-shadow:0 5px 14px color-mix(in srgb,var(--gold) 20%,transparent)}
+body.owner-mode .ticket .row:last-child{padding-top:10px;border-top:1px solid color-mix(in srgb,var(--line) 80%,transparent)}
+body.owner-mode .owner-quick-actions{gap:10px;margin-top:8px;margin-bottom:12px}
+body.owner-mode .owner-quick-actions .quick{min-height:76px;border-radius:16px;padding:14px;box-shadow:0 6px 18px rgba(20,48,34,.045)}
+body.owner-mode .order-lanes{gap:12px}
+body.owner-mode .order-lane{border-radius:18px;background:color-mix(in srgb,var(--panel) 97%,var(--panel2))}
+body.owner-mode .need{border-radius:15px;padding:11px 13px}
+body.owner-mode .flag{border-radius:999px;padding:2px 8px}
+body.owner-mode .kitchen-day,body.owner-mode .buy-card{border-radius:18px;overflow:hidden}
+body.owner-mode .kitchen-day th,body.owner-mode .buy-card th{font-size:11px;letter-spacing:.07em}
+body.owner-mode .kitchen-day td,body.owner-mode .buy-card td{padding-top:10px;padding-bottom:10px}
+body.owner-mode .owner-note{border-radius:13px;line-height:1.4}
+body.owner-mode .chatgrid{border-radius:18px;box-shadow:var(--owner-shadow-soft)}
+body.owner-mode .crow{border-radius:13px;padding:10px 11px}
+body.owner-mode .crow[aria-current=true]{box-shadow:inset 3px 0 0 var(--owner-green-2)}
+body.owner-mode .chat-thread-head{min-height:54px}
+body.owner-mode .thread .b{box-shadow:0 2px 8px rgba(20,48,34,.035)}
+body.owner-mode form.chat-reply textarea{border-radius:13px}
+@media(max-width:620px){
+  body.owner-mode{padding:10px 10px calc(152px + env(safe-area-inset-bottom));scroll-padding-bottom:170px}
+  body.owner-mode .owner-head{margin-bottom:12px;padding:13px 14px;border-radius:17px}
+  body.owner-mode .owner-brand img{width:40px;height:40px}
+  body.owner-mode .owner-brand h1{font-size:20px}
+  body.owner-mode .owner-brand .sub{font-size:11.5px}
+  body.owner-mode .tabs{position:fixed;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));top:auto;width:auto;min-height:68px;margin:0;padding:7px;gap:4px;border:1px solid color-mix(in srgb,var(--line) 78%,var(--owner-green-2) 22%);border-radius:22px;background:color-mix(in srgb,var(--panel) 94%,transparent);box-shadow:0 18px 48px rgba(7,26,18,.26),0 0 0 1px color-mix(in srgb,var(--panel) 80%,transparent);backdrop-filter:blur(22px) saturate(1.16);-webkit-backdrop-filter:blur(22px) saturate(1.16);z-index:60}
+  body.owner-mode .tabs button{min-height:52px;padding:6px 4px;border-radius:16px;font-size:11px;line-height:1.12}
+  body.owner-mode .tabs button[aria-selected=true]{background:linear-gradient(180deg,var(--owner-green-2),var(--owner-green));color:#fff;box-shadow:0 7px 16px rgba(18,63,46,.22)}
+  body.owner-mode h2{margin-top:18px;font-size:21px}
+  body.owner-mode .owner-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:16px}
+  body.owner-mode .owner-kpi{min-height:104px;padding:13px}
+  body.owner-mode .owner-kpi strong{font-size:28px}
+  body.owner-mode .ticket{margin-bottom:12px;padding:13px 12px 14px 17px}
+  body.owner-mode .ticket .row:last-child{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+  body.owner-mode .ticket .row:last-child button{width:100%;min-width:0;padding-inline:8px}
+  body.owner-mode .owner-quick-actions{margin-bottom:18px}
+  body.owner-mode .owner-quick-actions .quick{min-height:70px;padding:12px}
+  body.owner-mode.chat-open-mobile{padding-bottom:0}
+  body.owner-mode.chat-open-mobile .tabs{display:none!important}
+}
+@media(max-width:390px){
+  body.owner-mode{padding-left:8px;padding-right:8px}
+  body.owner-mode .tabs{left:8px;right:8px}
+  body.owner-mode .owner-kpi{padding:12px;min-height:100px}
+  body.owner-mode .owner-kpi small{font-size:10px}
+  body.owner-mode .owner-kpi strong{font-size:26px}
+  body.owner-mode .ticket .row:last-child{grid-template-columns:1fr 1fr}
+  body.owner-mode .ticket .row:last-child button:first-child{grid-column:1/-1}
+}
+@media(prefers-reduced-motion:reduce){body.owner-mode button,body.owner-mode .ticket{transition:none!important}}
