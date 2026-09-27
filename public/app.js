@@ -711,10 +711,10 @@
     var off = !x.live;
     var noPrice = x.kind === "combo" && x.single == null && x.bogo == null;
     var price = h("div", { class: "dprice" });
-    if (x.kind === "plan") price.append(h("span", { class: "lab" }, "Per person, per week"), h("span", { class: "amt" }, money(x.plan)));
+    if (x.kind === "plan") price.append(h("div", { class: "price-row" }, h("span", { class: "lab" }, "Per person, per week"), h("span", { class: "amt" }, money(x.plan))));
     else {
-      price.append(h("span", { class: "lab" }, x.kind === "combo" ? "Single" : x.kind === "addon" ? "Each" : "Price"), h("span", { class: "amt" }, money(x.single)));
-      if (x.kind === "combo" && x.bogo != null) price.append(h("span", { class: "lab" }, "Buy 1 Get 1"), h("span", { class: "amt alt" }, money(x.bogo)));
+      price.append(h("div", { class: "price-row" }, h("span", { class: "lab" }, x.kind === "combo" ? "Single" : x.kind === "addon" ? "Each" : "Price"), h("span", { class: "amt" }, money(x.single))));
+      if (x.kind === "combo" && x.bogo != null) price.append(h("div", { class: "price-row" }, h("span", { class: "lab" }, "Buy 1 Get 1"), h("span", { class: "amt alt" }, money(x.bogo))));
     }
     if (!off && !noPrice) {
       price.append(h("button", { class: "btn sm", type: "button", onclick: function () {

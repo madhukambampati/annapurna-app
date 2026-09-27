@@ -76,6 +76,19 @@ export class Store {
     }
   }
 
+  /** Timestamp for owner dashboard metrics that should start fresh with the Vindhu launch. */
+  ownerFreshLaunchAt(): number {
+    const r = this.db.prepare("SELECT json FROM kv WHERE key = ?").get("owner_chat_reset_vindhu_20260927") as Row | undefined;
+    if (!r) return 0;
+    try {
+      const v = JSON.parse(String(r.json)) as { at?: unknown };
+      const n = Number(v.at);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    } catch {
+      return 0;
+    }
+  }
+
   /** One-time refresh of combo names and prices when MENU_VERSION goes up. */
   private migrateMenu(): void {
     const v = this.kvGet<number>("menu_version", () => 0);

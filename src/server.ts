@@ -432,7 +432,7 @@ export function createServer(d: ServerDeps): Server {
           return send(req, res, 200, {
             orders: store.listOrders().map((o) => ({ ...o, contact: contactOf(o.waId) })),
             alerts: store.listAlerts().map((a) => ({ ...a, contact: contactOf(a.waId) })),
-            menu: store.getMenu(), settings: store.getSettings(),
+            menu: store.getMenu(), settings: store.getSettings(), ownerLaunchAt: store.ownerFreshLaunchAt(),
             customers, features: { simulator: cfg.simulator, web: w.enabled },
           });
         }
