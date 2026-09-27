@@ -25,7 +25,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
       - name: Apply combo availability change
-        run: python3 .github/combo-anyday-owner-confirm.py
+        run: python3 .github/combo-anyday-owner-confirm-v2.py
       - name: Install
         run: npm ci
       - name: Browser syntax
