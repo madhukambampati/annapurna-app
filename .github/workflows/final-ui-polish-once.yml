@@ -1,0 +1,51 @@
+name: Final UI polish once
+
+on:
+  push:
+    branches:
+      - final-ui-polish-v1
+
+permissions:
+  contents: write
+
+jobs:
+  polish-and-test:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: final-ui-polish-v1
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Configure Git
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Apply final UI polish
+        run: python3 .github/final-ui-polish.py
+      - name: Install
+        run: npm ci
+      - name: Browser syntax
+        run: |
+          node --check public/app.js
+          node --check public/desk.js
+      - name: Full regression suite
+        run: npm test
+      - name: Validate final design
+        run: |
+          git diff --check
+          grep -Fq 'class: "price-row"' public/app.js
+          grep -Fq "Today's sales" public/desk.js
+          grep -Fq 'ownerFreshLaunchAt' src/store.ts
+          grep -Fq 'ownerLaunchAt: store.ownerFreshLaunchAt()' src/server.ts
+          grep -Fq 'owner-quick-actions' public/desk.html
+          git diff --name-only
+      - name: Commit polished release
+        run: |
+          git add public/index.html public/app.js public/desk.html public/desk.js src/store.ts src/server.ts
+          git commit -m 'Polish final customer pricing and owner dashboard'
+          git push origin HEAD:final-ui-polish-v1
