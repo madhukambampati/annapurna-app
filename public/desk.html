@@ -456,6 +456,60 @@ body.owner-mode form.chat-reply textarea{min-height:44px;height:44px;max-height:
 }
 </style>
 
+
+<style id="ownerReferenceVisualV1">
+/* VISUAL-ONLY OWNER REFRESH — same DOM IDs and desk.js behavior */
+body.owner-mode{
+  color-scheme:light;--bg:#f2ebdf;--panel:#fffdf8;--panel2:#f6f0e6;--line:#e8dfd0;--line2:#d8cbb5;
+  --cream:#1f3128;--muted:#748078;--gold:#07905b;--on-gold:#fff;--chilli:#ef6b37;--leaf:#09925c;
+  --me:#e3f3ea;--agent:#f6f0e6;--maddy:#fff0d8;--paper:#fffdf8;--ink:#1f3128;--flag:#ed7a30;--bad:#d84d42;
+  max-width:1180px;background:#f3ecdf;padding-top:12px
+}
+body.owner-mode .owner-head{
+  background:#fffdf8;color:#1e3428;border:1px solid #e8dfd0;border-radius:18px;box-shadow:0 8px 24px rgba(42,54,46,.07);padding:12px 15px
+}
+body.owner-mode .owner-brand-home:hover{background:#f5efe5}.owner-brand img{background:#e5f4eb;box-shadow:none}.owner-brand h1{color:#19372a;font-size:22px}.owner-brand .sub{color:#7a837d!important}
+.owner-pill{width:38px;height:38px;padding:0;display:grid;place-items:center;border-radius:50%;background:#0b5e41;border:0;color:#fff;font-size:0;letter-spacing:0}
+.owner-pill::before{content:"👩🏽‍🍳";font-size:19px}
+body.owner-mode .tabs{top:6px;background:rgba(255,253,248,.94);border-color:#e5ddcf;box-shadow:0 8px 22px rgba(37,52,43,.07)}
+body.owner-mode .tabs button[aria-selected=true]{background:#078b58;border-color:#078b58;box-shadow:0 6px 16px rgba(7,139,88,.17)}
+body.owner-mode #panel{animation:ownerReferenceIn .22s ease both}
+@keyframes ownerReferenceIn{from{opacity:.7;transform:translateY(2px)}to{opacity:1;transform:none}}
+body.owner-mode .owner-kpis{gap:9px}.owner-kpi{min-height:100px;border-radius:16px;padding:13px;box-shadow:none;border-color:#e8dfd0}
+.owner-kpi small{color:#7d857e}.owner-kpi strong{font-size:28px}.owner-callout{border-radius:14px;background:#fff3df;border-color:#f0d9b8}
+body.owner-mode h2{color:#21382c;font-size:21px}.owner-page-title h2{font-size:25px!important}
+body.owner-mode .card{background:#fffdf8;border-color:#e7dece;border-radius:17px;box-shadow:0 6px 18px rgba(37,52,43,.045)}
+body.owner-mode .ticket{background:#fffdf8;border-color:#e7dece;border-radius:15px;box-shadow:0 6px 16px rgba(37,52,43,.05);padding:13px 13px 12px 17px}
+body.owner-mode .ticket::before{background:#ff7e2e;width:4px}.ticket-title b{color:#1f372a}.ticket .when{background:#fff1df!important;color:#e56d25!important;border-radius:999px!important;padding:4px 8px!important}
+body.owner-mode .ticket button{background:#08905b;border-radius:999px;min-height:36px}.ticket button.ghost{background:#fff!important;border-color:#d8cdbb!important;color:#30453a!important}
+.flag{background:#f07b34;border-radius:999px}.custom-flag{background:#9d6939}.need{background:#fff3e3;border-color:#efb583;border-radius:15px}
+.owner-lane{background:#f8f3ea!important;border-color:#e8dfd0!important;border-radius:18px!important}.owner-lane .ticket:last-child{margin-bottom:0}
+.owner-attention{background:#fff8ea!important;border-color:#edcf9f!important}
+body.owner-mode table{border-radius:14px;overflow:hidden}.kitchen-day th,.buy-card th,body.owner-mode th{background:#f5efe5;color:#7d857e}
+.more-card{border-radius:16px;min-height:104px;box-shadow:none;background:#fffdf8}.more-icon{background:#e4f3ea;color:#087d50}
+body.owner-mode .chatgrid{background:#fffdf8;border-color:#e7dece;border-radius:18px;box-shadow:0 7px 20px rgba(35,52,42,.05)}
+body.owner-mode .crow[aria-current=true]{background:#e8f5ee;border-color:#b8ddc9}.chat-avatar{background:#087b50}.chat-order-tag{background:#f5efe5}
+body.owner-mode .thread .b.cust{background:#f3eee5;border-color:#e3dacb}.thread .b.owner{background:#e5f4eb;border-color:#bcdcc9}.thread .b.agent{background:#fff0d6}
+.chat-send{background:#07905b!important;color:#fff!important;border-color:#07905b!important}
+dialog.cancel{background:#fffdf8}
+
+@media(max-width:620px){
+  body.owner-mode{padding:8px 10px calc(94px + env(safe-area-inset-bottom));background:#f3ecdf}
+  body.owner-mode .owner-head{position:sticky;top:0;z-index:24;margin:0 -2px 8px;border-radius:15px;padding-top:calc(10px + env(safe-area-inset-top));box-shadow:0 5px 16px rgba(31,50,39,.08)}
+  .owner-brand img{width:38px;height:38px}.owner-brand h1{font-size:19px}.owner-brand .sub{font-size:10.5px}
+  body.owner-mode .tabs{
+    position:fixed;left:8px;right:8px;top:auto;bottom:calc(8px + env(safe-area-inset-bottom));z-index:70;margin:0;
+    display:flex;flex-wrap:nowrap;padding:6px;border-radius:19px;background:rgba(255,253,248,.97);box-shadow:0 14px 34px rgba(35,52,42,.18)
+  }
+  body.owner-mode .tabs button{min-height:50px;padding:6px 4px;font-size:10px;line-height:1.1;border-radius:13px}
+  body.owner-mode .tabs button[aria-selected=true]{background:#e2f3e9!important;color:#08754c!important;border-color:#e2f3e9!important;box-shadow:none!important}
+  .owner-kpis{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.owner-kpi{min-height:86px;padding:10px}.owner-kpi strong{font-size:24px}.owner-kpi span{display:none}.owner-kpi small{font-size:9px}
+  .owner-callout{padding:11px 12px}.owner-page-title{margin-top:4px}.owner-page-title h2{font-size:24px!important}
+  body.owner-mode .ticket{padding:12px 12px 12px 16px}.ticket .row{gap:7px}.ticket .row button{flex:1}
+  body.owner-mode.chat-open-mobile{padding:0;background:#fffdf8}.chat-thread-head{background:#fffdf8!important}.chat-compose{background:#fffdf8!important}
+}
+</style>
+
 </head>
 <body class="owner-mode">
 <header class="owner-head">
