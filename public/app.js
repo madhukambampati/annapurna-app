@@ -991,9 +991,11 @@
         // In particular, a contact typo (409) must keep the resume token so the customer can
         // correct the contact and try again without being subject to the new-chat IP quota.
         if (e2.status === 409) {
-          var mismatch = new Error("This device has a saved chat for a different contact. Enter the same phone number or email used for that chat.");
-          mismatch.status = 409;
-          throw mismatch;
+          // A different contact must never inherit the previous customer's saved chat.
+          // Drop only this browser's stale resume pointer and start a fresh customer session instead.
+          store(RESUME_TOKEN_KEY, null);
+          token = "";
+          return fresh();
         }
         // An expired/deleted token is genuinely no longer resumable. Clear only that unusable
         // token, explain what happened, and require a second explicit submit to create a new chat.
