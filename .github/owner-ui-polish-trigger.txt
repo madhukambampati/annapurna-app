@@ -1,1 +1,0 @@
-Run once to apply the owner/admin presentation polish and execute the full regression suite.
