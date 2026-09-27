@@ -1,1 +1,0 @@
-Apply customer and owner presentation-only UI polish v3 on main, run full regression suite, and commit only the two HTML files.
