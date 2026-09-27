@@ -42,6 +42,24 @@ export class Store {
       /* column already there */
     }
     this.migrateMenu();
+    this.resetOwnerChatsForFreshVindhuLaunch();
+  }
+
+  /**
+   * One-time fresh-launch cleanup for the owner chat inbox.
+   * Orders and customer web sessions are intentionally preserved.
+   */
+  private resetOwnerChatsForFreshVindhuLaunch(): void {
+    const key = "owner_chat_reset_vindhu_20260927";
+    const done = this.db.prepare("SELECT 1 FROM kv WHERE key = ?").get(key);
+    if (done) return;
+    this.db.exec(`
+      DELETE FROM messages;
+      DELETE FROM drafts;
+      UPDATE alerts SET done = 1 WHERE order_id IS NULL;
+      UPDATE customers SET profile = '', uncertain_streak = 0;
+    `);
+    this.kvPut(key, { at: Date.now(), reason: "Fresh Vindhu launch" });
   }
 
   /** One-time refresh of combo names and prices when MENU_VERSION goes up. */
