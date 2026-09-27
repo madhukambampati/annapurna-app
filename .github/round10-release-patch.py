@@ -20,7 +20,7 @@ elif new_price not in text:
 p.write_text(text)
 
 # 2) Make the owner Chats inbox look brand-new without deleting customer transcripts
-# or placed orders. Pending drafts/non-order alerts are reset once at launch.
+# or placed orders. A message-id cutoff is stable even when tests use a mocked clock.
 p = Path('src/store.ts')
 text = p.read_text()
 old_method = '''    this.migrateMenu();
@@ -50,27 +50,29 @@ new_method = '''    this.migrateMenu();
 
   /**
    * One-time launch reset for the owner Chats inbox. Historical customer messages and
-   * placed orders remain stored; the owner UI simply starts showing chats from this cutoff.
+   * placed orders remain stored; owner Chats starts after the current highest message id.
    */
   private initializeFreshVindhuOwnerChat(): void {
     const key = "owner_chat_reset_vindhu_20260927";
     const done = this.db.prepare("SELECT 1 FROM kv WHERE key = ?").get(key);
     if (done) return;
+    const r = this.db.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM messages").get() as Row;
+    const afterMessageId = Number(r.id) || 0;
     this.db.exec(`
       DELETE FROM drafts;
       UPDATE alerts SET done = 1 WHERE order_id IS NULL;
       UPDATE customers SET profile = '', uncertain_streak = 0;
     `);
-    this.kvPut(key, { at: Date.now(), reason: "Fresh Vindhu owner chat launch" });
+    this.kvPut(key, { afterMessageId, at: Date.now(), reason: "Fresh Vindhu owner chat launch" });
   }
 
   /** Owner Chats intentionally hide messages from before the fresh Vindhu launch. */
-  ownerChatResetAt(): number {
+  ownerChatResetAfterMessageId(): number {
     const r = this.db.prepare("SELECT json FROM kv WHERE key = ?").get("owner_chat_reset_vindhu_20260927") as Row | undefined;
     if (!r) return 0;
     try {
-      const v = JSON.parse(String(r.json)) as { at?: unknown };
-      const n = Number(v.at);
+      const v = JSON.parse(String(r.json)) as { afterMessageId?: unknown };
+      const n = Number(v.afterMessageId);
       return Number.isFinite(n) && n > 0 ? n : 0;
     } catch {
       return 0;
@@ -94,11 +96,11 @@ old_state = '''        if (m === "GET" && path === "/api/state") {
             .sort((x, y) => y.last!.id - x.last!.id)
             .slice(0, 100);'''
 new_state = '''        if (m === "GET" && path === "/api/state") {
-          const ownerChatResetAt = store.ownerChatResetAt();
+          const ownerChatResetAfterMessageId = store.ownerChatResetAfterMessageId();
           const customers = store
             .listCustomers()
             .map((c) => ({ waId: c.waId, name: c.name, contact: c.contact, last: store.lastMessage(c.waId) ?? null }))
-            .filter((c) => c.last && c.last.ts >= ownerChatResetAt)
+            .filter((c) => c.last && c.last.id > ownerChatResetAfterMessageId)
             .sort((x, y) => y.last!.id - x.last!.id)
             .slice(0, 100);'''
 if old_state in text:
@@ -108,8 +110,8 @@ elif new_state not in text:
 
 old_messages = '''          if (m === "GET" && mt[2] === "messages") return send(req, res, 200, { customer: { waId, name: c.name, contact: c.contact }, messages: store.getMessages(waId, 200) });'''
 new_messages = '''          if (m === "GET" && mt[2] === "messages") {
-            const cutoff = store.ownerChatResetAt();
-            return send(req, res, 200, { customer: { waId, name: c.name, contact: c.contact }, messages: store.getMessages(waId, 200).filter((x) => x.ts >= cutoff) });
+            const cutoff = store.ownerChatResetAfterMessageId();
+            return send(req, res, 200, { customer: { waId, name: c.name, contact: c.contact }, messages: store.getMessages(waId, 200).filter((x) => x.id > cutoff) });
           }'''
 if old_messages in text:
     text = text.replace(old_messages, new_messages, 1)
