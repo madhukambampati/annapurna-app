@@ -1,0 +1,228 @@
+name: One-time visual reference refresh
+
+on:
+  push:
+    branches: [ui-visual-match-v2]
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.event.head_commit.message == 'Add one-time visual refresh workflow'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Apply presentation-only visual refresh
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          customer_css = r'''
+<style id="visualReferenceMatchV3">
+/* PRESENTATION-ONLY REFRESH. No ordering, pricing, session or API behavior is changed. */
+:root{
+  color-scheme:light;
+  --bg:#eef4e8;--page:#f8f4ea;--surface:#fffdf8;--surface2:#f4ecdd;--ink:#15291d;
+  --muted:#627166;--dim:#879087;--line:#e9dfcc;--line2:#d8cbb2;
+  --brand:#0f7a4d;--brand2:#075f3a;--brand-soft:#e0f3e8;
+  --accent:#ff8a1f;--accent-soft:#fff0dc;--on-accent:#472200;
+  --chilli:#ef563f;--chilli-soft:#ffe7e2;--cust:#0f8a58;--on-cust:#fff;--agent:#fffdf8;--owner:#fff2dc;
+  --shadow:0 18px 45px rgba(28,63,43,.13);
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    color-scheme:light;
+    --bg:#eef4e8;--page:#f8f4ea;--surface:#fffdf8;--surface2:#f4ecdd;--ink:#15291d;
+    --muted:#627166;--dim:#879087;--line:#e9dfcc;--line2:#d8cbb2;
+    --brand:#0f7a4d;--brand2:#075f3a;--brand-soft:#e0f3e8;
+    --accent:#ff8a1f;--accent-soft:#fff0dc;--on-accent:#472200;
+    --chilli:#ef563f;--chilli-soft:#ffe7e2;--cust:#0f8a58;--on-cust:#fff;--agent:#fffdf8;--owner:#fff2dc;
+    --shadow:0 18px 45px rgba(28,63,43,.13);
+  }
+}
+body{background:#e8f0e1;color:var(--ink)}
+.customer-mode .app{background:var(--page);border:1px solid #dce7d8}
+.customer-mode .top{
+  min-height:68px;background:rgba(255,253,248,.97);border-color:var(--line);
+  box-shadow:0 5px 20px rgba(20,55,36,.05);z-index:16;
+}
+.customer-mode .seal{width:42px;height:42px;border-radius:13px;box-shadow:0 6px 16px rgba(16,79,50,.12)}
+.customer-mode .brand h1{font-size:21px;color:#123521}.customer-mode .brand small{color:#718078}
+.customer-home{background:linear-gradient(180deg,#f9f4e9 0,#f3f7ee 100%);padding-top:14px}
+.home-hero{
+  min-height:320px;border-radius:28px;padding:30px;background:
+  radial-gradient(290px 240px at 82% 28%,rgba(255,173,68,.38),transparent 68%),
+  radial-gradient(210px 170px at 10% 100%,rgba(255,255,255,.17),transparent 72%),
+  linear-gradient(145deg,#073b27 0%,#0d6b44 55%,#0b5a39 100%);
+  box-shadow:0 22px 44px rgba(7,75,45,.22)
+}
+.home-copy h2{font-size:clamp(31px,6vw,46px);line-height:1.03}.home-copy>p{font-size:14px;color:#e4f3e9}
+.home-eyebrow{background:#ffffff18;border-color:#ffffff30}
+.home-primary{background:#ff9c2f;color:#342000;border-radius:17px;box-shadow:0 10px 22px rgba(0,0,0,.16)}
+.home-secondary{background:#ffffff12;border-color:#ffffff2d}
+.home-annuwrap .mascot{width:168px}.home-bubble{background:#fff9e9;color:#264331}
+.home-grid{gap:11px}.home-tile{min-height:116px;border-radius:20px;padding:15px;background:#fffdf9;border-color:#e5dfd0}
+.home-tile:nth-child(1){--tile-tone:#ff8a1f}.home-tile:nth-child(2){--tile-tone:#16a16b}.home-tile:nth-child(3){--tile-tone:#ef563f}.home-tile:nth-child(4){--tile-tone:#6eaa3c}
+.tile-icon{border-radius:15px;background:color-mix(in srgb,var(--tile-tone) 12%,#fff);color:var(--tile-tone)}
+.home-section-head h3{font-size:24px}.home-section-head>div>span{color:#16885a}
+.home-active{border-radius:22px!important;box-shadow:0 12px 28px rgba(19,89,57,.09)!important}
+
+/* Menu cards: visually echo the reference board without changing menu data. */
+.customer-mode .dish{
+  position:relative;overflow:hidden;min-height:126px;border-radius:20px;padding:15px 15px 15px 92px;
+  background:#fffdf9;border:1px solid #eadfc9;box-shadow:0 8px 20px rgba(48,67,52,.07)
+}
+.customer-mode .dish::before{
+  content:"🍛";position:absolute;left:13px;top:16px;width:64px;height:64px;display:grid;place-items:center;
+  font-size:34px;border-radius:17px;background:
+  radial-gradient(circle at 35% 28%,#ffd064 0 12%,transparent 13%),
+  linear-gradient(145deg,#f6b342,#d96722 58%,#7d351a);box-shadow:0 8px 20px rgba(114,56,20,.18)
+}
+.customer-mode .dish:nth-of-type(3n+2)::before{content:"🍚";background:linear-gradient(145deg,#8ccf6c,#2f8e50 60%,#175c39)}
+.customer-mode .dish:nth-of-type(3n)::before{content:"🥘";background:linear-gradient(145deg,#f5c55e,#d84f25 60%,#7a251c)}
+.customer-mode .dprice{margin-left:auto}.customer-mode .dprice .btn{background:#0b8a56;border-radius:11px}
+.customer-mode .seg{background:#edf5ec;border:1px solid #d9e6d7}.customer-mode .seg button[aria-selected=true]{background:#0d7f4f;color:white}
+
+/* Chat and confirmation */
+.customer-mode .chat{background:linear-gradient(180deg,#f8f3e8,#f5f7f1)}
+.customer-mode .msgs{padding-top:18px}.customer-mode .b{box-shadow:0 4px 14px rgba(35,55,40,.05)}
+.customer-mode .b.cust{background:#0c8a56}.customer-mode .b.agent{background:#fff;border-color:#e7dfd2}
+.customer-mode .b.owner{background:#fff0d7;border-color:#f1d6ab}
+.customer-mode .sum{border-color:#0d8a58;border-radius:18px;box-shadow:0 12px 28px rgba(13,138,88,.12)}
+.customer-mode .sum h3{background:#0d8a58}.customer-mode .sum .acts .btn:first-child{background:#0d8a58}
+.customer-mode .composer{background:#fbf7ef;border-top:1px solid #e8dfd0}.customer-mode .send{background:#0d8a58}
+
+/* Orders read more like the reference live-tracking cards. */
+.customer-mode .ord{border-radius:22px;background:#fffdf8;border:1px solid #e7dece}
+.customer-mode .ord::before{width:6px;background:#10a267}.customer-mode .ord-head b{font-size:23px}
+.customer-mode .ord .steps4{display:grid;grid-template-columns:1fr;gap:0;padding:4px 18px 14px 30px}
+.customer-mode .ord .steps4 li{position:relative;text-align:left;padding:9px 8px 9px 30px;font-size:12px;border-left:2px solid #d8e8dc}
+.customer-mode .ord .steps4 li::before{content:"";position:absolute;left:-7px;top:13px;width:12px;height:12px;border-radius:50%;background:#d8e0da}
+.customer-mode .ord .steps4 li.on::before{background:#14a76b;box-shadow:0 0 0 4px #e1f4e9}
+.customer-mode .ord .steps4 li.current-step::after{display:none}
+.customer-mode .ord-meta>div{background:#fbf8f1}
+
+.customer-mode .sheet{background:#f8f4ea}.customer-mode .sheet>header{background:#fffdf9}.customer-mode .day{background:#fffdf9}
+.customer-mode .links .btn{border-radius:13px}
+
+@media(max-width:699px){
+  .customer-mode .app{max-width:none;border:0}
+  .customer-mode .top{padding:calc(8px + env(safe-area-inset-top)) 12px 8px}
+  .customer-mode .brand h1{font-size:18px}.customer-mode .brand small{font-size:11px}
+  .customer-mode .tabs{
+    position:fixed;z-index:40;left:50%;bottom:0;transform:translateX(-50%);width:min(100%,600px);
+    display:grid;grid-template-columns:repeat(4,1fr);gap:0;padding:7px 8px calc(7px + env(safe-area-inset-bottom));
+    background:rgba(255,253,248,.97);border-top:1px solid #e6dece;box-shadow:0 -10px 30px rgba(31,57,41,.10);backdrop-filter:blur(18px)
+  }
+  .customer-mode .tab{min-width:0;border-radius:13px;padding:7px 3px;color:#718078}
+  .customer-mode .tab[aria-current=true]{background:#e4f3e8;color:#0c7d4e}.customer-mode .tab[aria-current=true]::after{display:none}
+  .customer-home,.onboard,.customer-mode .chat{padding-bottom:calc(78px + env(safe-area-inset-bottom))}
+  .customer-mode .composer{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
+  .home-hero{grid-template-columns:1fr;min-height:0;padding:23px 20px 12px;border-radius:24px}
+  .home-copy h2{font-size:35px}.home-annuwrap{min-height:180px;margin-top:-8px}.home-annuwrap .mascot{width:142px}.home-bubble{margin-top:-16px}
+  .home-hero-actions{width:100%;margin-top:18px}.home-primary{min-width:0;flex:1}.home-secondary{min-height:58px}
+  .home-grid{grid-template-columns:repeat(2,1fr)}.home-tile{grid-template-columns:42px 1fr;min-height:104px;padding:13px}.home-tile>.home-arrow{display:none}
+  .customer-mode .dish{padding-left:82px}.customer-mode .dish::before{width:56px;height:56px;font-size:29px}
+}
+</style>
+'''
+
+          owner_css = r'''
+<style id="ownerVisualReferenceMatchV3">
+/* PRESENTATION-ONLY OWNER REFRESH. Existing buttons, APIs and workflow remain unchanged. */
+:root{
+  color-scheme:light;
+  --bg:#f5f0e6;--panel:#fffdf9;--panel2:#f6efe4;--line:#e9dfcf;--line2:#d9cbb4;
+  --cream:#18281f;--muted:#66736a;--gold:#0d8151;--on-gold:#fff;--chilli:#ee5c40;--leaf:#0d8a55;
+  --me:#e2f2e8;--agent:#f5f0e7;--maddy:#fff0d8;--paper:#fffdf9;--ink:#18281f;--flag:#e76f2e;--bad:#dc4f43;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    color-scheme:light;
+    --bg:#f5f0e6;--panel:#fffdf9;--panel2:#f6efe4;--line:#e9dfcf;--line2:#d9cbb4;
+    --cream:#18281f;--muted:#66736a;--gold:#0d8151;--on-gold:#fff;--chilli:#ee5c40;--leaf:#0d8a55;
+    --me:#e2f2e8;--agent:#f5f0e7;--maddy:#fff0d8;--paper:#fffdf9;--ink:#18281f;--flag:#e76f2e;--bad:#dc4f43;
+  }
+}
+body.owner-mode{background:linear-gradient(180deg,#f8f3e9,#f1f5ee);color:#19291f}
+.owner-head{
+  padding:14px 16px;border-radius:18px;background:#fffdf9;color:#193025;border:1px solid #e8dfd0;
+  box-shadow:0 8px 24px rgba(36,57,43,.07)
+}
+.owner-brand img{background:#e4f2e8}.owner-brand h1{color:#183326;font-size:23px}.owner-brand .sub{color:#6c776f}
+.owner-pill{background:#e5f3e9;border-color:#d2e9d9;color:#0b7549}
+body.owner-mode .tabs{background:#fffdf9;border:1px solid #e8dfd0;box-shadow:0 8px 24px rgba(35,57,42,.07)}
+body.owner-mode .tabs button{color:#68766c}.owner-kpis{gap:10px}
+.owner-kpi{border-radius:17px;box-shadow:0 7px 20px rgba(35,57,42,.06)}
+.owner-kpi:nth-child(1){--tone:#ef5a3e;background:#fff5f0}.owner-kpi:nth-child(2){--tone:#ef8c29;background:#fff8ec}
+.owner-kpi:nth-child(3){--tone:#0b9258;background:#f0faf4}.owner-kpi:nth-child(4){--tone:#8a6d32;background:#fffaf0}
+.owner-kpi strong{font-size:30px}.owner-kpi small{color:#647067}
+.owner-callout{background:#fff4e5;border-color:#f5d3a3}
+body.owner-mode .ticket{background:#fffdf9;border-radius:16px;padding:14px 14px 13px 18px;box-shadow:0 7px 18px rgba(35,57,42,.055)}
+body.owner-mode .ticket::before{background:#ef7c2e}.ticket b{font-size:16px}.ticket .contact{color:#728077}
+body.owner-mode .ticket .when{background:#fff1df;color:#ce6522}
+body.owner-mode .ticket button{background:#0d8753;border-radius:10px}.ticket button.ghost{background:#fff;color:#30443a}
+body.owner-mode .need{background:#fff4e7;border-color:#f09a55;color:#2f352f}
+body.owner-mode .card{background:#fffdf9;border-color:#e8dfd0;box-shadow:0 7px 20px rgba(35,57,42,.045)}
+body.owner-mode input,body.owner-mode select,body.owner-mode textarea{background:#fffdf9}
+body.owner-mode table{background:#fffdf9;border-radius:14px;overflow:hidden}
+body.owner-mode th{background:#f7f1e7;color:#68766c}.flag{background:#ef7a2e}
+
+/* Owner chat mirrors the reference's light admin presentation. */
+body.owner-mode .chatgrid{gap:12px}.clist{background:#fffdf9;border:1px solid #e8dfd0;border-radius:17px;padding:7px}
+.crow{border-radius:12px;border-color:transparent}.crow[aria-current=true]{background:#e7f4eb;border-color:#cce5d5}
+.thread{background:#fffdf9;border:1px solid #e8dfd0;border-radius:17px;overflow:hidden}
+.thread .msgs{background:linear-gradient(180deg,#fbf8f1,#f6f5ef);padding:14px}.b.cust{background:#f0ede5}.b.agent{background:#e1f2e8}.b.owner{background:#fff0d7}
+form.reply{padding:10px;background:#fffdf9;border-top:1px solid #e8dfd0;margin:0}
+
+@media(max-width:760px){
+  body.owner-mode{padding:8px 10px 92px;background:#f7f2e8}
+  .owner-head{margin:0 0 10px;border-radius:16px}.owner-brand img{width:40px;height:40px}.owner-brand h1{font-size:19px}
+  body.owner-mode .tabs{
+    position:fixed;left:0;right:0;bottom:0;top:auto;z-index:60;margin:0;padding:7px 8px calc(7px + env(safe-area-inset-bottom));
+    display:grid;grid-template-columns:repeat(5,1fr);border-radius:18px 18px 0 0;background:rgba(255,253,249,.98);
+    box-shadow:0 -10px 30px rgba(35,57,42,.11);backdrop-filter:blur(18px)
+  }
+  body.owner-mode .tabs button{min-width:0;min-height:48px;padding:7px 4px;border-radius:12px;font-size:12px}
+  body.owner-mode .tabs button[aria-selected=true]{background:#0d8352;color:#fff}
+  .owner-kpis{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.owner-kpi{min-height:90px;padding:12px}.owner-kpi strong{font-size:25px}.owner-kpi span{display:none}
+  body.owner-mode .ticket{border-radius:16px;margin-bottom:9px}.owner-callout{border-radius:14px}
+  body.owner-mode.chat-open-mobile{padding:0;background:#fffdf9}.chat-open-mobile .thread{border:0;border-radius:0;background:#fffdf9}
+}
+</style>
+'''
+
+          for file, css in [(Path('public/index.html'), customer_css), (Path('public/desk.html'), owner_css)]:
+              s = file.read_text()
+              marker = css.split('\n',2)[1].strip()
+              if marker in s:
+                  raise SystemExit(f'{file}: style already injected')
+              if '</head>' not in s:
+                  raise SystemExit(f'{file}: no </head>')
+              s = s.replace('</head>', css + '\n</head>', 1)
+              file.write_text(s)
+          PY
+      - name: Verify frontend-only scope
+        run: |
+          git status --short
+          changed=$(git diff --name-only | sort | tr '\n' ' ')
+          test "$changed" = "public/desk.html public/index.html "
+          git diff --check
+          node --check public/app.js
+          node --check public/desk.js
+      - name: Full regression suite
+        run: |
+          npm ci
+          npm test
+      - name: Commit presentation changes
+        run: |
+          git config user.name 'madhukambampati'
+          git config user.email '85366523+madhukambampati@users.noreply.github.com'
+          git add public/index.html public/desk.html
+          git commit -m 'Polish customer and owner UI to match visual reference'
+          git push origin HEAD:ui-visual-match-v2
