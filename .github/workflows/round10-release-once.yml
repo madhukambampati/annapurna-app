@@ -45,9 +45,10 @@ jobs:
           git diff --check
           grep -Fq 'Hi! I’m Vindhu, your Annapurna ordering assistant 🍛' public/app.js
           grep -Fq 'owner_chat_reset_vindhu_20260927' src/store.ts
+          grep -Fq 'ownerChatResetAfterMessageId' src/server.ts
           git diff --name-only
       - name: Commit tested release
         run: |
-          git add public/index.html public/app.js public/desk.html public/desk.js src/store.ts
+          git add public/index.html public/app.js public/desk.html public/desk.js src/store.ts src/server.ts
           git commit -m 'Prepare Round 10 Vindhu release'
           git push origin HEAD:release-round10-vindhu
