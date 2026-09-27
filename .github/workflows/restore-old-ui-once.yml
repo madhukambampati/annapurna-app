@@ -1,0 +1,87 @@
+name: One-time old UI restore
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  restore-old-ui:
+    if: github.event.head_commit.message == 'Add one-time old UI restore workflow'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Configure Git identity
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Restore pre-redesign public UI files
+        run: |
+          git checkout 2626d0b112b105f8762993ea95c50e71d6cc6bec -- \
+            public/index.html \
+            public/app.js \
+            public/desk.html \
+            public/desk.js
+      - name: Keep Vindhu branding and confirmation idempotency
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # Keep the requested assistant name while preserving the old visual UI.
+          for name in ('public/index.html', 'public/app.js', 'public/desk.js'):
+              p = Path(name)
+              text = p.read_text()
+              text = text.replace('Annu', 'Vindhu')
+              text = text.replace("Namaste! I'm Vindhu.", "Hi! I’m Vindhu, your Annapurna ordering assistant 🍛")
+              p.write_text(text)
+
+          # Preserve the invisible duplicate-confirmation safety fix without changing the old UI.
+          p = Path('public/app.js')
+          text = p.read_text()
+          old = 'onclick: function () { send("Yes, confirm"); }'
+          new = 'onclick: function () { send("Yes, confirm", m.id ? "confirm:" + m.id : undefined); }'
+          if old not in text:
+              raise SystemExit('old confirmation handler not found')
+          text = text.replace(old, new, 1)
+
+          old = 'function send(text) {'
+          new = 'function send(text, requestId) {'
+          if old not in text:
+              raise SystemExit('old send signature not found')
+          text = text.replace(old, new, 1)
+
+          old = 'api("POST", "/web/message", { text: text }).then(function (j) {'
+          new = 'api("POST", "/web/message", { text: text, requestId: requestId }).then(function (j) {'
+          if old not in text:
+              raise SystemExit('old message POST not found')
+          text = text.replace(old, new, 1)
+          p.write_text(text)
+          PY
+      - name: Install
+        run: npm ci
+      - name: Browser JavaScript syntax
+        run: |
+          node --check public/app.js
+          node --check public/desk.js
+      - name: Full automated regression suite
+        run: npm test
+      - name: Verify only public UI changed from current release
+        run: |
+          git diff --check
+          git diff --name-only HEAD | sort
+          test "$(git diff --name-only HEAD | sort | tr '\n' ' ')" = "public/app.js public/desk.html public/desk.js public/index.html "
+          grep -Fq 'Hi! I’m Vindhu, your Annapurna ordering assistant 🍛' public/app.js
+      - name: Commit restored old UI
+        run: |
+          git add public/index.html public/app.js public/desk.html public/desk.js
+          git commit -m 'Restore pre-redesign UI while keeping current backend fixes'
+          git push origin HEAD:main
