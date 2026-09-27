@@ -1076,6 +1076,73 @@ body.customer-mode{
   }
 }
 </style>
+<style id="visualReferenceMatchV3">
+/* Presentation-only refresh based on the approved visual reference. */
+:root{
+  color-scheme:light;
+  --bg:#eef4e8;--page:#f8f4ea;--surface:#fffdf8;--surface2:#f4ecdd;--ink:#15291d;
+  --muted:#627166;--dim:#879087;--line:#e9dfcc;--line2:#d8cbb2;
+  --brand:#0f7a4d;--brand2:#075f3a;--brand-soft:#e0f3e8;
+  --accent:#ff8a1f;--accent-soft:#fff0dc;--on-accent:#472200;
+  --chilli:#ef563f;--chilli-soft:#ffe7e2;--cust:#0f8a58;--on-cust:#fff;--agent:#fffdf8;--owner:#fff2dc;
+}
+@media(prefers-color-scheme:dark){:root{
+  color-scheme:light;
+  --bg:#eef4e8;--page:#f8f4ea;--surface:#fffdf8;--surface2:#f4ecdd;--ink:#15291d;
+  --muted:#627166;--dim:#879087;--line:#e9dfcc;--line2:#d8cbb2;
+  --brand:#0f7a4d;--brand2:#075f3a;--brand-soft:#e0f3e8;--accent:#ff8a1f;--accent-soft:#fff0dc;
+  --chilli:#ef563f;--chilli-soft:#ffe7e2;--cust:#0f8a58;--on-cust:#fff;--agent:#fffdf8;--owner:#fff2dc;
+}}
+body{background:#e8f0e1;color:var(--ink)}
+.customer-mode .app{background:var(--page);border:1px solid #dce7d8}
+.customer-mode .top{min-height:68px;background:#fffdf8f7;border-color:var(--line);box-shadow:0 5px 20px rgba(20,55,36,.05);z-index:16}
+.customer-mode .seal{width:42px;height:42px;border-radius:13px;box-shadow:0 6px 16px rgba(16,79,50,.12)}
+.customer-mode .brand h1{font-size:21px;color:#123521}.customer-mode .brand small{color:#718078}
+.customer-home{background:linear-gradient(180deg,#f9f4e9,#f3f7ee);padding-top:14px}
+.home-hero{min-height:320px;border-radius:28px;padding:30px;background:radial-gradient(290px 240px at 82% 28%,rgba(255,173,68,.38),transparent 68%),radial-gradient(210px 170px at 10% 100%,rgba(255,255,255,.17),transparent 72%),linear-gradient(145deg,#073b27,#0d6b44 55%,#0b5a39);box-shadow:0 22px 44px rgba(7,75,45,.22)}
+.home-copy h2{font-size:clamp(31px,6vw,46px);line-height:1.03}.home-copy>p{font-size:14px;color:#e4f3e9}
+.home-eyebrow{background:#ffffff18;border-color:#ffffff30}
+.home-primary{background:#ff9c2f;color:#342000;border-radius:17px;box-shadow:0 10px 22px rgba(0,0,0,.16)}
+.home-secondary{background:#ffffff12;border-color:#ffffff2d}
+.home-annuwrap .mascot{width:168px}.home-bubble{background:#fff9e9;color:#264331}
+.home-grid{gap:11px}.home-tile{min-height:116px;border-radius:20px;padding:15px;background:#fffdf9;border-color:#e5dfd0}
+.home-tile:nth-child(1){--tile-tone:#ff8a1f}.home-tile:nth-child(2){--tile-tone:#16a16b}.home-tile:nth-child(3){--tile-tone:#ef563f}.home-tile:nth-child(4){--tile-tone:#6eaa3c}
+.tile-icon{border-radius:15px;background:color-mix(in srgb,var(--tile-tone) 12%,#fff);color:var(--tile-tone)}
+.home-section-head h3{font-size:24px}.home-section-head>div>span{color:#16885a}
+.customer-mode .dish{position:relative;overflow:hidden;min-height:126px;border-radius:20px;padding:15px 15px 15px 92px;background:#fffdf9;border:1px solid #eadfc9;box-shadow:0 8px 20px rgba(48,67,52,.07)}
+.customer-mode .dish::before{content:"🍛";position:absolute;left:13px;top:16px;width:64px;height:64px;display:grid;place-items:center;font-size:34px;border-radius:17px;background:linear-gradient(145deg,#f6b342,#d96722 58%,#7d351a);box-shadow:0 8px 20px rgba(114,56,20,.18)}
+.customer-mode .dish:nth-of-type(3n+2)::before{content:"🍚";background:linear-gradient(145deg,#8ccf6c,#2f8e50 60%,#175c39)}
+.customer-mode .dish:nth-of-type(3n)::before{content:"🥘";background:linear-gradient(145deg,#f5c55e,#d84f25 60%,#7a251c)}
+.customer-mode .dprice .btn{background:#0b8a56;border-radius:11px}
+.customer-mode .seg{background:#edf5ec;border:1px solid #d9e6d7}.customer-mode .seg button[aria-selected=true]{background:#0d7f4f;color:white}
+.customer-mode .chat{background:linear-gradient(180deg,#f8f3e8,#f5f7f1)}
+.customer-mode .b.cust{background:#0c8a56}.customer-mode .b.agent{background:#fff;border-color:#e7dfd2}.customer-mode .b.owner{background:#fff0d7;border-color:#f1d6ab}
+.customer-mode .sum{border-color:#0d8a58;border-radius:18px;box-shadow:0 12px 28px rgba(13,138,88,.12)}
+.customer-mode .sum h3{background:#0d8a58}.customer-mode .composer{background:#fbf7ef;border-top:1px solid #e8dfd0}.customer-mode .send{background:#0d8a58}
+.customer-mode .ord{border-radius:22px;background:#fffdf8;border:1px solid #e7dece}.customer-mode .ord::before{width:6px;background:#10a267}
+.customer-mode .ord .steps4{display:grid;grid-template-columns:1fr;gap:0;padding:4px 18px 14px 30px}
+.customer-mode .ord .steps4 li{position:relative;text-align:left;padding:9px 8px 9px 30px;font-size:12px;border-left:2px solid #d8e8dc}
+.customer-mode .ord .steps4 li::before{content:"";position:absolute;left:-7px;top:13px;width:12px;height:12px;border-radius:50%;background:#d8e0da}
+.customer-mode .ord .steps4 li.on::before{background:#14a76b;box-shadow:0 0 0 4px #e1f4e9}
+.customer-mode .ord .steps4 li.current-step::after{display:none}
+.customer-mode .ord-meta>div{background:#fbf8f1}
+@media(max-width:699px){
+  .customer-mode .app{max-width:none;border:0}
+  .customer-mode .top{padding:calc(8px + env(safe-area-inset-top)) 12px 8px}
+  .customer-mode .brand h1{font-size:18px}.customer-mode .brand small{font-size:11px}
+  .customer-mode .tabs{position:fixed;z-index:40;left:50%;bottom:0;transform:translateX(-50%);width:min(100%,600px);display:grid;grid-template-columns:repeat(4,1fr);gap:0;padding:7px 8px calc(7px + env(safe-area-inset-bottom));background:#fffdf8fa;border-top:1px solid #e6dece;box-shadow:0 -10px 30px rgba(31,57,41,.10);backdrop-filter:blur(18px)}
+  .customer-mode .tab{min-width:0;border-radius:13px;padding:7px 3px;color:#718078}
+  .customer-mode .tab[aria-current=true]{background:#e4f3e8;color:#0c7d4e}.customer-mode .tab[aria-current=true]::after{display:none}
+  .customer-home,.customer-mode .onboard,.customer-mode .chat{padding-bottom:calc(82px + env(safe-area-inset-bottom))}
+  .customer-mode .composer{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+  .home-hero{grid-template-columns:1fr;min-height:0;padding:23px 20px 12px;border-radius:24px}
+  .home-copy h2{font-size:35px}.home-annuwrap{min-height:180px;margin-top:-8px}.home-annuwrap .mascot{width:142px}
+  .home-grid{grid-template-columns:repeat(2,1fr)}.home-tile{grid-template-columns:42px 1fr;min-height:104px;padding:13px}.home-tile>.home-arrow{display:none}
+  .customer-mode .dish{padding-left:82px}.customer-mode .dish::before{width:56px;height:56px;font-size:29px}
+}
+
+</style>
+
 </head>
 <body>
 <template id="tplMascot">
