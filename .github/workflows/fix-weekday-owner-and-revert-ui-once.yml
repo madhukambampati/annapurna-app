@@ -21,10 +21,10 @@ jobs:
         run: python .github/scripts/fix-weekday-owner-and-revert-ui.py
       - name: Verify scope and syntax
         run: |
-          git diff --check
+          git diff HEAD --check
           node --check public/app.js
           node --check public/desk.js
-          changed=$(git diff --name-only | sort | tr '\n' ' ')
+          changed=$(git diff HEAD --name-only | sort | tr '\n' ' ')
           echo "Changed: $changed"
           test "$changed" = "public/desk.html public/index.html src/prompt.ts test/agent.test.ts "
       - name: Full regression suite
