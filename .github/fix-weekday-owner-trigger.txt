@@ -1,1 +1,1 @@
-Retry weekday combo owner-approval behavior and UI revert after fixing staged-diff verification.
+Rerun weekday combo owner-approval behavior and UI revert with updated regression expectations.
