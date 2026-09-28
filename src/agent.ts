@@ -73,6 +73,21 @@ const DRAFT_RESET = /\b(?:forget\s+everything\s+before\s+this|start\s+over|reset
 const CUSTOMER_CUSTOM_PRICE = /(?:\$\s*\d{1,5}(?:\.\d{1,2})?|\b\d{1,5}(?:\.\d{1,2})?\s*(?:\$|cad)\b)/i;
 const PLACEMENT_CLAIM = /\b(?:order\s+(?:is\s+|has\s+been\s+|was\s+)?(?:confirm(?:ed|ing)|placed|booked)|(?:confirm(?:ed|ing)|placed|booked)\s+(?:this|it|the\s+order|your\s+order)|(?:this|it|that|the\s+order|your\s+order)\s+(?:went|has\s+gone|is\s+going)\s+through|(?:went|gone|going)\s+through|successfully\s+(?:placed|confirmed|booked)|lock(?:ing|ed)?\s+(?:this|it|the order)\s+in)\b/i;
 const PLACED_ORDER_CHANGE = /\b(?:change|modify|cancel|update|edit|replace)\b/i;
+const EXPLICIT_PLACED_ORDER_TARGET = /\b(?:order\s*#\s*\d+|order\s+#?\d+|confirmed\s+order|placed\s+order|existing\s+order)\b/i;
+
+/** Legacy/model custom alerts that belong to a pending catering request, not a placed order. */
+function isCustomWorkAlert(note: string): boolean {
+  if (/^Custom\/bulk request(?: updated)?:/i.test(note)) return true;
+  const headcount = /\b\d{1,3}\s*(?:people|persons|pax|members|guests)\b/i.test(note);
+  const customWork = /\b(?:quote|price|cater(?:ing)?|bulk|custom|tray)\b/i.test(note);
+  return headcount && customWork;
+}
+
+/** A headcount edit belongs to the active unplaced catering draft unless a real placed order is named. */
+function pendingCustomHeadcountChange(text: string, draft: Draft | null): number | null {
+  if (!draft?.custom || !PLACED_ORDER_CHANGE.test(text) || EXPLICIT_PLACED_ORDER_TARGET.test(text)) return null;
+  return customHeadcount(text);
+}
 
 function customHeadcount(text: string): number | null {
   const m = CUSTOM_HEADCOUNT.exec(text);
@@ -378,6 +393,48 @@ export class Agent {
       return out;
     }
 
+    // A change such as "my new catering request, change it to 25 people instead of 20"
+    // must update the pending custom draft, never route to cancel/change a placed order.
+    const changedHeadcount = pendingCustomHeadcountChange(text, draft);
+    if (draft?.custom && changedHeadcount != null) {
+      const hadQuote = draft.custom.price != null;
+      const next: Draft = {
+        ...draft,
+        items: draft.items.map((it) => ({ ...it, qty: changedHeadcount })),
+        readback_hash: null,
+        stage: "collecting",
+        custom: {
+          ...draft.custom,
+          request: text.slice(0, 300),
+          price: null,
+          approved: false,
+          quote_key: null,
+        },
+      };
+      store.putDraft(msg.from, next);
+      // Replace stale custom-work alerts with one current, unlinked request. Never attach this
+      // kind of change to a placed order, which is what creates the dangerous Cancel button.
+      for (const a of store.listAlerts(true)) {
+        if (a.waId === msg.from && a.orderId == null && isCustomWorkAlert(a.note)) store.markAlertDone(a.id);
+      }
+      out.route = "custom_headcount_change";
+      if (hadQuote) out.issues.push("stale_custom_quote");
+      out.replies.push(
+        hadQuote
+          ? `Got it — I updated the pending catering request to ${changedHeadcount} people and cleared the old quoted price. No placed order was changed. Annapurna Home Foods needs to quote the updated request again.`
+          : `Got it — I updated the pending catering request to ${changedHeadcount} people. No placed order was changed. Annapurna Home Foods will confirm the price here.`
+      );
+      await this.raise(
+        msg.from,
+        customer.name || msg.name || "Customer",
+        `Custom/bulk request updated: ${changedHeadcount} people. Needs current price quote. Customer said: "${text.slice(0, 180)}"`,
+        null,
+        out,
+      );
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
+    }
+
     // Wants a real person or a contact detail: answered by code, so the customer always gets a clear status.
     if (HUMAN.test(text) && !(draft?.stage === "awaiting_confirmation" && BARE_OK.test(text))) {
       const who = customer.name || msg.name || "Customer";
@@ -624,7 +681,12 @@ export class Agent {
 
     const ownerNote = typeof raw.owner_note === "string" ? raw.owner_note.trim() : "";
     if ((raw.needs_owner === true || r.kind === "owner_topic") && !fixes.length) {
-      await this.raise(msg.from, customer.name || msg.name || "Customer", (ownerNote || `Needs Maddy: "${text.slice(0, 140)}"`).slice(0, 300), null, out);
+      const baseNote = ownerNote || `Needs Maddy: "${text.slice(0, 140)}"`;
+      // Keep every custom/catering alert recognizable as custom work so fulfillment can close it.
+      const alertNote = custom
+        ? `Custom/bulk request: ${baseNote.replace(/^Custom\/bulk request:\s*/i, "")}`
+        : baseNote;
+      await this.raise(msg.from, customer.name || msg.name || "Customer", alertNote.slice(0, 300), null, out);
     }
     if (r.kind === "clarify" && streak >= this.d.cfg.thresholds.unclearStreak) {
       await this.raise(msg.from, customer.name || msg.name || "Customer", `The agent has been unsure what this customer wants for ${streak} messages in a row. Latest: "${text.slice(0, 140)}"`, null, out);
@@ -710,7 +772,7 @@ export class Agent {
     // The Needs-you custom request is fulfilled by this real order. Close every still-open
     // unlinked custom request alert for this customer so the owner desk does not retain stale work.
     for (const a of store.listAlerts(true)) {
-      if (a.waId === waId && a.orderId == null && a.note.startsWith("Custom/bulk request:")) store.markAlertDone(a.id);
+      if (a.waId === waId && a.orderId == null && isCustomWorkAlert(a.note)) store.markAlertDone(a.id);
     }
     store.clearDraft(waId);
     if (!customer.name && draft.customer_name) store.updateCustomer(waId, { name: draft.customer_name });

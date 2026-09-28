@@ -754,6 +754,18 @@ describe("web: chat and orders", () => {
       assert.equal(t.store.listAlerts(true).some((a) => a.waId === wa && a.orderId == null), false);
       assert.equal((await call("GET", "/web/history", { token })).status, 401);
       assert.equal(t.store.listOrders().length, 1);
+
+      // Regression: order lifecycle events after deletion must not reconstruct a fake, partial chat.
+      const orderId = t.store.listOrders()[0]!.id;
+      await call("POST", `/api/orders/${orderId}/status`, { token: "secret", body: { status: "ready", confirm: true } });
+      await call("POST", `/api/orders/${orderId}/status`, { token: "secret", body: { status: "done", confirm: true } });
+      assert.equal(t.store.getMessages(wa, 50).length, 0, "ready/thank-you notes do not recreate deleted messages");
+      const owner = await call("GET", "/api/state", { token: "secret" });
+      assert.equal(owner.json.customers.some((c: any) => c.waId === wa), false, "deleted chat stays out of owner Chats");
+      assert.equal(owner.json.orders.some((o: any) => o.waId === wa), true, "order history is preserved");
+      const thread = await call("GET", `/api/customers/${encodeURIComponent(wa)}/messages`, { token: "secret" });
+      assert.deepEqual(thread.json.messages, [], "direct thread lookup is an honest empty state");
+      assert.equal((await call("POST", `/api/customers/${encodeURIComponent(wa)}/reply`, { token: "secret", body: { text: "hello" } })).status, 410);
     }));
 });
 

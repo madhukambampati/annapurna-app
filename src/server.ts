@@ -424,6 +424,7 @@ export function createServer(d: ServerDeps): Server {
           const ownerChatResetAfterMessageId = store.ownerChatResetAfterMessageId();
           const customers = store
             .listCustomers()
+            .filter((c) => !store.ownerChatDeleted(c.waId))
             .map((c) => ({ waId: c.waId, name: c.name, contact: c.contact, last: store.lastMessage(c.waId) ?? null }))
             .filter((c) => c.last && c.last.id > ownerChatResetAfterMessageId)
             .sort((x, y) => y.last!.id - x.last!.id)
@@ -461,9 +462,11 @@ export function createServer(d: ServerDeps): Server {
           if (!c) throw new HttpError(404, "No such customer");
           if (m === "GET" && mt[2] === "messages") {
             const cutoff = store.ownerChatResetAfterMessageId();
-            return send(req, res, 200, { customer: { waId, name: c.name, contact: c.contact }, messages: store.getMessages(waId, 200).filter((x) => x.id > cutoff) });
+            const messages = store.ownerChatDeleted(waId) ? [] : store.getMessages(waId, 200).filter((x) => x.id > cutoff);
+            return send(req, res, 200, { customer: { waId, name: c.name, contact: c.contact }, messages });
           }
           if (m === "POST" && mt[2] === "reply") {
+            if (store.ownerChatDeleted(waId)) throw new HttpError(410, "This customer deleted the chat. The placed orders are still available in Order history.");
             const text = cleanText((await readJson(req)).text, MAX_TEXT);
             if (!text) throw new HttpError(400, "Reply is empty");
             const draft = store.getDraft(waId);
@@ -522,9 +525,13 @@ export function createServer(d: ServerDeps): Server {
           const updated = store.setOrderStatus(o.id, to, o.status === "hold" && to === "cook");
           const s = store.getSettings();
           const note = orderNote(o, o.status, to, s, reason);
-          if (note) store.addMessage(o.waId, "agent", note, now());
-          // After pickup the assistant thanks the customer and asks for feedback, once per order.
-          if (to === "done" && o.status !== "done") store.addMessage(o.waId, "agent", thanksNote(o, s), now());
+          // A deleted chat stays deleted. Order lifecycle continues in Order history, but lifecycle
+          // notes must not reconstruct a different, partial chat thread for the owner.
+          if (!store.ownerChatDeleted(o.waId)) {
+            if (note) store.addMessage(o.waId, "agent", note, now());
+            // After pickup the assistant thanks the customer and asks for feedback, once per order.
+            if (to === "done" && o.status !== "done") store.addMessage(o.waId, "agent", thanksNote(o, s), now());
+          }
           return send(req, res, 200, { order: updated });
         }
         mt = /^\/api\/alerts\/(\d+)\/done$/.exec(path);
