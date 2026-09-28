@@ -182,9 +182,12 @@ test("short notice puts the order on hold, and the read-back says so before the 
   assert.deepEqual([o.status, o.flags], ["hold", ["Under 2h notice"]]);
 });
 
-test("a non-pickup day puts the order on hold", async () => {
+test("a non-pickup day is kept for owner approval and puts the order on hold", async () => {
   const t = setup({ judge: yesJudge });
-  await orderAndReadBack(t, [KHEEMA_BOGO], "2026-09-28T12:00", "2 kheema fry combos monday at noon"); // Monday, not a combo day
+  const r = await orderAndReadBack(t, [KHEEMA_BOGO], "2026-09-28T12:00", "2 kheema fry combos monday at noon"); // Monday, outside normal combo days
+  assert.match(t.llm.prompts[0]!, /do NOT reject the request/);
+  assert.match(t.llm.prompts[0]!, /set needs_owner to true/);
+  assert.match(r.replies[0]!, /Annapurna Home Foods needs to confirm this order first/);
   await t.say("yes");
   const o = t.store.listOrders()[0]!;
   assert.deepEqual([o.status, o.flags], ["hold", ["Monday is not a pickup day for Chicken Kheema Fry combo"]]);
@@ -197,7 +200,7 @@ test("weekend combos can be picked up on Saturday and Sunday, no hold", async ()
   await t.say("yes");
   const o = t.store.listOrders()[0]!;
   assert.deepEqual([o.status, o.flags], ["cook", []]);
-  assert.match(t.llm.prompts[0]!, /never say it is impossible/);
+  assert.match(t.llm.prompts[0]!, /Saturday and Sunday remain normal pickup days for weekend combos/);
   assert.match(t.llm.prompts[0]!, /"pickup_days":\["Friday","Saturday","Sunday"\]/);
 });
 
