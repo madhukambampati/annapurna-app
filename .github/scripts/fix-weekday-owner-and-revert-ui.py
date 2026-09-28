@@ -12,11 +12,15 @@ assert old in s, "pickup rule not found"
 s = s.replace(old, new, 1)
 p.write_text(s)
 
-# Strengthen the existing regression test so this owner-approval behavior stays in the model prompt.
+# Strengthen the existing regression tests so owner-approval behavior stays in the model prompt.
 t = Path("test/agent.test.ts")
 ts = t.read_text()
 old_test = '''test("a non-pickup day puts the order on hold", async () => {\n  const t = setup({ judge: yesJudge });\n  await orderAndReadBack(t, [KHEEMA_BOGO], "2026-09-28T12:00", "2 kheema fry combos monday at noon"); // Monday, not a combo day\n  await t.say("yes");\n  const o = t.store.listOrders()[0]!;\n  assert.deepEqual([o.status, o.flags], ["hold", ["Monday is not a pickup day for Chicken Kheema Fry combo"]]);\n});'''
 new_test = '''test("a non-pickup day is kept for owner approval and puts the order on hold", async () => {\n  const t = setup({ judge: yesJudge });\n  const r = await orderAndReadBack(t, [KHEEMA_BOGO], "2026-09-28T12:00", "2 kheema fry combos monday at noon"); // Monday, outside normal combo days\n  assert.match(t.llm.prompts[0]!, /do NOT reject the request/);\n  assert.match(t.llm.prompts[0]!, /set needs_owner to true/);\n  assert.match(r.replies[0]!, /Annapurna Home Foods needs to confirm this order first/);\n  await t.say("yes");\n  const o = t.store.listOrders()[0]!;\n  assert.deepEqual([o.status, o.flags], ["hold", ["Monday is not a pickup day for Chicken Kheema Fry combo"]]);\n});'''
 assert old_test in ts, "non-pickup regression test not found"
 ts = ts.replace(old_test, new_test, 1)
+old_weekend = '  assert.match(t.llm.prompts[0]!, /never say it is impossible/);'
+new_weekend = '  assert.match(t.llm.prompts[0]!, /Saturday and Sunday remain normal pickup days for weekend combos/);'
+assert old_weekend in ts, "weekend prompt assertion not found"
+ts = ts.replace(old_weekend, new_weekend, 1)
 t.write_text(ts)
