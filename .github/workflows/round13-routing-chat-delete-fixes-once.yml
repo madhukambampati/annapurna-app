@@ -1,0 +1,40 @@
+name: Round 13 routing and deleted chat fixes
+on:
+  push:
+    branches: [round13-routing-chat-delete-fixes]
+    paths:
+      - '.github/round13-trigger.txt'
+permissions:
+  contents: write
+jobs:
+  apply-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply Round 13 fixes
+        run: python .github/scripts/round13-routing-chat-delete-fixes.py
+      - name: Verify scope and syntax
+        run: |
+          git diff --check
+          node --check public/app.js
+          node --check public/desk.js
+          changed=$(git diff --name-only | sort | tr '\n' ' ')
+          echo "Changed: $changed"
+          test "$changed" = "src/agent.ts src/server.ts src/store.ts test/agent.test.ts test/web.test.ts "
+      - name: Full regression suite
+        run: |
+          npm ci
+          npm test
+      - name: Commit fixes
+        run: |
+          git config user.name 'madhukambampati'
+          git config user.email '85366523+madhukambampati@users.noreply.github.com'
+          git add src/agent.ts src/server.ts src/store.ts test/agent.test.ts test/web.test.ts
+          git commit -m 'Fix custom headcount routing and keep deleted chats deleted'
+          git push origin HEAD:round13-routing-chat-delete-fixes
