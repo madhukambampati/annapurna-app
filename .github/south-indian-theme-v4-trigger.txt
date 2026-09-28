@@ -1,1 +1,0 @@
-Apply the presentation-only South Indian visual identity theme v4 on main and run full regression tests.
