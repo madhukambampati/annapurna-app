@@ -1,0 +1,38 @@
+name: One-time South Indian visual theme v4
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/south-indian-theme-v4-trigger.txt'
+permissions:
+  contents: write
+jobs:
+  apply-and-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply presentation-only South Indian theme
+        run: python .github/scripts/apply-south-indian-theme-v4.py
+      - name: Scope and syntax checks
+        run: |
+          git diff --check
+          node --check public/app.js
+          node --check public/desk.js
+          changed=$(git diff --name-only | sort | tr '\n' ' ')
+          echo "Changed: $changed"
+          test "$changed" = "public/desk.html public/index.html "
+      - name: Full regression suite
+        run: |
+          npm ci
+          npm test
+      - name: Commit visual theme
+        run: |
+          git config user.name 'madhukambampati'
+          git config user.email '85366523+madhukambampati@users.noreply.github.com'
+          git add public/index.html public/desk.html
+          git commit -m 'Apply South Indian visual identity theme'
+          git push origin HEAD:main
