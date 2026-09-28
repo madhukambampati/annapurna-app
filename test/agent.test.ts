@@ -623,3 +623,49 @@ test("extras on their own with no main dish that day wait for the shop", async (
   await t.say("yes");
   assert.equal(t.store.listOrders()[0]!.status, "hold");
 });
+
+
+test("Round 13: pending catering headcount change never routes to cancel a placed order", async () => {
+  const t = setup({ judge: () => ({ cancelPlaced: 0.99 }) });
+  const waId = "+15195550101";
+  t.store.upsertCustomer(waId, "Asha");
+  for (let i = 0; i < 3; i++) {
+    t.store.insertOrder({
+      waId,
+      name: "Asha",
+      items: [{ id: "kheema_fry", name: "Chicken Kheema Fry combo", qty: 1, pack: "single", amt: 18 }],
+      pickup: FRI_6PM,
+      flags: [],
+      status: "cook",
+      notes: "",
+      createdAt: Date.now() + i,
+    });
+  }
+  t.store.putDraft(waId, {
+    items: [{ id: "fry_piece_pulao", name: "Gongura Fry Piece Pulao combo", qty: 20, pack: "single", amt: null }],
+    pickup_local: FRI_6PM,
+    customer_name: "Asha",
+    notes: "",
+    readback_hash: null,
+    stage: "collecting",
+    custom: { request: "Gongura Fry Piece Pulao combo for 20 people", price: 140, approved: true, quote_key: "old-quote" },
+  });
+  const oldAlert = t.store.insertAlert({
+    waId, cust: "Asha", note: "20 people Gongura Fry Piece Pulao needs price quote", orderId: null, createdAt: Date.now(),
+  });
+
+  const r = await t.say("For my new catering request (the Gongura Fry Piece Pulao combo one), please change it to 25 people instead of 20");
+  assert.equal(r.route, "custom_headcount_change");
+  assert.equal(t.llm.prompts.length, 0, "this safety-critical disambiguation is deterministic");
+  assert.equal(t.store.listOrders().length, 3, "no placed order is changed or cancelled");
+  const d = t.store.getDraft(waId)!;
+  assert.equal(d.items[0]!.qty, 25);
+  assert.equal(d.custom!.price, null, "the 20-person quote is invalidated");
+  assert.equal(d.custom!.approved, false);
+  assert.equal(t.store.listAlerts().find((a) => a.id === oldAlert.id)!.done, true, "the stale custom alert is closed");
+  const open = t.store.listAlerts(true);
+  assert.equal(open.length, 1);
+  assert.equal(open[0]!.orderId, null, "the replacement alert is not attached to a real order");
+  assert.match(open[0]!.note, /Custom\/bulk request updated: 25 people/);
+  assert.match(r.replies[0]!, /No placed order was changed/);
+});

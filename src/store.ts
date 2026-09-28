@@ -89,6 +89,27 @@ export class Store {
     }
   }
 
+  /**
+   * True when a customer explicitly deleted their chat. The legacy inference also hides chats
+   * deleted before this marker existed, where later order lifecycle notes reconstructed a fake
+   * status-only thread after the real conversation had been erased.
+   */
+  ownerChatDeleted(waId: string): boolean {
+    const key = `owner_chat_deleted:${waId}`;
+    if (this.db.prepare("SELECT 1 FROM kv WHERE key = ?").get(key)) return true;
+    if (!waId.startsWith("web:")) return false;
+    if (this.db.prepare("SELECT 1 FROM web_sessions WHERE wa_id = ? LIMIT 1").get(waId)) return false;
+    const rows = this.db.prepare("SELECT who, text FROM messages WHERE wa_id = ? ORDER BY id").all(waId) as Row[];
+    const hasOrder = !!this.db.prepare("SELECT 1 FROM orders WHERE wa_id = ? LIMIT 1").get(waId);
+    if (!rows.length) return hasOrder;
+    const lifecycleOnly = rows.every((r) => {
+      if (String(r.who) !== "agent") return false;
+      const text = String(r.text);
+      return /^(?:Annapurna Home Foods confirmed your order #\d+|Order #\d+ has been cancelled|Sorry, order #\d+ has been cancelled|Your order #\d+ is ready for pickup|Thank you for your order)/i.test(text);
+    });
+    return hasOrder && lifecycleOnly;
+  }
+
   /** One-time refresh of combo names and prices when MENU_VERSION goes up. */
   private migrateMenu(): void {
     const v = this.kvGet<number>("menu_version", () => 0);
@@ -158,6 +179,9 @@ export class Store {
   }
 
   addMessage(waId: string, who: Msg["who"], text: string, ts: number): number {
+    // If a transport ever reuses the same customer id after deletion, a genuine new customer
+    // message starts a new visible thread. System/order lifecycle notes never do this.
+    if (who === "cust") this.db.prepare("DELETE FROM kv WHERE key = ?").run(`owner_chat_deleted:${waId}`);
     const r = this.db.prepare("INSERT INTO messages (wa_id, who, text, ts) VALUES (?, ?, ?, ?)").run(waId, who, text, ts);
     return Number(r.lastInsertRowid);
   }
@@ -205,6 +229,9 @@ export class Store {
     this.db.prepare("DELETE FROM messages WHERE wa_id = ?").run(waId);
     this.db.prepare("DELETE FROM drafts WHERE wa_id = ?").run(waId);
     this.db.prepare("DELETE FROM web_sessions WHERE wa_id = ?").run(waId);
+    // Persist a tombstone so later order-ready/thank-you lifecycle events cannot silently recreate
+    // a misleading partial conversation in the owner's Chats list. Orders themselves remain intact.
+    this.kvPut(`owner_chat_deleted:${waId}`, { at: Date.now() });
     // Non-order alerts depend on chat context. Once the customer deletes the chat they must not
     // remain as orphaned "Open chat" tasks for the owner. Order-linked alerts stay for kitchen safety.
     this.db.prepare("UPDATE alerts SET done = 1 WHERE wa_id = ? AND order_id IS NULL").run(waId);
