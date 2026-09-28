@@ -1,1 +1,1 @@
-Apply weekday combo owner-approval behavior, revert the latest South Indian visual theme, and run the full regression suite.
+Retry weekday combo owner-approval behavior and UI revert after fixing staged-diff verification.
