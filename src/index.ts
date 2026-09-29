@@ -35,6 +35,37 @@ const llm: Llm = cfg.anthropicKey
 const agent = new Agent({ store, judge, llm, cfg, notifier: cfg.notifyUrl ? new WebhookNotifier(cfg.notifyUrl) : new ConsoleNotifier() });
 const server = createServer({ agent, store, cfg });
 
+// The customer menu keeps a compact two-column card layout on phones. On narrow screens,
+// let the price label wrap above the amount instead of colliding with it; on very narrow
+// screens, move the whole price/action block below the description. This is presentation-only.
+const mobileMenuPriceFix = `<style id="mobile-menu-price-overlap-fix">
+@media(max-width:520px){
+  body.customer-mode .dish{align-items:stretch}
+  body.customer-mode .dprice{width:124px;min-width:124px}
+  body.customer-mode .dprice .price-row{display:flex;flex-direction:column;align-items:flex-end;gap:1px;width:100%}
+  body.customer-mode .dprice .lab{white-space:normal;overflow-wrap:anywhere;text-align:right;line-height:1.15;max-width:100%}
+  body.customer-mode .dprice .amt,body.customer-mode .dprice .amt.alt{line-height:1.15}
+}
+@media(max-width:360px){
+  body.customer-mode .dish{flex-direction:column}
+  body.customer-mode .dprice{width:100%;min-width:0;align-items:stretch;text-align:left}
+  body.customer-mode .dprice .price-row{flex-direction:row;align-items:baseline;justify-content:space-between;gap:12px}
+  body.customer-mode .dprice .lab{text-align:left}
+  body.customer-mode .dprice .btn{width:100%}
+}
+</style>`;
+
+server.prependListener("request", (req, res) => {
+  if (req.method !== "GET" || new URL(req.url ?? "/", "http://x").pathname !== "/") return;
+  const end = res.end.bind(res);
+  (res as any).end = (...args: any[]) => {
+    const chunk = args[0];
+    const html = Buffer.isBuffer(chunk) ? chunk.toString("utf8") : typeof chunk === "string" ? chunk : "";
+    if (html.includes("</head>")) args[0] = html.replace("</head>", `${mobileMenuPriceFix}</head>`);
+    return (end as any)(...args);
+  };
+});
+
 server.listen(cfg.port, () => {
   console.log(`Annapurna order agent on http://localhost:${cfg.port}`);
   console.log(`  Customer site  : ${cfg.web.enabled ? "on at /  (chat, menu, orders)" : "off (WEB=off)"}`);
