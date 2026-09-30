@@ -79,11 +79,34 @@
 
   function money(n) { return n == null ? "Ask us" : "$" + (Math.round(n * 100) / 100); }
   function clock(ts) { try { return new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); } catch (e) { return ""; } }
-  function validNameInput(n) { return !!n && n.length <= 60 && !/[<>]/.test(n); }
-  function validContactInput(c) {
-    if (c.length < 5 || c.length > 80) return false;
-    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) return true;
-    return /^[+()\-.\s\d]+$/.test(c) && c.replace(/\D/g, "").length >= 7;
+  function nameValidationError(value) {
+    var name = String(value || "").trim();
+    if (!name) return "Please enter your name.";
+    if (name.length > 60) return "Name must be 60 characters or less.";
+    if (!/^[\p{L}\p{M}][\p{L}\p{M} .'\u2019-]*$/u.test(name)) return "Please use letters only. Spaces, hyphens, apostrophes and periods are allowed.";
+    return "";
+  }
+  function contactValidationError(value) {
+    var contact = String(value || "").trim();
+    if (!contact) return "Please enter a phone number or email.";
+    if (contact.length > 80) return "Phone or email is too long.";
+    if (contact.indexOf("@") !== -1) {
+      if (!/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,63}$/.test(contact)) return "Please enter a valid email, for example name@example.com.";
+      return "";
+    }
+    if (!/^[+()\-. \d]+$/.test(contact)) return "Please enter a valid phone number or email.";
+    var plusCount = (contact.match(/\+/g) || []).length;
+    if (plusCount > 1 || (plusCount === 1 && contact.charAt(0) !== "+")) return "The + sign can only appear at the beginning of a phone number.";
+    var digits = contact.replace(/\D/g, "");
+    if (digits.length < 7 || digits.length > 15) return "Please enter a phone number with 7 to 15 digits.";
+    return "";
+  }
+  function setFieldValidation(inputId, errorId, message) {
+    var input = $(inputId), error = $(errorId);
+    if (!input || !error) return;
+    input.classList.toggle("field-invalid", !!message);
+    input.setAttribute("aria-invalid", message ? "true" : "false");
+    error.textContent = message || "";
   }
   function isLowValueOwnerMessage(m) {
     return !!m && m.who === "owner" && /^(?:ok(?:ay)?|yes|no|sure|thanks|thank you|no thank you|yes please|got it|fine|alright)[\s.!?]*$/i.test(String(m.text || "").trim());
@@ -955,14 +978,31 @@
   });
   document.addEventListener("visibilitychange", function () { if (!document.hidden) poll(); });
 
+  $("fName").addEventListener("blur", function () {
+    setFieldValidation("fName", "fNameErr", nameValidationError($("fName").value));
+  });
+  $("fContact").addEventListener("blur", function () {
+    setFieldValidation("fContact", "fContactErr", contactValidationError($("fContact").value));
+  });
+  $("fName").addEventListener("input", function () {
+    if ($("fName").getAttribute("aria-invalid") === "true") setFieldValidation("fName", "fNameErr", nameValidationError($("fName").value));
+  });
+  $("fContact").addEventListener("input", function () {
+    if ($("fContact").getAttribute("aria-invalid") === "true") setFieldValidation("fContact", "fContactErr", contactValidationError($("fContact").value));
+  });
+
   $("startForm").addEventListener("submit", function (e) {
     e.preventDefault();
     var err = $("startErr"); err.textContent = "";
     var name = $("fName").value.trim(), contact = $("fContact").value.trim();
-    if (!name) { err.textContent = "Please enter your name."; return; }
-    if (!validNameInput(name)) { err.textContent = "Please enter a name without < or > characters."; return; }
-    if (!contact) { err.textContent = "Please enter a phone number or email."; return; }
-    if (!validContactInput(contact)) { err.textContent = "Please enter a valid phone number or email."; return; }
+    var nameError = nameValidationError(name), contactError = contactValidationError(contact);
+    setFieldValidation("fName", "fNameErr", nameError);
+    setFieldValidation("fContact", "fContactErr", contactError);
+    if (nameError || contactError) {
+      err.textContent = nameError && contactError ? "Please fix the highlighted fields." : "Please fix the highlighted field.";
+      (nameError ? $("fName") : $("fContact")).focus();
+      return;
+    }
     if (!$("fConsent").checked) { err.textContent = "Please tick the box to continue."; return; }
     $("startBtn").disabled = true;
 

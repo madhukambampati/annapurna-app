@@ -145,16 +145,24 @@ function lowValueOwnerReply(text: string): boolean {
   return /^(?:ok(?:ay)?|yes|no|sure|thanks|thank you|no thank you|yes please|got it|fine|alright|order\s+confirm(?:ed|ing)|confirm(?:ed|ing)\s+ord\w*)[\s.!?]*$/i.test(text.trim());
 }
 
-/** A display name is plain text. HTML-like names are rejected for customer-facing polish. */
+/** Customer display name: letters plus normal name punctuation only. */
 export function validName(n: string): boolean {
-  return n.length > 0 && n.length <= 60 && !/[<>]/.test(n);
+  const value = n.trim();
+  return value.length > 0
+    && value.length <= 60
+    && /^[\p{L}\p{M}][\p{L}\p{M} .'\u2019-]*$/u.test(value);
 }
 
-/** A phone number (7+ digits) or something that looks like an email. */
+/** A valid email or phone number containing 7-15 digits. */
 export function validContact(c: string): boolean {
-  if (c.length < 5 || c.length > 80) return false;
-  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) return true;
-  return /^[+()\-.\s\d]+$/.test(c) && c.replace(/\D/g, "").length >= 7;
+  const value = c.trim();
+  if (value.length < 5 || value.length > 80) return false;
+  if (value.includes("@")) return /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,63}$/.test(value);
+  if (!/^[+()\-. \d]+$/.test(value)) return false;
+  const plusCount = (value.match(/\+/g) ?? []).length;
+  if (plusCount > 1 || (plusCount === 1 && !value.startsWith("+"))) return false;
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 7 && digits.length <= 15;
 }
 
 function contactKey(c: string): string {
