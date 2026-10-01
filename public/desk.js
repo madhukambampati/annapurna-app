@@ -135,7 +135,7 @@ function renderDashboard() {
   const tz = state.settings && state.settings.tz ? state.settings.tz : "America/Toronto";
   const today = localDateKey(Date.now(), tz);
   const sales = state.orders
-    .filter((o) => o.status !== "cancelled" && Number(o.createdAt || 0) >= launchAt && localDateKey(o.createdAt, tz) === today)
+    .filter((o) => !["hold", "cancelled"].includes(o.status) && Number(o.createdAt || 0) >= launchAt && localDateKey(o.createdAt, tz) === today)
     .reduce((sum, o) => {
       const t = totalOf(o.items);
       return sum + (t == null ? 0 : t);

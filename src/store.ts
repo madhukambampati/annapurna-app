@@ -232,9 +232,9 @@ export class Store {
     // Persist a tombstone so later order-ready/thank-you lifecycle events cannot silently recreate
     // a misleading partial conversation in the owner's Chats list. Orders themselves remain intact.
     this.kvPut(`owner_chat_deleted:${waId}`, { at: Date.now() });
-    // Non-order alerts depend on chat context. Once the customer deletes the chat they must not
-    // remain as orphaned "Open chat" tasks for the owner. Order-linked alerts stay for kitchen safety.
-    this.db.prepare("UPDATE alerts SET done = 1 WHERE wa_id = ? AND order_id IS NULL").run(waId);
+    // Chat-only work and cancellation requests should not survive a deleted customer chat.
+    // Other order-linked safety alerts remain available to the kitchen.
+    this.db.prepare("UPDATE alerts SET done = 1 WHERE wa_id = ? AND (order_id IS NULL OR note LIKE 'Cancellation requested%')").run(waId);
     this.db.prepare("UPDATE customers SET profile = '', uncertain_streak = 0 WHERE wa_id = ?").run(waId);
   }
 
@@ -334,6 +334,11 @@ export class Store {
   /** The owner has replied in the chat, so open handoff requests from this customer are answered. */
   closeHandoffs(waId: string): void {
     this.db.prepare("UPDATE alerts SET done = 1 WHERE wa_id = ? AND done = 0 AND note LIKE 'Wants to talk to a person%'").run(waId);
+  }
+
+  /** A closed order cannot keep stale owner alerts open. */
+  closeOrderAlerts(orderId: number): void {
+    this.db.prepare("UPDATE alerts SET done = 1 WHERE order_id = ? AND done = 0").run(orderId);
   }
 
   markAlertDone(id: number): void {

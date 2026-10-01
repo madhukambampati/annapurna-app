@@ -393,7 +393,7 @@ export function createServer(d: ServerDeps): Server {
           limit(`poll:${waId}`, 60, 60_000);
           const s = store.getSettings();
           const orders = store.ordersFor(waId).map((o) => ({
-            id: o.id, status: o.status, pickup: o.pickup, pickupText: formatWhen(o.pickup), items: o.items.map(itemLabel), total: total(o.items), address: s.address,
+            id: o.id, status: o.status, pickup: o.pickup, pickupText: formatWhen(o.pickup), items: o.items.map(itemLabel), total: total(o.items), notes: o.notes, address: s.address,
           }));
           return send(req, res, 200, { orders });
         }
@@ -531,6 +531,7 @@ export function createServer(d: ServerDeps): Server {
           }
           if (!ALLOWED[o.status]?.includes(to)) throw new HttpError(400, `Cannot move an order from ${o.status} to ${String(to)}`);
           const updated = store.setOrderStatus(o.id, to, o.status === "hold" && to === "cook");
+          if (to === "cancelled" || to === "done") store.closeOrderAlerts(o.id);
           const s = store.getSettings();
           const note = orderNote(o, o.status, to, s, reason);
           // A deleted chat stays deleted. Order lifecycle continues in Order history, but lifecycle

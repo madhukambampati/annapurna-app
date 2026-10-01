@@ -672,6 +672,7 @@
         h("div", { class: "ord-items" }, h("ul", {}, o.items.map(function (x) { return h("li", {}, x); }))),
         h("div", { class: "ord-meta" },
           h("div", {}, h("span", {}, "Pickup"), h("b", {}, o.pickupText)),
+          o.notes ? h("div", {}, h("span", {}, "Note"), h("b", {}, o.notes)) : null,
           (o.status === "ready" || o.status === "cook") && o.address ? h("div", {}, h("span", {}, "Location"), h("b", {}, o.address)) : null),
         h("div", { class: "ord-foot" },
           h("div", { class: "tot" }, o.total == null ? "Total to be confirmed" : "Total " + money(o.total)),
@@ -984,11 +985,18 @@
   $("fContact").addEventListener("blur", function () {
     setFieldValidation("fContact", "fContactErr", contactValidationError($("fContact").value));
   });
+  function clearResolvedStartError() {
+    var err = $("startErr");
+    if (!err || !/^Please fix the highlighted field/.test(err.textContent || "")) return;
+    if (!nameValidationError($("fName").value) && !contactValidationError($("fContact").value)) err.textContent = "";
+  }
   $("fName").addEventListener("input", function () {
     if ($("fName").getAttribute("aria-invalid") === "true") setFieldValidation("fName", "fNameErr", nameValidationError($("fName").value));
+    clearResolvedStartError();
   });
   $("fContact").addEventListener("input", function () {
     if ($("fContact").getAttribute("aria-invalid") === "true") setFieldValidation("fContact", "fContactErr", contactValidationError($("fContact").value));
+    clearResolvedStartError();
   });
 
   $("startForm").addEventListener("submit", function (e) {

@@ -385,6 +385,18 @@ input.field-invalid{border-color:var(--chilli)!important;box-shadow:0 0 0 3px co
   .customer-mode .brand small{display:block!important;font-size:8.6px;line-height:1.05;white-space:normal;overflow:visible;text-overflow:clip;letter-spacing:0}
   .customer-mode .brand small::after{display:block!important;content:"Vindhu Assistant";margin:2px 0 0;color:var(--brand2);font-size:7.9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
 }
+
+/* 320px launch guard: preserve Annapurna + nav; Vindhu remains visible in the chat heading. */
+@media(max-width:340px){
+  .customer-mode .top{gap:4px;padding-left:6px;padding-right:6px}
+  .customer-mode .seal{width:34px;height:34px;border-radius:11px}
+  .customer-mode .brand{max-width:78px}
+  .customer-mode .brand h1{font-size:14px!important;line-height:1.02}
+  .customer-mode .brand small{display:block!important;font-size:7.8px!important;line-height:1.05;white-space:nowrap!important}
+  .customer-mode .brand small::after{display:none!important}
+  .customer-mode .tabs{gap:0}
+  .customer-mode .tab{min-width:41px!important;padding-left:2px!important;padding-right:2px!important;font-size:9.5px!important}
+}
 </style>
 
 <style id="customerRedesignV1">

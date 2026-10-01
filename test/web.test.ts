@@ -197,7 +197,7 @@ describe("web: chat and orders", () => {
   test("message -> read-back -> yes -> order; orders list shows it", () =>
     withRig(async ({ t, start, say, call }) => {
       const token = await start("Asha", "asha@example.com");
-      t.llm.push(modelReply({ reply: "Sure, noted.", items: [{ id: "kheema_fry", qty: 2, pack: "bogo", asked_for: "kheema fry" }], pickup: FRI_6PM, stage: "awaiting_confirmation" }));
+      t.llm.push(modelReply({ reply: "Sure, noted.", items: [{ id: "kheema_fry", qty: 2, pack: "bogo", asked_for: "kheema fry" }], pickup: FRI_6PM, notes: "Spicy", stage: "awaiting_confirmation" }));
       const a = await say(token, "2 kheema fry combos bogo, Friday 6pm");
       assert.equal(a.status, 200);
       const texts = a.json.messages.map((m: any) => `${m.who}:${m.text}`).join("\n");
@@ -208,6 +208,7 @@ describe("web: chat and orders", () => {
       const o = await call("GET", "/web/orders", { token });
       assert.equal(o.json.orders.length, 1);
       assert.deepEqual([o.json.orders[0].status, o.json.orders[0].total], ["cook", 56]);
+      assert.equal(o.json.orders[0].notes, "Spicy");
       assert.match(o.json.orders[0].pickupText, /Fri/);
       // the desk sees name and contact
       const st = await call("GET", "/api/state", { token: "secret" });
@@ -606,6 +607,9 @@ describe("web: chat and orders", () => {
       assert.match(alert!.note, /Cancellation requested/);
       assert.ok(r.json.messages.some((m: any) => /cancellation request/i.test(m.text)));
       assert.match(t.notifier.sent.at(-1)!.title, /Cancellation request/);
+      const cancelled = await call("POST", "/api/orders/" + id + "/status", { token: "secret", body: { status: "cancelled" } });
+      assert.equal(cancelled.status, 200);
+      assert.equal(t.store.listAlerts(true).some((a) => a.orderId === id), false);
     }));
 
   test("ready and picked-up transitions require explicit owner confirmation", () =>
@@ -748,10 +752,14 @@ describe("web: chat and orders", () => {
       assert.ok(t.store.getMessages(wa, 50).length > 0);
       // A chat-only alert would otherwise leave the owner with a stale Open chat card and a blank thread.
       t.store.insertAlert({ waId: wa, cust: "Asha", note: "Custom/bulk request: old pending request", orderId: null, createdAt: Date.now() });
+      const placedOrder = t.store.listOrders()[0]!;
+      t.store.insertAlert({ waId: wa, cust: "Asha", note: "Cancellation requested for order #" + placedOrder.id, orderId: placedOrder.id, createdAt: Date.now() });
       assert.ok(t.store.listAlerts(true).some((a) => a.waId === wa && a.orderId == null));
+      assert.ok(t.store.listAlerts(true).some((a) => a.waId === wa && a.note.startsWith("Cancellation requested")));
       assert.equal((await call("DELETE", "/web/me", { token })).status, 200);
       assert.equal(t.store.getMessages(wa, 50).length, 0);
       assert.equal(t.store.listAlerts(true).some((a) => a.waId === wa && a.orderId == null), false);
+      assert.equal(t.store.listAlerts(true).some((a) => a.waId === wa && a.note.startsWith("Cancellation requested")), false);
       assert.equal((await call("GET", "/web/history", { token })).status, 401);
       assert.equal(t.store.listOrders().length, 1);
 
