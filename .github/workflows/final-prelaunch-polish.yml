@@ -23,16 +23,19 @@ jobs:
           node-version: 22
       - run: npm ci
       - name: Apply final prelaunch polish
-        run: node scripts/final-prelaunch-polish.cjs
+        run: |
+          node scripts/final-prelaunch-polish.cjs
+          node scripts/restore-original-garbage-number.cjs
       - name: Full regression suite
         run: npm test
       - name: Commit fix and remove temporary patch files
         shell: bash
         run: |
           rm scripts/final-prelaunch-polish.cjs
+          rm scripts/restore-original-garbage-number.cjs
           rm .github/workflows/final-prelaunch-polish.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public/app.js src/server.ts test/web.test.ts scripts/final-prelaunch-polish.cjs .github/workflows/final-prelaunch-polish.yml
+          git add public/app.js src/server.ts test/web.test.ts scripts/final-prelaunch-polish.cjs scripts/restore-original-garbage-number.cjs .github/workflows/final-prelaunch-polish.yml
           git commit -m "Polish prelaunch signup validation"
           git push origin annapurna-working
