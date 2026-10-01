@@ -1,0 +1,38 @@
+name: Final prelaunch polish
+
+on:
+  push:
+    branches:
+      - annapurna-working
+    paths:
+      - .github/workflows/final-prelaunch-polish.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-clean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: annapurna-working
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Apply final prelaunch polish
+        run: node scripts/final-prelaunch-polish.cjs
+      - name: Full regression suite
+        run: npm test
+      - name: Commit fix and remove temporary patch files
+        shell: bash
+        run: |
+          rm scripts/final-prelaunch-polish.cjs
+          rm .github/workflows/final-prelaunch-polish.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/app.js src/server.ts test/web.test.ts scripts/final-prelaunch-polish.cjs .github/workflows/final-prelaunch-polish.yml
+          git commit -m "Polish prelaunch signup validation"
+          git push origin annapurna-working
