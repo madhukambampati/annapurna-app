@@ -7,6 +7,13 @@ function replaceOnce(file, oldText, newText) {
   fs.writeFileSync(file, s);
 }
 
+// Ordinary orders need routine approval; exception/safety holds keep the stronger "needs you" signal.
+replaceOnce('src/agent.ts',
+`    await this.d.notifier.notify(
+      \`Order #\${order.id} needs approval\`,`,
+`    await this.d.notifier.notify(
+      flags.length ? \`Order #\${order.id} needs you\` : \`Order #\${order.id} needs approval\`,`);
+
 replaceOnce('test/agent.test.ts',
 `  assert.match(r2.replies[0]!, /reach out to you here in this chat/);`,
 `  assert.match(r2.replies[0]!, /confirm it here before we start cooking/);`);
