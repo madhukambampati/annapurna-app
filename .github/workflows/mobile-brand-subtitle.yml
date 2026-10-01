@@ -34,14 +34,14 @@ jobs:
           const marker = '</style>';
           if (!s.includes(marker)) throw new Error('style closing tag not found');
           const css = `
-/* Launch polish: keep the Annapurna + Vindhu identity visible on compact phones. */
-@media(max-width:520px){
-  .customer-mode .brand{min-width:0}
-  .customer-mode .brand h1{font-size:16.5px;line-height:1.05}
-  .customer-mode .brand small{display:block!important;font-size:8.7px;line-height:1.1;white-space:nowrap;overflow:visible;text-overflow:clip;letter-spacing:0}
-  .customer-mode .brand small::after{display:inline!important;content:" · Vindhu Assistant";margin-left:2px;color:var(--brand2);font-size:8px;font-weight:800;letter-spacing:.02em}
-}
-`;
+          /* Launch polish: keep the Annapurna + Vindhu identity visible on compact phones. */
+          @media(max-width:520px){
+            .customer-mode .brand{min-width:0}
+            .customer-mode .brand h1{font-size:16.5px;line-height:1.05}
+            .customer-mode .brand small{display:block!important;font-size:8.7px;line-height:1.1;white-space:nowrap;overflow:visible;text-overflow:clip;letter-spacing:0}
+            .customer-mode .brand small::after{display:inline!important;content:" · Vindhu Assistant";margin-left:2px;color:var(--brand2);font-size:8px;font-weight:800;letter-spacing:.02em}
+          }
+          `;
           if (!s.includes('Launch polish: keep the Annapurna + Vindhu identity visible on compact phones.')) {
             s = s.replace(marker, css + marker);
             fs.writeFileSync(path, s);
