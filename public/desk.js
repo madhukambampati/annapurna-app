@@ -9,6 +9,7 @@ let cook = null;
 let chat = { waId: "", messages: [], customer: null };
 let sim = { from: "+15195550101", name: "", msgs: [] };
 let token = "";
+let orderQuery = "", orderStatusFilter = "all", chatQuery = "";
 try { token = localStorage.getItem("annapurna-owner") || ""; } catch { /* storage blocked */ }
 
 function h(tag, attrs, ...kids) {
@@ -175,6 +176,24 @@ function renderDashboard() {
   return out;
 }
 
+function orderFilterBar() {
+  const q = h("input", { type: "search", value: orderQuery, placeholder: "Order #, customer, contact, dish...", "aria-label": "Search orders" });
+  const status = h("select", { "aria-label": "Filter order status" },
+    [["all","All statuses"],["hold","Needs approval"],["cook","To cook"],["ready","Ready"],["done","Picked up"],["cancelled","Cancelled"]].map(([v,l]) => h("option", { value: v, selected: orderStatusFilter === v }, l)));
+  const apply = () => { orderQuery = q.value.trim(); orderStatusFilter = status.value; render(); };
+  return h("form", { class: "owner-filters", onsubmit: (e) => { e.preventDefault(); apply(); } },
+    q, status,
+    h("button", { class: "pri", type: "submit" }, "Apply"),
+    (orderQuery || orderStatusFilter !== "all") ? h("button", { class: "ghost", type: "button", onclick: () => { orderQuery = ""; orderStatusFilter = "all"; render(); } }, "Clear") : null);
+}
+function orderMatches(o) {
+  if (orderStatusFilter !== "all" && o.status !== orderStatusFilter) return false;
+  const q = orderQuery.toLowerCase();
+  if (!q) return true;
+  const text = [o.id, o.name, o.contact, o.notes, o.status].concat((o.items || []).map((i) => [i.name, i.id].join(" "))).join(" ").toLowerCase();
+  return text.includes(q.replace(/^#/, "")) || String(o.id) === q.replace(/^#/, "");
+}
+
 /* ---------- orders ---------- */
 function ticket(o) {
   const b = (to, txt, ghost) => h("button", { class: ghost ? "ghost" : "", onclick: () => {
@@ -205,12 +224,14 @@ function ticket(o) {
 }
 
 function renderOrders() {
-  const open = state.alerts.filter((a) => !a.done);
-  const held = state.orders.filter((o) => o.status === "hold");
-  const cooking = state.orders.filter((o) => o.status === "cook").sort((a, b) => String(a.pickup || "9").localeCompare(String(b.pickup || "9")));
-  const ready = state.orders.filter((o) => o.status === "ready").sort((a, b) => String(a.pickup || "9").localeCompare(String(b.pickup || "9")));
-  const done = state.orders.filter((o) => o.status === "done").slice(-12).reverse();
-  const cancelled = state.orders.filter((o) => o.status === "cancelled").slice(-8).reverse();
+  const q = orderQuery.toLowerCase();
+  const orderPool = state.orders.filter(orderMatches);
+  const open = state.alerts.filter((a) => !a.done && (!q || [a.id, a.orderId, a.cust, a.contact, a.note].join(" ").toLowerCase().includes(q.replace(/^#/, ""))));
+  const held = orderPool.filter((o) => o.status === "hold");
+  const cooking = orderPool.filter((o) => o.status === "cook").sort((a, b) => String(a.pickup || "9").localeCompare(String(b.pickup || "9")));
+  const ready = orderPool.filter((o) => o.status === "ready").sort((a, b) => String(a.pickup || "9").localeCompare(String(b.pickup || "9")));
+  const done = orderPool.filter((o) => o.status === "done").slice(-12).reverse();
+  const cancelled = orderPool.filter((o) => o.status === "cancelled").slice(-8).reverse();
   const out = [
     h("div", { class: "owner-page-title" },
       h("div", {}, h("h2", {}, "Orders"), h("p", { class: "sub" }, "Accept, prepare and hand off customer orders.")),
@@ -219,6 +240,8 @@ function renderOrders() {
         h("span", {}, ready.length + " ready"),
         (open.length + held.length) ? h("span", { class: "hot" }, (open.length + held.length) + " need you") : null))
   ];
+
+  out.push(orderFilterBar());
 
   if (open.length || held.length) {
     out.push(h("section", { class: "owner-attention" },
@@ -237,8 +260,9 @@ function renderOrders() {
         h("div", { class: "cols" }, held.map(ticket))) : null));
   }
 
-  if (!state.orders.length) {
-    out.push(h("div", { class: "empty owner-empty-large" }, h("b", {}, "No orders yet"), h("span", {}, "Customer orders will appear here as soon as they are confirmed.")));
+  if (!orderPool.length && !open.length) {
+    const filtered = orderQuery || orderStatusFilter !== "all";
+    out.push(h("div", { class: "empty owner-empty-large" }, h("b", {}, filtered ? "No matching orders" : "No orders yet"), h("span", {}, filtered ? "Try another search or clear the filter." : "Customer orders will appear here as soon as they are submitted.")));
     return out;
   }
 
@@ -311,13 +335,23 @@ function customerOrderBadge(waId) {
   return { id: order.id, status: order.status, label: labels[order.status] || order.status };
 }
 
+function chatFilterBar() {
+  const q = h("input", { type: "search", value: chatQuery, placeholder: "Search customer, contact or message...", "aria-label": "Search customer chats" });
+  return h("form", { class: "owner-filters chat-filters", onsubmit: (e) => { e.preventDefault(); chatQuery = q.value.trim(); render(); } },
+    q,
+    h("button", { class: "pri", type: "submit" }, "Search"),
+    chatQuery ? h("button", { class: "ghost", type: "button", onclick: () => { chatQuery = ""; render(); } }, "Clear") : null);
+}
+
 function renderChats() {
+  const q = chatQuery.toLowerCase();
+  const filteredCustomers = state.customers.filter((c) => !q || [c.name, c.contact, c.last && c.last.text].join(" ").toLowerCase().includes(q));
   const title = h("div", { class: "owner-page-title chat-title" },
     h("div", {}, h("h2", {}, "Customer chats"), h("p", { class: "sub" }, "Read conversations and reply as Annapurna.")),
-    h("span", { class: "lane-count" }, String(state.customers.length)));
+    h("span", { class: "lane-count" }, String(filteredCustomers.length)));
 
   const list = h("div", { class: "clist" },
-    state.customers.length ? state.customers.map((c) => {
+    filteredCustomers.length ? filteredCustomers.map((c) => {
       const order = customerOrderBadge(c.waId);
       const last = c.last || null;
       return h("button", { class: "crow", "aria-current": String(c.waId === chat.waId), onclick: () => openChat(c.waId) },
@@ -376,7 +410,7 @@ function renderChats() {
         ? h("div", { class: "chat-compose" }, h("small", {}, "Replies appear in the customer's chat."), form)
         : h("div", { class: "chat-compose test-only" }, h("small", {}, "Test customer — replies are not delivered anywhere.")));
   }
-  return [title, h("div", { class: "chatgrid" + (chat.waId ? " has-thread" : "") }, list, right)];
+  return [title, chatFilterBar(), h("div", { class: "chatgrid" + (chat.waId ? " has-thread" : "") }, list, right)];
 }
 
 /* ---------- cook ---------- */

@@ -233,6 +233,12 @@ export function createServer(d: ServerDeps): Server {
     }
   };
 
+  const appVersion = (): string => {
+    const js = asset("app.js");
+    const html = asset("index.html");
+    return sha(String(js ?? "") + "\0" + String(html ?? "")).slice(0, 12);
+  };
+
   const clientIp = (req: IncomingMessage): string => {
     if (w.proxyHops > 0) {
       const parts = String(req.headers["x-forwarded-for"] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -304,6 +310,11 @@ export function createServer(d: ServerDeps): Server {
       if (path.startsWith("/web/")) {
         if (!w.enabled) throw new HttpError(404, "Not found");
         const ip = clientIp(req);
+
+        if (m === "GET" && path === "/web/version") {
+          limit(`version:${ip}`, 120, 60_000);
+          return send(req, res, 200, { version: appVersion() });
+        }
 
         if (m === "GET" && path === "/web/menu") {
           limit(`menu:${ip}`, 60, 60_000);

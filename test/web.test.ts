@@ -118,6 +118,13 @@ describe("web: files and headers", () => {
       }
     }));
 
+  test("customer app exposes a deploy version for safe refresh checks", () =>
+    withRig(async ({ call }) => {
+      const r = await call("GET", "/web/version");
+      assert.equal(r.status, 200);
+      assert.match(r.json.version, /^[0-9a-f]{12}$/);
+    }));
+
   test("HSTS only when the proxy says https", () =>
     withRig(async ({ call }) => {
       assert.equal((await call("GET", "/health")).headers.get("strict-transport-security"), null);
@@ -169,6 +176,17 @@ describe("web: menu and sessions", () => {
       assert.equal(ok.json.name, "Asha");
     }));
 
+  test("contact alone cannot resume another chat; resume requires this browser's saved bearer token", () =>
+    withRig(async ({ t, call, start }) => {
+      const first = await start("Asha", "asha@example.com");
+      const noToken = await call("POST", "/web/resume", { body: { name: "Asha", contact: "asha@example.com", consent: true } });
+      assert.equal(noToken.status, 401);
+      const second = await start("Asha", "asha@example.com");
+      assert.notEqual(first, second);
+      assert.equal(t.store.listCustomers().length, 2);
+      assert.equal((await call("GET", "/web/history", { token: second })).json.messages.length, 0);
+    }));
+
   test("the raw token is never stored, only its hash", () =>
     withRig(async ({ t, start }) => {
       const token = await start();
@@ -216,7 +234,7 @@ describe("web: chat and orders", () => {
       assert.equal(b.json.orderId, 1);
       const o = await call("GET", "/web/orders", { token });
       assert.equal(o.json.orders.length, 1);
-      assert.deepEqual([o.json.orders[0].status, o.json.orders[0].total], ["cook", 56]);
+      assert.deepEqual([o.json.orders[0].status, o.json.orders[0].total], ["hold", 56]);
       assert.equal(o.json.orders[0].notes, "Spicy");
       assert.match(o.json.orders[0].pickupText, /Fri/);
       // the desk sees name and contact
@@ -242,7 +260,7 @@ describe("web: chat and orders", () => {
       const orders = (await call("GET", "/web/orders", { token })).json.orders;
       assert.equal(orders.length, 1);
       assert.equal(orders[0].total, 22);
-      const confirmations = t.store.getMessages(t.store.listCustomers()[0]!.waId, 100).filter((m: any) => /Order #\d+.*is confirmed/.test(m.text));
+      const confirmations = t.store.getMessages(t.store.listCustomers()[0]!.waId, 100).filter((m: any) => /Order #\d+.*(?:submitted for Annapurna confirmation|is confirmed)/.test(m.text));
       assert.equal(confirmations.length, 1);
     }));
 
@@ -610,7 +628,7 @@ describe("web: chat and orders", () => {
       const id = (await say(token, "yes")).json.orderId;
       const r = await call("POST", `/web/orders/${id}/cancel-request`, { token });
       assert.equal(r.status, 200);
-      assert.equal(t.store.getOrder(id)!.status, "cook");
+      assert.equal(t.store.getOrder(id)!.status, "hold");
       const alert = t.store.listAlerts(true).find((a) => a.orderId === id);
       assert.ok(alert);
       assert.match(alert!.note, /Cancellation requested/);
@@ -628,6 +646,8 @@ describe("web: chat and orders", () => {
       await say(token, "1 kheema fry friday 6pm");
       const id = (await say(token, "yes")).json.orderId;
       assert.equal((await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "ready" } })).status, 400);
+      assert.equal(t.store.getOrder(id)!.status, "hold");
+      assert.equal((await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "cook" } })).status, 200);
       assert.equal(t.store.getOrder(id)!.status, "cook");
       assert.equal((await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "ready", confirm: true } })).status, 200);
       assert.equal((await call("POST", `/api/orders/${id}/status`, { token: "secret", body: { status: "done" } })).status, 400);
