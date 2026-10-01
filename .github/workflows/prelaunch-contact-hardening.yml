@@ -36,3 +36,5 @@ jobs:
           git add public/app.js src/server.ts test scripts/prelaunch-contact-hardening.cjs .github/workflows/prelaunch-contact-hardening.yml
           git commit -m "Finalize prelaunch contact validation"
           git push origin annapurna-working
+
+# retry after updating reserved-number test fixtures
