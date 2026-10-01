@@ -87,8 +87,8 @@ describe("limiter", () => {
 });
 
 test("customer identity validation accepts real values and rejects junk", () => {
-  for (const ok of ["519-555-0101", "+1 (519) 555 0101", "maddy@example.com", "5195550101"]) assert.equal(validContact(ok), true, ok);
-  for (const bad of ["", "abc", "12345", "not an email@", "a@b", "519+5550101", "1234567890123456", "<script>alert(1)</script>", "x".repeat(81)]) assert.equal(validContact(bad), false, bad);
+  for (const ok of ["519-555-0101", "+1 (519) 555 0101", "maddy@example.com", "5195550101", "6478043658"]) assert.equal(validContact(ok), true, ok);
+  for (const bad of ["", "abc", "12345", "not an email@", "a@b", "519+5550101", "1234567890", "12345678890", "1111111111", "0000000000", "5191550101", "+1 (123) 456-7890", "1234567890123456", "<script>alert(1)</script>", "x".repeat(81)]) assert.equal(validContact(bad), false, bad);
   for (const ok of ["Asha", "M. Kiran", "Siva-Parvathi", "José", "O'Connor"]) assert.equal(validName(ok), true, ok);
   for (const bad of ["", "1234", "M@xy", "Madhu_1", "<script>alert(1)</script>", "A < B", "x".repeat(61)]) assert.equal(validName(bad), false, bad);
 });

@@ -94,11 +94,14 @@
       if (!/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,63}$/.test(contact)) return "Please enter a valid email, for example name@example.com.";
       return "";
     }
-    if (!/^[+()\-. \d]+$/.test(contact)) return "Please enter a valid phone number or email.";
+    if (!/^[+()\-. \d]+$/.test(contact)) return "Please enter a valid Canadian/US phone number, or use your email.";
     var plusCount = (contact.match(/\+/g) || []).length;
     if (plusCount > 1 || (plusCount === 1 && contact.charAt(0) !== "+")) return "The + sign can only appear at the beginning of a phone number.";
     var digits = contact.replace(/\D/g, "");
-    if (digits.length < 7 || digits.length > 15) return "Please enter a phone number with 7 to 15 digits.";
+    if (digits.length === 11 && digits.charAt(0) === "1") digits = digits.slice(1);
+    if (digits.length !== 10) return "Please enter a 10-digit Canadian/US phone number, or use your email.";
+    if (!/^[2-9]\d{2}[2-9]\d{6}$/.test(digits)) return "Please enter a valid Canadian/US phone number, or use your email.";
+    if (/(\d)\1{5,}/.test(digits) || /(012345|123456|234567|345678|456789|567890|098765|987654|876543|765432|654321|543210)/.test(digits)) return "Please enter a real phone number, or use your email.";
     return "";
   }
   function setFieldValidation(inputId, errorId, message) {

@@ -153,7 +153,7 @@ export function validName(n: string): boolean {
     && /^[\p{L}\p{M}][\p{L}\p{M} .'\u2019-]*$/u.test(value);
 }
 
-/** A valid email or phone number containing 7-15 digits. */
+/** A syntactically valid email or a plausible Canadian/US (NANP) phone number. */
 export function validContact(c: string): boolean {
   const value = c.trim();
   if (value.length < 5 || value.length > 80) return false;
@@ -161,8 +161,13 @@ export function validContact(c: string): boolean {
   if (!/^[+()\-. \d]+$/.test(value)) return false;
   const plusCount = (value.match(/\+/g) ?? []).length;
   if (plusCount > 1 || (plusCount === 1 && !value.startsWith("+"))) return false;
-  const digits = value.replace(/\D/g, "");
-  return digits.length >= 7 && digits.length <= 15;
+  let digits = value.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
+  if (digits.length !== 10) return false;
+  if (!/^[2-9]\d{2}[2-9]\d{6}$/.test(digits)) return false;
+  if (/(\d)\1{5,}/.test(digits)) return false;
+  if (/(012345|123456|234567|345678|456789|567890|098765|987654|876543|765432|654321|543210)/.test(digits)) return false;
+  return true;
 }
 
 function contactKey(c: string): string {
