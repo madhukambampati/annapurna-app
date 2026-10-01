@@ -631,6 +631,15 @@ body.owner-mode .more-card{border-radius:20px}
 }
 </style>
 
+
+<style id="ownerDeskSearchV2">
+.owner-filters{display:grid;grid-template-columns:minmax(180px,1fr) minmax(150px,210px) auto auto;gap:8px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:0 8px 22px rgba(20,50,32,.04)}
+.owner-filters input,.owner-filters select{width:100%;min-height:42px;padding:9px 11px;border:1px solid var(--line2);border-radius:11px;background:var(--page);color:var(--ink)}
+.owner-filters .pri,.owner-filters .ghost{min-height:42px;white-space:nowrap}
+.chat-filters{grid-template-columns:minmax(180px,1fr) auto auto}
+@media(max-width:700px){.owner-filters,.chat-filters{grid-template-columns:1fr 1fr}.owner-filters input,.chat-filters input{grid-column:1/-1}}
+@media(max-width:420px){.owner-filters,.chat-filters{grid-template-columns:1fr}.owner-filters input,.chat-filters input{grid-column:auto}.owner-filters .pri,.owner-filters .ghost{width:100%}}
+</style>
 </head>
 <body class="owner-mode">
 <header class="owner-head">

@@ -709,7 +709,7 @@ export class Agent {
     ];
     if (d.notes) out.push(`Note: ${d.notes}`);
     if (flags.length) out.push(`Annapurna Home Foods needs to confirm this order first (${flags.join("; ").toLowerCase()}).`);
-    out.push("Reply YES to confirm, or tell me what to change.");
+    out.push("Reply YES to submit this order for Annapurna confirmation, or tell me what to change.");
     return out.join("\n");
   }
 
@@ -829,8 +829,11 @@ export class Agent {
     const notes = main ? [`Extras for order #${main.id}`, draft.notes].filter(Boolean).join(". ") : draft.notes;
     const customer = store.getCustomer(waId)!;
     const name = customer.name || draft.customer_name || "Customer";
+    // Every normal website order is reviewed by Annapurna before it enters the kitchen.
+    // Existing safety flags remain visible; ordinary orders get an explicit approval flag.
+    const approvalFlags = flags.length ? flags : ["Awaiting owner approval"];
     const order = store.insertOrder({
-      waId, name, items, pickup: draft.pickup_local, flags, status: flags.length ? "hold" : "cook", notes, createdAt: now,
+      waId, name, items, pickup: draft.pickup_local, flags: approvalFlags, status: "hold", notes, createdAt: now,
     });
     store.clearDraft(waId);
     if (!customer.name && draft.customer_name) store.updateCustomer(waId, { name: draft.customer_name });
@@ -840,14 +843,13 @@ export class Agent {
     const t = total(items);
     const who = friendlyName(customer.name || draft.customer_name);
     const listing = items.map((it) => `- ${itemLabel(it)}`).join("\n");
-    if (flags.length) {
-      out.replies.push(`Thank you${who ? ` ${who}` : ""}! I've noted order #${order.id}:\n${listing}\nWe need to confirm it first (${flags.join("; ").toLowerCase()}). Annapurna Home Foods will reach out to you here in this chat.`);
-    } else {
-      out.replies.push(`Thank you${who ? ` ${who}` : ""}! Order #${order.id}${main ? ` (extras for order #${main.id})` : ""} is confirmed:\n${listing}\nTotal: ${money(t)}\nPickup: ${formatWhen(draft.pickup_local)} at ${s.address}`);
-    }
+    const reviewNote = flags.length ? ` Review needed: ${flags.join("; ").toLowerCase()}.` : "";
+    out.replies.push(
+      `Thank you${who ? ` ${who}` : ""}! Order #${order.id}${main ? ` (extras for order #${main.id})` : ""} has been submitted for Annapurna confirmation:\n${listing}\nTotal: ${money(t)}\nPickup: ${formatWhen(draft.pickup_local)} at ${s.address}\nWe'll confirm it here before we start cooking.${reviewNote}`
+    );
     await this.d.notifier.notify(
-      flags.length ? `Order #${order.id} needs you` : main ? `Extras for order #${main.id} (new order #${order.id})` : `New order #${order.id}`,
-      `${name}: ${items.map(itemLabel).join(", ")}. Pickup ${formatWhen(draft.pickup_local)}. ${money(t)}${flags.length ? `. HOLD: ${flags.join("; ")}` : ""}`,
+      flags.length ? `Order #${order.id} needs you` : `Order #${order.id} needs approval`,
+      `${name}: ${items.map(itemLabel).join(", ")}. Pickup ${formatWhen(draft.pickup_local)}. ${money(t)}. REVIEW: ${approvalFlags.join("; ")}`,
     );
   }
 

@@ -32,12 +32,12 @@ test("happy path: model proposes, CODE reads back, customer says yes, CODE place
   assert.equal(t.llm.prompts.length, 1, "no model call is needed to place an order");
   const orders = t.store.listOrders();
   assert.equal(orders.length, 1);
-  assert.deepEqual([orders[0]!.status, orders[0]!.flags, orders[0]!.pickup, orders[0]!.name], ["cook", [], FRI_6PM, "Asha"]);
-  assert.match(r2.replies[0]!, /Order #1 is confirmed/);
+  assert.deepEqual([orders[0]!.status, orders[0]!.flags, orders[0]!.pickup, orders[0]!.name], ["hold", ["Awaiting owner approval"], FRI_6PM, "Asha"]);
+  assert.match(r2.replies[0]!, /Order #1 has been submitted for Annapurna confirmation/);
   assert.match(r2.replies[0]!, /Total: \$56/);
   assert.match(r2.replies[0]!, /Fri, Sep 25 · 6:00 PM/);
   assert.equal(t.store.getDraft("+15198043658"), null);
-  assert.equal(t.notifier.sent[0]!.title, "New order #1");
+  assert.equal(t.notifier.sent[0]!.title, "Order #1 needs approval");
   assert.match(t.store.getCustomer("+15198043658")!.profile, /Last order/);
 });
 
@@ -75,7 +75,7 @@ test("regression: asked for Bagara rice and chicken fry, model wrote kheema fry"
   const o = t.store.listOrders()[0]!;
   assert.deepEqual([o.status, o.flags], ["hold", ["Price not set"]]);
   assert.equal(o.items[0]!.id, "bagara_chicken_fry");
-  assert.match(r2.replies[0]!, /reach out to you here in this chat/);
+  assert.match(r2.replies[0]!, /confirm it here before we start cooking/);
   assert.equal(t.notifier.sent.at(-1)!.title, "Order #1 needs you");
 });
 
@@ -199,7 +199,7 @@ test("weekend combos can be picked up on Saturday and Sunday, no hold", async ()
   assert.doesNotMatch(r.replies[0]!, /needs to confirm/);
   await t.say("yes");
   const o = t.store.listOrders()[0]!;
-  assert.deepEqual([o.status, o.flags], ["cook", []]);
+  assert.deepEqual([o.status, o.flags], ["hold", ["Awaiting owner approval"]]);
   assert.match(t.llm.prompts[0]!, /Saturday and Sunday remain normal pickup days for weekend combos/);
   assert.match(t.llm.prompts[0]!, /"pickup_days":\["Friday","Saturday","Sunday"\]/);
 });
@@ -218,7 +218,7 @@ test("cancel of a placed order: alert with the order id, the order stays, nothin
   assert.equal(a.length, 1);
   assert.equal(a[0]!.orderId, 1);
   assert.match(a[0]!.note, /cancel or change order #1/);
-  assert.equal(t.store.getOrder(1)!.status, "cook");
+  assert.equal(t.store.getOrder(1)!.status, "hold");
   assert.match(t.notifier.sent.at(-1)!.text, /order #1/);
 });
 
@@ -371,7 +371,7 @@ test("placed orders are shown to the model so it never claims to change them", a
   await t.say("yes");
   t.llm.push(modelReply({ reply: "Sure" }));
   await t.say("what is my order status?");
-  assert.match(t.llm.prompts.at(-1)!, /ORDERS ALREADY PLACED BY THIS CUSTOMER: #1 \(cook\) 2 x Chicken Kheema Fry combo \(Buy 1 Get 1\)/);
+  assert.match(t.llm.prompts.at(-1)!, /ORDERS ALREADY PLACED BY THIS CUSTOMER: #1 \(hold\) 2 x Chicken Kheema Fry combo \(Buy 1 Get 1\)/);
 });
 
 test("judgment helper defaults are sane", () => {
@@ -456,7 +456,7 @@ test("spice level: the assistant asks once, the answer goes on the order as a no
   await t.say("yes");
   const o = t.store.listOrders()[0]!;
   assert.equal(o.notes, "Medium spice");
-  assert.equal(o.status, "cook");
+  assert.equal(o.status, "hold");
 });
 
 test("customer-facing wording never names Maddy", async () => {
@@ -575,7 +575,7 @@ test("the 'Yes, place order' button places the order even with the offline judge
   await orderAndReadBack(t);
   const r = await t.say("Yes, confirm");
   assert.equal(r.route, "confirm_order");
-  assert.match(r.replies[0]!, /Order #1 is confirmed/);
+  assert.match(r.replies[0]!, /Order #1 has been submitted for Annapurna confirmation/);
   assert.equal(t.store.listOrders().length, 1);
 });
 
@@ -595,7 +595,7 @@ test("extras in a new order are priced items on the read-back and the order", as
   assert.match(r.replies[0]!, /1 x Extra Raita: \$1/);
   assert.match(r.replies[0]!, /Total: \$73/);
   await t.say("yes");
-  assert.equal(t.store.listOrders()[0]!.status, "cook");
+  assert.equal(t.store.listOrders()[0]!.status, "hold");
 });
 
 test("extras after the order is placed: read back as extras for that order and placed as a linked order", async () => {
@@ -608,11 +608,11 @@ test("extras after the order is placed: read back as extras for that order and p
   assert.match(r.replies[0]!, /Total: \$16/);
   assert.doesNotMatch(r.replies[0]!, /needs to confirm/);
   const r2 = await t.say("yes");
-  assert.match(r2.replies[0]!, /Order #2 \(extras for order #1\) is confirmed/);
+  assert.match(r2.replies[0]!, /Order #2 \(extras for order #1\) has been submitted for Annapurna confirmation/);
   const o = t.store.listOrders().find((x) => x.id === 2)!;
-  assert.equal(o.status, "cook");
+  assert.equal(o.status, "hold");
   assert.match(o.notes, /Extras for order #1/);
-  assert.match(t.notifier.sent.at(-1)!.title, /Extras for order #1/);
+  assert.match(t.notifier.sent.at(-1)!.title, /Order #2 needs approval/);
 });
 
 test("extras on their own with no main dish that day wait for the shop", async () => {

@@ -32,6 +32,7 @@
   };
 
   var token = "", lastId = 0, busy = false, seen = {}, orders = [], pollTimer = 0;
+  var appVersion = "", versionTimer = 0;
   var sheetOpen = "", lastFocus = null, menuData = null, handoff = null, confirmingDelete = false, confirmingEndSession = false;
   var pendingOrderText = "";
   var failedMessageText = "";
@@ -310,6 +311,7 @@
 
   /* A placed order is drawn as a receipt card. */
   function confirmed(m) {
+    var submitted = /has been submitted for Annapurna confirmation:/.test(m.text);
     var lines = m.text.split("\n");
     var num = /Order #(\d+)/.exec(lines[0]);
     var items = [], rows = [];
@@ -317,12 +319,12 @@
       if (/^- /.test(l)) items.push(l.slice(2));
       else if (/^(Total|Pickup): /.test(l)) { var j = l.indexOf(": "); rows.push([l.slice(0, j), l.slice(j + 2)]); }
     });
-    var card = h("div", { class: "b agent sum", "data-id": m.id || "" },
-      h("div", { class: "cfhead" }, mascot("sm jump"), h("h3", {}, "Order " + (num ? "#" + num[1] + " " : "") + "confirmed" + (/extras for order #(\d+)/.test(lines[0]) ? " \u00b7 extras for #" + /extras for order #(\d+)/.exec(lines[0])[1] : ""))),
+    var card = h("div", { class: "b agent sum" + (submitted ? " pending-approval" : ""), "data-id": m.id || "" },
+      h("div", { class: "cfhead" }, mascot("sm" + (submitted ? "" : " jump")), h("h3", {}, "Order " + (num ? "#" + num[1] + " " : "") + (submitted ? "submitted" : "confirmed") + (/extras for order #(\d+)/.test(lines[0]) ? " · extras for #" + /extras for order #(\d+)/.exec(lines[0])[1] : ""))),
       h("ul", {}, items.map(function (it) { return h("li", {}, h("span", {}, it)); })),
       rows.map(function (r) { return h("div", { class: "row" + (r[0] === "Total" ? " total" : "") }, h("span", {}, r[0]), h("span", {}, r[1])); }),
       h("time", {}, m.ts ? clock(m.ts) : ""));
-    if (isFresh(m) && !REDUCED) card.append(confetti());
+    if (isFresh(m) && !REDUCED && !submitted) card.append(confetti());
     return card;
   }
 
@@ -483,7 +485,7 @@
 
   function bubble(m, pending) {
     if (m.who === "agent" && /^Please check your (order|extras)/.test(m.text)) return summary(m);
-    if (m.who === "agent" && /^[^\n]*Order #\d+(?: \([^)]*\))? is confirmed:/.test(m.text)) return confirmed(m);
+    if (m.who === "agent" && /^[^\n]*Order #\d+(?: \([^)]*\))? (?:is confirmed|has been submitted for Annapurna confirmation):/.test(m.text)) return confirmed(m);
     var card = dishes(m) || weekCard(m) || readyCard(m) || thanksCard(m); if (card) return card;
     var kids = [];
     if (m.who === "owner") kids.push(h("span", { class: "who" }, "Annapurna"));
@@ -870,7 +872,7 @@
     if (token) {
       body.append(h("section", { class: "card2" },
         h("h3", {}, "Session"),
-        h("p", {}, "Finished for now? End this session to return to the welcome screen. On this device, enter the same contact later to resume your chat and placed orders."),
+        h("p", {}, "Finished for now? End this session to return to the welcome screen. Your saved chat can resume only from this browser using its private saved session, and you must enter the same contact."),
         confirmingEndSession
           ? h("div", { class: "links" },
               h("button", { class: "btn warn", type: "button", onclick: endSession }, "Yes, end session"),
@@ -969,6 +971,28 @@
     chat.insertBefore(bar, $("msgs"));
   }
 
+  /* ---------- deployed-version watch ---------- */
+  function showUpdateBanner() {
+    if ($("appUpdate")) return;
+    var bar = h("div", { class: "app-update", id: "appUpdate", role: "status", "aria-live": "polite" },
+      h("span", {}, h("b", {}, "Annapurna was updated."), " Refresh to get the latest version."),
+      h("button", { type: "button", class: "btn sm", onclick: function () { window.location.reload(); } }, "Refresh"),
+      h("button", { type: "button", class: "app-update-close", "aria-label": "Dismiss update notice", onclick: function () { bar.remove(); } }, "×"));
+    document.body.append(bar);
+  }
+  function checkVersion() {
+    fetch("/web/version", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      if (!j || !j.version) return;
+      if (!appVersion) { appVersion = j.version; return; }
+      if (j.version !== appVersion) showUpdateBanner();
+    }).catch(function () { /* best effort */ });
+  }
+  function startVersionWatch() {
+    checkVersion();
+    if (versionTimer) clearInterval(versionTimer);
+    versionTimer = setInterval(checkVersion, 5 * 60 * 1000);
+  }
+
   /* ---------- wiring ---------- */
   CHIPS.forEach(function (c) { $("chips").append(h("button", { type: "button", onclick: function () { send(c); } }, c)); });
 
@@ -1001,7 +1025,7 @@
   $("text").addEventListener("keydown", function (e) {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send($("text").value); }
   });
-  document.addEventListener("visibilitychange", function () { if (!document.hidden) poll(); });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) { poll(); checkVersion(); } });
 
   $("fName").addEventListener("blur", function () {
     setFieldValidation("fName", "fNameErr", nameValidationError($("fName").value));
@@ -1097,5 +1121,6 @@
   token = store(TOKEN_KEY) || "";
   initHero();
   addCustomerActions();
+  startVersionWatch();
   if (token) openHome(); else show("onboard");
 })();

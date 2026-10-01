@@ -53,7 +53,7 @@ describe("http server", () => {
     assert.equal(b.json.orderId, 1);
     const s = await call("/api/state", { token: "secret" });
     assert.equal(s.json.orders.length, 1);
-    assert.equal(s.json.orders[0].status, "cook");
+    assert.equal(s.json.orders[0].status, "hold");
     const h = await call("/sim/history?from=%2B15198043658");
     assert.equal(h.json.messages.length, 4);
   });
@@ -67,7 +67,8 @@ describe("http server", () => {
   });
 
   test("order status moves follow the allowed steps only", async () => {
-    assert.equal((await post("/api/orders/1/status", { status: "done" }, "secret")).status, 400); // cook -> done not allowed
+    assert.equal((await post("/api/orders/1/status", { status: "done" }, "secret")).status, 400); // hold -> done not allowed
+    assert.equal((await post("/api/orders/1/status", { status: "cook" }, "secret")).json.order.status, "cook"); // owner accepts
     assert.equal((await post("/api/orders/1/status", { status: "ready", confirm: true }, "secret")).json.order.status, "ready");
     assert.equal((await post("/api/orders/1/status", { status: "done", confirm: true }, "secret")).json.order.status, "done");
     assert.equal((await post("/api/orders/1/status", { status: "cancelled" }, "secret")).status, 400); // done is final
