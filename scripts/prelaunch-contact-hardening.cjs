@@ -99,14 +99,18 @@ replaceBetween(
   backend,
 );
 
-// Existing tests used NANP's reserved 555-01xx example range as a positive fixture.
-// Swap only test fixtures to a plausible structurally valid number.
+// Existing tests used NANP's reserved 555-01xx fictional/example range as positive fixtures.
+// Change test-only fixture numbers to the structurally valid 804 exchange. Production validation
+// remains strict; the identity test below deliberately restores 555-01xx as a negative case.
 for (const file of fs.readdirSync('test').filter((f) => f.endsWith('.ts'))) {
   const p = path.join('test', file);
   let s = fs.readFileSync(p, 'utf8');
   s = s.replaceAll('+1 (519) 555 0101', '+1 (519) 804 3658')
        .replaceAll('519-555-0101', '519-804-3658')
-       .replaceAll('5195550101', '5198043658');
+       .replaceAll('5195550101', '5198043658')
+       .replace(/(\d{3})55501(\d{2})/g, (_m, area, tail) => `${area}80401${tail}`)
+       .replace(/(\d{3})-555-01(\d{2})/g, (_m, area, tail) => `${area}-804-01${tail}`)
+       .replace(/(\(\d{3}\)\s*)555([ -]?)01(\d{2})/g, (_m, area, sep, tail) => `${area}804${sep}01${tail}`);
   fs.writeFileSync(p, s);
 }
 
