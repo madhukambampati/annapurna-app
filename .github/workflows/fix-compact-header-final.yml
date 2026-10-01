@@ -27,21 +27,22 @@ jobs:
           const fs = require('fs');
           const path = 'public/index.html';
           let s = fs.readFileSync(path, 'utf8');
-          const tag = 'compact340final';
-          if (!s.includes(`id="${tag}"`)) {
-            const css = `<style id="${tag}">
-@media(max-width:340px){
-  .customer-mode .top{gap:4px!important;padding-left:6px!important;padding-right:6px!important}
-  .customer-mode .seal{width:34px!important;height:34px!important;border-radius:11px!important}
-  .customer-mode .brand{max-width:78px!important;min-width:0!important}
-  .customer-mode .brand h1{font-size:14px!important;line-height:1.02!important;white-space:nowrap!important}
-  .customer-mode .brand small{display:block!important;font-size:7.8px!important;line-height:1.05!important;white-space:nowrap!important;overflow:hidden!important}
-  .customer-mode .brand small::after{display:none!important}
-  .customer-mode .tabs{gap:0!important}
-  .customer-mode .tab{min-width:41px!important;padding-left:2px!important;padding-right:2px!important;font-size:9.5px!important}
-}
-</style>
-`;
+          if (!s.includes('id="compact340final"')) {
+            const css = [
+              '<style id="compact340final">',
+              '@media(max-width:340px){',
+              '  .customer-mode .top{gap:4px!important;padding-left:6px!important;padding-right:6px!important}',
+              '  .customer-mode .seal{width:34px!important;height:34px!important;border-radius:11px!important}',
+              '  .customer-mode .brand{max-width:78px!important;min-width:0!important}',
+              '  .customer-mode .brand h1{font-size:14px!important;line-height:1.02!important;white-space:nowrap!important}',
+              '  .customer-mode .brand small{display:block!important;font-size:7.8px!important;line-height:1.05!important;white-space:nowrap!important;overflow:hidden!important}',
+              '  .customer-mode .brand small::after{display:none!important}',
+              '  .customer-mode .tabs{gap:0!important}',
+              '  .customer-mode .tab{min-width:41px!important;padding-left:2px!important;padding-right:2px!important;font-size:9.5px!important}',
+              '}',
+              '</style>',
+              ''
+            ].join('\n');
             if (!s.includes('</head>')) throw new Error('head closing tag not found');
             s = s.replace('</head>', css + '</head>');
             fs.writeFileSync(path, s);
