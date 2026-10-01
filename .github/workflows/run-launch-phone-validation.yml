@@ -33,3 +33,5 @@ jobs:
           git add public/app.js src/server.ts test/web.test.ts scripts/launch-phone-validation.cjs .github/workflows/run-launch-phone-validation.yml
           git commit -m "Harden launch phone validation"
           git push origin annapurna-working
+
+# retry after validation-test adjustment
