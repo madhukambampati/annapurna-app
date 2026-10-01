@@ -859,7 +859,7 @@
         h("p", {}, "You can remove this chat and this browser's access to it. Placed orders stay with Annapurna Home Foods so we can cook them, but this deleted chat cannot be reopened."),
         confirmingDelete
           ? h("div", { class: "links" },
-              h("button", { class: "btn warn", type: "button", onclick: deleteChat }, icon("trash"), "Yes, delete my chat"),
+              h("button", { class: "btn warn", type: "button", onclick: deleteChat }, icon("trash"), "Delete chat"),
               h("button", { class: "btn ghost", type: "button", onclick: function () { confirmingDelete = false; renderHelp(); } }, "Keep it"))
           : h("button", { class: "btn ghost", type: "button", onclick: function () { confirmingDelete = true; renderHelp(); var b = $("sheetBody").querySelector(".btn.warn"); if (b) b.focus(); } }, icon("trash"), "Delete my chat")));
     }
