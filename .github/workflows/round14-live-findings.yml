@@ -21,7 +21,7 @@ jobs:
           node-version: 22
       - run: npm ci
       - name: Apply live findings fixes
-        run: node scripts/round14-live-findings.cjs
+        run: node scripts/round14-live-findings-v2.cjs
       - name: Check browser JavaScript syntax
         run: |
           node --check public/app.js
@@ -34,6 +34,7 @@ jobs:
         shell: bash
         run: |
           rm scripts/round14-live-findings.cjs
+          rm scripts/round14-live-findings-v2.cjs
           rm .github/workflows/round14-live-findings.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
