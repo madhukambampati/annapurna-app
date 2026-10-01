@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/postlaunch-enhancements.yml
       - scripts/postlaunch-enhancements.cjs
+      - scripts/postlaunch-fix-tests.cjs
 
 permissions:
   contents: write
@@ -32,6 +33,7 @@ jobs:
           fs.writeFileSync(file, s.replace(/\\u00b7/g, '·'));
           NODE
           node scripts/postlaunch-enhancements.cjs
+          node scripts/postlaunch-fix-tests.cjs
       - name: Check browser JavaScript syntax
         run: |
           node --check public/app.js
@@ -44,6 +46,7 @@ jobs:
         shell: bash
         run: |
           rm scripts/postlaunch-enhancements.cjs
+          rm scripts/postlaunch-fix-tests.cjs
           rm .github/workflows/postlaunch-enhancements.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
