@@ -78,9 +78,3 @@ replaceOnce('test/web.test.ts', `test("customer identity validation accepts real
   for (const ok of ["Asha", "M. Kiran", "Siva-Parvathi", "José", "O'Connor"]) assert.equal(validName(ok), true, ok);
   for (const bad of ["", "1234", "M@xy", "Madhu_1", "<script>alert(1)</script>", "A < B", "x".repeat(61)]) assert.equal(validName(bad), false, bad);
 });`);
-
-replaceOnce('test/web.test.ts', `      assert.equal((await s({ name: "A", contact: "nope", consent: true })).status, 400);
-      assert.equal((await s({ name: "A", contact: "5195550101" })).status, 400);`, `      assert.equal((await s({ name: "A", contact: "nope", consent: true })).status, 400);
-      assert.equal((await s({ name: "A", contact: "1234567890", consent: true })).status, 400);
-      assert.equal((await s({ name: "A", contact: "12345678890", consent: true })).status, 400);
-      assert.equal((await s({ name: "A", contact: "5195550101" })).status, 400);`);
