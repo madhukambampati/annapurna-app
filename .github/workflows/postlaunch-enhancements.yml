@@ -24,7 +24,14 @@ jobs:
           node-version: 22
       - run: npm ci
       - name: Apply post-launch enhancements
-        run: node scripts/postlaunch-enhancements.cjs
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const file = 'public/app.js';
+          const s = fs.readFileSync(file, 'utf8');
+          fs.writeFileSync(file, s.replace(/\\u00b7/g, '·'));
+          NODE
+          node scripts/postlaunch-enhancements.cjs
       - name: Check browser JavaScript syntax
         run: |
           node --check public/app.js
