@@ -358,7 +358,15 @@ input.field-invalid{border-color:var(--chilli)!important;box-shadow:0 0 0 3px co
     .process-error strong{display:block;color:#653d00}.process-error small{display:block;margin-top:2px;color:#765b30;line-height:1.35}
     .process-error .pe-actions{display:flex;gap:7px;flex-wrap:wrap}.process-error button{white-space:nowrap}
     @media(max-width:620px){.process-error{align-items:flex-start;flex-direction:column}.process-error .pe-actions{width:100%}.process-error .pe-actions button{flex:1}}
-  </style>
+  
+/* Launch polish: keep the Annapurna + Vindhu identity visible on compact phones. */
+@media(max-width:520px){
+  .customer-mode .brand{min-width:0}
+  .customer-mode .brand h1{font-size:16.5px;line-height:1.05}
+  .customer-mode .brand small{display:block!important;font-size:8.7px;line-height:1.1;white-space:nowrap;overflow:visible;text-overflow:clip;letter-spacing:0}
+  .customer-mode .brand small::after{display:inline!important;content:" · Vindhu Assistant";margin-left:2px;color:var(--brand2);font-size:8px;font-weight:800;letter-spacing:.02em}
+}
+</style>
 
 <style id="customerRedesignV1">
 /* CUSTOMER REDESIGN V1 — presentation only; ordering logic remains in app.js */
