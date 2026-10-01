@@ -21,6 +21,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install dependencies
+        run: npm ci
+
       - name: Add a subtle Vindhu trust cue
         shell: bash
         run: |
