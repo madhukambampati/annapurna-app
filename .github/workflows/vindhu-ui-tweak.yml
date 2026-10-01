@@ -1,0 +1,52 @@
+name: Apply Vindhu UI tweaks
+
+on:
+  push:
+    branches: [annapurna-working]
+    paths:
+      - '.github/workflows/vindhu-ui-tweak.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  tweak:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: annapurna-working
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Update Vindhu presence
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const p = 'public/index.html';
+          let s = fs.readFileSync(p, 'utf8');
+          const reps = [
+            ['content:"  ·  CUSTOMER";', 'content:"  ·  VINDHU ASSISTANT";'],
+            ['content:"ORDER CHAT";flex:none;', 'content:"CHAT WITH VINDHU";flex:none;'],
+            ['<span class="kick">Fresh · Homemade · Pickup</span>', '<span class="kick">Meet Vindhu · Ordering assistant</span>'],
+            ['<h2>South Indian home food, ordered in a chat.</h2>', '<h2>South Indian home food, ordered with Vindhu.</h2>'],
+            ["<p>Tell us what you'd like. We check every order and cook it fresh in our Kitchener kitchen.</p>", "<p>Tell Vindhu what you'd like. We check every order and cook it fresh in our Kitchener kitchen.</p>"],
+            ['<li><b>1</b><span>Craving?</span>Tell us what you want</li>', '<li><b>1</b><span>Chat</span>Tell Vindhu what you want</li>'],
+            ['<button class="btn" id="startBtn" type="submit">Start chat</button>', '<button class="btn" id="startBtn" type="submit">Start ordering with Vindhu</button>']
+          ];
+          for (const [a,b] of reps) {
+            if (!s.includes(a)) throw new Error('Expected text not found: ' + a);
+            s = s.replace(a,b);
+          }
+          fs.writeFileSync(p,s);
+          NODE
+      - run: npm ci
+      - run: npm test
+      - name: Commit UI tweak and remove one-time workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/vindhu-ui-tweak.yml
+          git add public/index.html
+          git commit -m "Strengthen Vindhu assistant presence"
+          git push origin annapurna-working
