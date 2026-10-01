@@ -1,0 +1,56 @@
+name: Apply launch trust UI tweak
+
+on:
+  push:
+    branches: [annapurna-working]
+    paths: ['.github/workflows/launch-trust-tweak.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  tweak:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: annapurna-working
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Add a subtle Vindhu trust cue
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'public/index.html';
+          let s = fs.readFileSync(path, 'utf8');
+
+          const cssOld = `.steps span{display:block;color:var(--ink);font-weight:700;font-size:14px}\n.card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:12px}`;
+          const cssNew = `.steps span{display:block;color:var(--ink);font-weight:700;font-size:14px}\n.assistant-trust{display:flex;align-items:flex-start;gap:9px;margin:-4px 2px 0;padding:10px 12px;border:1px solid color-mix(in srgb,var(--brand) 22%,var(--line));border-radius:14px;background:color-mix(in srgb,var(--brand-soft) 54%,var(--surface));color:var(--muted);font-size:12.5px;line-height:1.35}\n.assistant-trust::before{content:\"✓\";display:grid;place-items:center;flex:none;width:20px;height:20px;border-radius:50%;background:var(--brand);color:var(--on-brand);font-size:12px;font-weight:900}\n.assistant-trust strong{color:var(--ink)}\n.card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:12px}`;
+          if (!s.includes(cssOld)) throw new Error('CSS anchor not found');
+          s = s.replace(cssOld, cssNew);
+
+          const htmlOld = `    </ol>\n    <form class=\"card\" id=\"startForm\" autocomplete=\"on\">`;
+          const htmlNew = `    </ol>\n    <div class=\"assistant-trust\"><span><strong>Vindhu helps you order.</strong> Every order is reviewed by Annapurna before we cook.</span></div>\n    <form class=\"card\" id=\"startForm\" autocomplete=\"on\">`;
+          if (!s.includes(htmlOld)) throw new Error('HTML anchor not found');
+          s = s.replace(htmlOld, htmlNew);
+
+          fs.writeFileSync(path, s);
+          NODE
+
+      - name: Run regression tests
+        run: npm test
+
+      - name: Commit UI tweak and remove workflow
+        shell: bash
+        run: |
+          rm .github/workflows/launch-trust-tweak.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/index.html .github/workflows/launch-trust-tweak.yml
+          git commit -m "Add Vindhu trust cue before launch"
+          git push origin annapurna-working
