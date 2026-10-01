@@ -34,17 +34,17 @@ jobs:
           const marker = '</style>';
           if (!s.includes(marker)) throw new Error('style closing tag not found');
           const css = `
-/* Final mobile header fix: keep Vindhu visible without overlapping navigation. */
-@media(max-width:520px){
-  .customer-mode .top{gap:6px;padding-left:8px;padding-right:8px}
-  .customer-mode .brand{min-width:104px;max-width:118px;overflow:hidden}
-  .customer-mode .brand h1{font-size:16px;line-height:1.02;white-space:nowrap}
-  .customer-mode .brand small{display:block!important;font-size:9px;line-height:1.05;white-space:normal!important;overflow:hidden!important;text-overflow:clip!important;letter-spacing:0}
-  .customer-mode .brand small::after{display:block!important;content:"VINDHU ASSISTANT"!important;margin:2px 0 0!important;color:var(--brand2);font-size:7.8px!important;font-weight:900;line-height:1.05;letter-spacing:.05em!important;white-space:nowrap}
-  .customer-mode .tabs{gap:0}
-  .customer-mode .tab{min-width:42px;padding-left:3px;padding-right:3px;font-size:10px}
-}
-`;
+          /* Final mobile header fix: keep Vindhu visible without overlapping navigation. */
+          @media(max-width:520px){
+            .customer-mode .top{gap:6px;padding-left:8px;padding-right:8px}
+            .customer-mode .brand{min-width:104px;max-width:118px;overflow:hidden}
+            .customer-mode .brand h1{font-size:16px;line-height:1.02;white-space:nowrap}
+            .customer-mode .brand small{display:block!important;font-size:9px;line-height:1.05;white-space:normal!important;overflow:hidden!important;text-overflow:clip!important;letter-spacing:0}
+            .customer-mode .brand small::after{display:block!important;content:"VINDHU ASSISTANT"!important;margin:2px 0 0!important;color:var(--brand2);font-size:7.8px!important;font-weight:900;line-height:1.05;letter-spacing:.05em!important;white-space:nowrap}
+            .customer-mode .tabs{gap:0}
+            .customer-mode .tab{min-width:42px;padding-left:3px;padding-right:3px;font-size:10px}
+          }
+          `;
           if (!s.includes('Final mobile header fix: keep Vindhu visible without overlapping navigation.')) {
             s = s.replace(marker, css + marker);
             fs.writeFileSync(path, s);
