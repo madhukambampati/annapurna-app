@@ -1,0 +1,42 @@
+name: Round 14 live findings
+
+on:
+  push:
+    branches:
+      - round14-live-findings-fixes
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-clean:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: round14-live-findings-fixes
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Apply live findings fixes
+        run: node scripts/round14-live-findings.cjs
+      - name: Check browser JavaScript syntax
+        run: |
+          node --check public/app.js
+          node --check public/desk.js
+      - name: Full regression suite
+        run: npm test
+      - name: Check diff whitespace
+        run: git diff --check
+      - name: Commit fixes and remove temporary patch files
+        shell: bash
+        run: |
+          rm scripts/round14-live-findings.cjs
+          rm .github/workflows/round14-live-findings.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Fix live ordering and cancellation regressions"
+          git push origin round14-live-findings-fixes
