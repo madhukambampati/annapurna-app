@@ -150,7 +150,9 @@ export function validName(n: string): boolean {
   const value = n.trim();
   return value.length > 0
     && value.length <= 60
-    && /^[\p{L}\p{M}][\p{L}\p{M} .'\u2019-]*$/u.test(value);
+    && /^[\p{L}\p{M}][\p{L}\p{M} .'\u2019-]*$/u.test(value)
+    && !/(?:[.'\u2019-]\s*){2,}/u.test(value)
+    && (!/[.'\u2019-]$/.test(value) || /^[\p{L}\p{M}]\.$/u.test(value));
 }
 
 function validEmailContact(value: string): boolean {
@@ -329,10 +331,10 @@ export function createServer(d: ServerDeps): Server {
         if (m === "POST" && path === "/web/resume") {
           const waId = webSession(req);
           const b = await readJson(req);
-          const name = cleanText(b.name, 61);
+          const name = cleanText(b.name, 61).replace(/\s+/g, " ");
           const contact = cleanText(b.contact, 80);
           if (!validName(name)) throw new HttpError(400, "Please enter a valid name.");
-          if (!validContact(contact)) throw new HttpError(400, "Please enter a phone number or email so Annapurna Home Foods can reach you.");
+          if (!validContact(contact)) throw new HttpError(400, contact.includes("@") ? "Please enter a valid email, for example name@example.com." : "Please enter a valid Canadian/US phone number, or use your email.");
           if (b.consent !== true) throw new HttpError(400, "Please tick the box to continue.");
           const customer = store.getCustomer(waId);
           if (!customer || contactKey(customer.contact) !== contactKey(contact)) {
@@ -343,13 +345,15 @@ export function createServer(d: ServerDeps): Server {
         }
 
         if (m === "POST" && path === "/web/session") {
-          limit(`sess:${ip}`, w.sessionsPerIpHour, HOUR);
+          // Invalid typos should not consume the hourly new-chat quota, while this broad cap still blocks request floods.
+          limit(`sess-attempt:${ip}`, 60, 60_000);
           const b = await readJson(req);
-          const name = cleanText(b.name, 61);
+          const name = cleanText(b.name, 61).replace(/\s+/g, " ");
           const contact = cleanText(b.contact, 80);
           if (!validName(name)) throw new HttpError(400, "Please enter a valid name.");
-          if (!validContact(contact)) throw new HttpError(400, "Please enter a phone number or email so Annapurna Home Foods can reach you.");
+          if (!validContact(contact)) throw new HttpError(400, contact.includes("@") ? "Please enter a valid email, for example name@example.com." : "Please enter a valid Canadian/US phone number, or use your email.");
           if (b.consent !== true) throw new HttpError(400, "Please tick the box to continue.");
+          limit(`sess:${ip}`, w.sessionsPerIpHour, HOUR);
           const waId = `web:${randomBytes(8).toString("hex")}`;
           const token = randomBytes(24).toString("base64url");
           store.upsertCustomer(waId, name, contact);

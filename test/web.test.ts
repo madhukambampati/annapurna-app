@@ -98,8 +98,8 @@ test("customer identity validation accepts real values and rejects junk", () => 
     "<b>x</b>@a.com", "test@example..com", "test@-example.com", ".test@example.com", "test@exam_ple.com",
     "1234567890123456", "<script>alert(1)</script>", "x".repeat(81)
   ]) assert.equal(validContact(bad), false, bad);
-  for (const ok of ["Asha", "M. Kiran", "Siva-Parvathi", "José", "O'Connor", "Maxy", "M"]) assert.equal(validName(ok), true, ok);
-  for (const bad of ["", "1234", "M@xy", "Madhu_1", "<script>alert(1)</script>", "A < B", "x".repeat(61)]) assert.equal(validName(bad), false, bad);
+  for (const ok of ["Asha", "M. Kiran", "Siva-Parvathi", "José", "O'Connor", "Maxy", "M", "M.", "Madhu Babu"]) assert.equal(validName(ok), true, ok);
+  for (const bad of ["", "1234", "M@xy", "Madhu_1", "Madhu ..", "Madhu - - Babu", "Ravi-", "<script>alert(1)</script>", "A < B", "x".repeat(61)]) assert.equal(validName(bad), false, bad);
 });
 
 describe("web: files and headers", () => {
@@ -797,6 +797,23 @@ describe("web: abuse limits", () => {
       advance(3_600_001);
       assert.equal((await call("POST", "/web/session", { body })).status, 200);
     }, { web: { sessionsPerIpHour: 2 } }));
+
+  test("invalid signup attempts do not consume the hourly new-chat quota", () =>
+    withRig(async ({ call }) => {
+      for (let i = 0; i < 5; i++) {
+        const badPhone = await call("POST", "/web/session", { body: { name: "Asha", contact: "1234567890", consent: true } });
+        assert.equal(badPhone.status, 400);
+        assert.match(badPhone.json.error, /valid Canadian\/US phone/i);
+      }
+      const badEmail = await call("POST", "/web/session", { body: { name: "Asha", contact: "test@example..com", consent: true } });
+      assert.equal(badEmail.status, 400);
+      assert.match(badEmail.json.error, /valid email/i);
+      const valid = await call("POST", "/web/session", { body: { name: "Madhu  Babu", contact: "2267894561", consent: true } });
+      assert.equal(valid.status, 200);
+      assert.equal(valid.json.name, "Madhu Babu");
+      const blocked = await call("POST", "/web/session", { body: { name: "Bala", contact: "2267894562", consent: true } });
+      assert.equal(blocked.status, 429);
+    }, { web: { sessionsPerIpHour: 1 } }));
 
   test("returning customer resume bypasses an exhausted new-chat IP quota", () =>
     withRig(async ({ call }) => {

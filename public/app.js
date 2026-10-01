@@ -84,6 +84,8 @@
     if (!name) return "Please enter your name.";
     if (name.length > 60) return "Name must be 60 characters or less.";
     if (!/^[\p{L}\p{M}][\p{L}\p{M} .'\u2019-]*$/u.test(name)) return "Please use letters only. Spaces, hyphens, apostrophes and periods are allowed.";
+    if (/(?:[.'\u2019-]\s*){2,}/u.test(name)) return "Please remove repeated punctuation from your name.";
+    if (/[.'\u2019-]$/.test(name) && !/^[\p{L}\p{M}]\.$/u.test(name)) return "Please enter your name without trailing punctuation.";
     return "";
   }
   function validEmailValue(value) {
@@ -1009,7 +1011,9 @@
   });
   function clearResolvedStartError() {
     var err = $("startErr");
-    if (!err || !/^Please fix the highlighted field/.test(err.textContent || "")) return;
+    if (!err) return;
+    if (err.textContent === "Your chat was deleted.") { err.textContent = ""; return; }
+    if (!/^Please fix the highlighted field/.test(err.textContent || "")) return;
     if (!nameValidationError($("fName").value) && !contactValidationError($("fContact").value)) err.textContent = "";
   }
   $("fName").addEventListener("input", function () {
@@ -1020,11 +1024,13 @@
     if ($("fContact").getAttribute("aria-invalid") === "true") setFieldValidation("fContact", "fContactErr", contactValidationError($("fContact").value));
     clearResolvedStartError();
   });
+  $("fConsent").addEventListener("change", clearResolvedStartError);
 
   $("startForm").addEventListener("submit", function (e) {
     e.preventDefault();
     var err = $("startErr"); err.textContent = "";
-    var name = $("fName").value.trim(), contact = $("fContact").value.trim();
+    var name = $("fName").value.trim().replace(/\s+/g, " "), contact = $("fContact").value.trim();
+    $("fName").value = name;
     var nameError = nameValidationError(name), contactError = contactValidationError(contact);
     setFieldValidation("fName", "fNameErr", nameError);
     setFieldValidation("fContact", "fContactErr", contactError);
