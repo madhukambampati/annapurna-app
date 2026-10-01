@@ -669,3 +669,33 @@ test("Round 13: pending catering headcount change never routes to cancel a place
   assert.match(open[0]!.note, /Custom\/bulk request updated: 25 people/);
   assert.match(r.replies[0]!, /No placed order was changed/);
 });
+
+test("Round 14: a clear fresh menu order after an existing order is not mistaken for a change request", async () => {
+  const t = setup({ judge: (ctx) => ctx.hasPlacedOrder
+    ? { cancelPlaced: 0.99, intent: { label: "order", prob: 0.99, confidence: 0.98 } }
+    : {} });
+  const waId = "+15198043658";
+  t.store.upsertCustomer(waId, "Maxy", "maxy@example.com");
+  t.store.insertOrder({
+    waId,
+    name: "Maxy",
+    items: [{ id: "kheema_fry", name: "Chicken Kheema Fry combo", qty: 1, pack: "single", amt: 15 }],
+    pickup: FRI_6PM,
+    flags: [],
+    status: "cook",
+    notes: "",
+    createdAt: 1,
+  });
+  t.llm.push(modelReply({
+    items: [{ id: "bagara_chicken_fry", qty: 2, pack: "single", asked_for: "Bagara Rice and Chicken Fry combo" }],
+    pickup: "2026-09-25T17:00",
+    name: "Maxy",
+    stage: "awaiting_confirmation",
+  }));
+
+  const r = await t.say("I want 2 Bagara Rice and Chicken Fry combo, pickup Friday 5pm", waId, { name: "Maxy" });
+  assert.equal(r.route, "normal");
+  assert.match(r.replies[0]!, /Bagara Rice and Chicken Fry combo/);
+  assert.equal(t.store.listAlerts(true).some((a) => /cancel or change order/i.test(a.note)), false);
+  assert.equal(r.judgment?.cancelPlaced, 0.05);
+});

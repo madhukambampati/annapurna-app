@@ -457,6 +457,28 @@ export class Agent {
     }
     // The "Yes, place order" button sends exactly this text. It is a yes, whatever the judge thinks.
     if (ctx.awaitingConfirmation && CONFIRM_BUTTON.test(text) && judgment.cancelPlaced < 0.5) judgment = { ...judgment, agrees: Math.max(judgment.agrees ?? 0, 0.99) };
+
+    // A clearly phrased fresh menu order must not be mistaken for a change/cancel request merely
+    // because this customer already has another live order. TypeSafe can occasionally over-score
+    // cancels_placed_order when hasPlacedOrder=true, so code gives a deterministic fresh-order
+    // sentence priority unless the customer actually uses change/cancel language or targets an
+    // existing order. Phrases such as "instead" remain ambiguous and are deliberately not forced.
+    const clearFreshMenuOrder = open.length > 0
+      && clearlyNormalMenuOrder(text, menu)
+      && !PLACED_ORDER_CHANGE.test(text)
+      && !EXPLICIT_PLACED_ORDER_TARGET.test(text)
+      && !/\b(?:instead|rather\s+than|swap|remove)\b/i.test(text);
+    if (clearFreshMenuOrder && judgment.cancelPlaced >= cfg.thresholds.cancelMaybe) {
+      judgment = {
+        ...judgment,
+        cancelPlaced: 0.05,
+        intent: {
+          label: "order",
+          prob: Math.max(judgment.intent.prob, 0.95),
+          confidence: Math.max(judgment.intent.confidence, 0.9),
+        },
+      };
+    }
     out.judgment = judgment;
 
     let r = decideRoute(judgment, { awaitingConfirmation: ctx.awaitingConfirmation, readbackCurrent, hasPlacedOrder: open.length > 0 }, cfg.thresholds);

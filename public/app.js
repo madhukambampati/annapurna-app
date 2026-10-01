@@ -944,7 +944,11 @@
       closeSheet();
       stopPolling();
       show("onboard");
-      $("startErr").textContent = "Your chat was deleted.";
+      var deletedNotice = $("startErr");
+      deletedNotice.textContent = "Your chat was deleted.";
+      setTimeout(function () {
+        if (deletedNotice.textContent === "Your chat was deleted.") deletedNotice.textContent = "";
+      }, 3500);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }).catch(function (e) { confirmingDelete = false; renderHelp(); toast(errText(e)); });
   }
