@@ -83,6 +83,6 @@ export function setup(opts: { judge?: JudgeFn; now?: number } = {}) {
   return {
     store, llm, judge, notifier, cfg, agent,
     setNow: (t: number) => { now = t; },
-    say: (text: string, from = "+15195550101", extra: { name?: string; messageId?: string } = {}) => agent.handle({ from, text, ...extra }),
+    say: (text: string, from = "+15198043658", extra: { name?: string; messageId?: string } = {}) => agent.handle({ from, text, ...extra }),
   };
 }

@@ -24,7 +24,7 @@ test("happy path: model proposes, CODE reads back, customer says yes, CODE place
   assert.match(rb, /Pickup: Fri, Sep 25 · 6:00 PM at 1425B Blockline Rd, Kitchener/);
   assert.match(rb, /Reply YES/);
   assert.doesNotMatch(rb, /Sure, noted/, "the model's own wording must not replace the read-back");
-  assert.equal(t.store.getDraft("+15195550101")!.stage, "awaiting_confirmation");
+  assert.equal(t.store.getDraft("+15198043658")!.stage, "awaiting_confirmation");
   assert.equal(t.store.listOrders().length, 0, "nothing is placed before the customer says yes");
 
   const r2 = await t.say("yes");
@@ -36,9 +36,9 @@ test("happy path: model proposes, CODE reads back, customer says yes, CODE place
   assert.match(r2.replies[0]!, /Order #1 is confirmed/);
   assert.match(r2.replies[0]!, /Total: \$56/);
   assert.match(r2.replies[0]!, /Fri, Sep 25 · 6:00 PM/);
-  assert.equal(t.store.getDraft("+15195550101"), null);
+  assert.equal(t.store.getDraft("+15198043658"), null);
   assert.equal(t.notifier.sent[0]!.title, "New order #1");
-  assert.match(t.store.getCustomer("+15195550101")!.profile, /Last order/);
+  assert.match(t.store.getCustomer("+15198043658")!.profile, /Last order/);
 });
 
 test("the model saying 'confirmed' does nothing: only the customer's yes places an order", async () => {
@@ -46,7 +46,7 @@ test("the model saying 'confirmed' does nothing: only the customer's yes places 
   t.llm.push({ ...(modelReply({ items: [KHEEMA_BOGO], pickup: FRI_6PM }) as object), stage: "confirmed", reply: "Your order is confirmed!" });
   const r = await t.say("2 kheema fry friday 6pm");
   assert.equal(t.store.listOrders().length, 0);
-  assert.equal(t.store.getDraft("+15195550101")!.stage, "collecting");
+  assert.equal(t.store.getDraft("+15198043658")!.stage, "collecting");
   assert.equal(r.orderId, undefined);
 });
 
@@ -85,7 +85,7 @@ test("a dish that is not on the menu is not swapped for another; Maddy is told",
   const r = await t.say("1 paneer tikka masala friday 6pm");
   assert.match(r.replies[0]!, /I don't see "paneer tikka masala" on the ordering menu/);
   assert.doesNotMatch(r.replies[0]!, /coming up/);
-  assert.equal(t.store.getDraft("+15195550101")!.items.length, 0);
+  assert.equal(t.store.getDraft("+15198043658")!.items.length, 0);
   assert.equal(t.store.listAlerts(true).length, 1);
   assert.equal(t.store.listOrders().length, 0);
 });
@@ -97,7 +97,7 @@ test("an ambiguous dish name gets a question with the close matches, not a guess
   assert.match(r.replies[0]!, /which one did you mean for "chicken pulao"/);
   assert.match(r.replies[0]!, /Chicken Kheema Pulao with Raitha/);
   assert.match(r.replies[0]!, /Chicken Pulao with Mirchi Ka Salan and Raitha/);
-  assert.equal(t.store.getDraft("+15195550101")!.stage, "collecting");
+  assert.equal(t.store.getDraft("+15198043658")!.stage, "collecting");
 });
 
 test("a weekend combo that is switched off cannot be ordered", async () => {
@@ -108,7 +108,7 @@ test("a weekend combo that is switched off cannot be ordered", async () => {
   t.llm.push(modelReply({ reply: "Sure!", items: [KHEEMA_BOGO], pickup: FRI_6PM, stage: "awaiting_confirmation" }));
   const r = await t.say("2 kheema fry combos friday 6pm");
   assert.match(r.replies[0]!, /Chicken Kheema Fry combo isn't running right now/);
-  assert.equal(t.store.getDraft("+15195550101")!.items.length, 0);
+  assert.equal(t.store.getDraft("+15198043658")!.items.length, 0);
   assert.equal(t.store.listAlerts(true).length, 1);
 });
 
@@ -145,7 +145,7 @@ test("regression: customer names Friday, model produced Thursday -> pickup clear
   const r = await t.say("2 kheema fry combos, pickup friday 6pm");
   assert.deepEqual(r.issues, ["weekday_mismatch"]);
   assert.match(r.replies[0]!, /did you mean Friday, September 25\?/);
-  const d = t.store.getDraft("+15195550101")!;
+  const d = t.store.getDraft("+15198043658")!;
   assert.equal(d.pickup_local, null);
   assert.equal(d.stage, "collecting");
   assert.equal(d.readback_hash, null);
@@ -253,14 +253,14 @@ test("unclear turns: the draft is frozen, and Maddy is pulled in after a streak"
   const t = setup({ judge: () => (unclear ? { intent: { label: "other" as const, prob: 0.9, confidence: 0.8 } } : {}) });
   t.llm.push(modelReply({ items: [KHEEMA_BOGO], pickup: FRI_6PM, stage: "collecting" }));
   await t.say("2 kheema fry combos friday 6pm");
-  const before = JSON.stringify(t.store.getDraft("+15195550101"));
+  const before = JSON.stringify(t.store.getDraft("+15198043658"));
 
   unclear = true;
   // the model tries to wipe the draft on an unclear turn; code ignores that
   t.llm.push(modelReply({ reply: "Sorry, what do you mean?", items: [], pickup: null }));
   const r1 = await t.say("hmm the thing");
   assert.equal(r1.route, "clarify");
-  assert.equal(JSON.stringify(t.store.getDraft("+15195550101")), before);
+  assert.equal(JSON.stringify(t.store.getDraft("+15198043658")), before);
   assert.equal(t.store.listAlerts(true).length, 0);
 
   t.llm.push(modelReply({ reply: "Could you tell me a bit more?" }));
@@ -271,7 +271,7 @@ test("unclear turns: the draft is frozen, and Maddy is pulled in after a streak"
   unclear = false; // a normal turn resets the streak
   t.llm.push(modelReply({ items: [KHEEMA_BOGO], pickup: FRI_6PM }));
   await t.say("ok 2 kheema fry");
-  assert.equal(t.store.getCustomer("+15195550101")!.uncertainStreak, 0);
+  assert.equal(t.store.getCustomer("+15198043658")!.uncertainStreak, 0);
 });
 
 test("if the judge itself throws, the rules take over and the customer still gets a reply", async () => {
@@ -292,7 +292,7 @@ test("model errors give a safe apology and change nothing; the next message work
   const r = await t.say("hi there");
   assert.match(r.route, /model_error/);
   assert.match(r.replies[0]!, /couldn't process that just now/);
-  assert.equal(t.store.getDraft("+15195550101"), null);
+  assert.equal(t.store.getDraft("+15198043658"), null);
   assert.match(t.store.listAlerts(true)[0]!.note, /model error/);
   t.llm.push(modelReply({ reply: "Namaste!" }));
   assert.equal((await t.say("hello")).replies[0], "Namaste!");
@@ -303,7 +303,7 @@ test("malformed model output cannot crash the agent or corrupt the draft", async
   t.llm.push({ reply: "ok", draft: { items: "lots", pickup_local: 12345, customer_name: { x: 1 }, notes: 7 }, stage: 99 });
   const r = await t.say("hello");
   assert.equal(r.replies[0], "ok");
-  assert.equal(t.store.getDraft("+15195550101"), null);
+  assert.equal(t.store.getDraft("+15198043658"), null);
   t.llm.push(["not", "an", "object"]);
   const r2 = await t.say("hello again");
   assert.match(r2.route, /model_error/);
@@ -337,7 +337,7 @@ test("customers are isolated from each other", async () => {
   t.llm.push(modelReply({ reply: "Hi B" }));
   await t.say("yes", "+1416B"); // B saying yes must not confirm A's draft
   assert.equal(t.store.listOrders().length, 0);
-  assert.ok(t.store.getDraft("+15195550101"));
+  assert.ok(t.store.getDraft("+15198043658"));
   assert.equal(t.store.getDraft("+1416B"), null);
   assert.doesNotMatch(t.llm.prompts[1]!, /Asha|kheema_fry","qty":2/);
 });
@@ -347,7 +347,7 @@ test("empty and oversized messages", async () => {
   assert.equal((await t.say("   ")).route, "empty");
   t.llm.push(modelReply({ reply: "ok" }));
   await t.say("x".repeat(5000));
-  assert.equal(t.store.getMessages("+15195550101")[0]!.text.length, 1000);
+  assert.equal(t.store.getMessages("+15198043658")[0]!.text.length, 1000);
 });
 
 test("the prompt carries the calendar, the switches and the rules the guards enforce", async () => {
@@ -384,7 +384,7 @@ test("a customer who only asks a question never gets an order started, even if t
   t.llm.push(modelReply({ reply: "Mon: 4 idli...\nTue: 3 dosa...", items: [{ id: "plan_full", qty: 1, pack: "plan", asked_for: "full meal plan" }], pickup: "2026-09-28T11:00", stage: "awaiting_confirmation" }));
   const r = await t.say("I want to see the full meal plan, what is on Monday and Tuesday");
   assert.equal(r.route, "normal");
-  assert.equal(t.store.getDraft("+15195550101"), null, "no draft from a question");
+  assert.equal(t.store.getDraft("+15198043658"), null, "no draft from a question");
   assert.doesNotMatch(r.replies[0]!, /Please check your order|Reply YES/);
   assert.match(r.replies[0]!, /Mon: 4 idli/);
   assert.match(t.llm.prompts[0]!, /only asking a question/);
@@ -393,11 +393,11 @@ test("a customer who only asks a question never gets an order started, even if t
 test("a question in the middle of an order leaves the read-back valid", async () => {
   const t = setup({ judge: (c) => (c.message.startsWith("what") ? { intent: { label: "question", prob: 0.9, confidence: 0.8 }, agrees: 0.05 } : yesJudge(c)) });
   await orderAndReadBack(t);
-  const before = t.store.getDraft("+15195550101")!;
+  const before = t.store.getDraft("+15198043658")!;
   t.llm.push(modelReply({ reply: "We are at 1425B Blockline Rd.", items: [], pickup: null, stage: "browsing" }));
   const q = await t.say("what is the pickup address?");
   assert.equal(q.replies[0], "We are at 1425B Blockline Rd.");
-  assert.deepEqual(t.store.getDraft("+15195550101"), before, "draft and read-back hash untouched");
+  assert.deepEqual(t.store.getDraft("+15198043658"), before, "draft and read-back hash untouched");
   const y = await t.say("yes");
   assert.equal(y.route, "confirm_order");
   assert.equal(t.store.listOrders().length, 1);
@@ -414,7 +414,7 @@ test("after an order is placed, the same order is never read back again (no dupl
     const r = await t.say(said);
     assert.match(r.replies[0]!, /Order #1 is already confirmed/, said);
     assert.doesNotMatch(r.replies[0]!, /Reply YES|Please check your order/, said);
-    const d = t.store.getDraft("+15195550101");
+    const d = t.store.getDraft("+15198043658");
     assert.ok(!d || (d.items.length === 0 && d.stage !== "awaiting_confirmation" && d.readback_hash === null), "nothing is left waiting for a yes");
     assert.ok(r.issues.includes("duplicate_order"));
   }
@@ -448,7 +448,7 @@ test("spice level: the assistant asks once, the answer goes on the order as a no
   t.llm.push(modelReply({ reply: "Would you like regular, medium or less spicy? Any other request?", items: [KHEEMA_BOGO], pickup: FRI_6PM, name: "Asha", stage: "collecting" }));
   const r1 = await t.say("2 chicken kheema fry combos buy 1 get 1, friday 6pm");
   assert.match(r1.replies[0]!, /regular, medium or less spicy/i);
-  assert.equal(t.store.getDraft("+15195550101")!.stage, "collecting");
+  assert.equal(t.store.getDraft("+15198043658")!.stage, "collecting");
   t.llm.push(modelReply({ reply: "Noted!", items: [KHEEMA_BOGO], pickup: FRI_6PM, name: "Asha", notes: "Medium spice", stage: "awaiting_confirmation" }));
   const r2 = await t.say("medium spice");
   assert.match(r2.replies[0]!, /Note: Medium spice/);
@@ -482,7 +482,7 @@ test("after an order is confirmed, thank you and a stray yes do not start or pla
   t.llm.push(modelReply({ reply: "You're welcome!", items: [KHEEMA_BOGO], pickup: FRI_6PM, name: "Asha", stage: "awaiting_confirmation" }));
   const r1 = await t.say("Thank you");
   assert.doesNotMatch(r1.replies[0]!, /Please check your order|Reply YES/);
-  assert.equal(t.store.getDraft("+15195550101"), null);
+  assert.equal(t.store.getDraft("+15198043658"), null);
   t.llm.push(modelReply({ reply: "Anything else?", items: [KHEEMA_BOGO], pickup: FRI_6PM, name: "Asha", stage: "awaiting_confirmation" }));
   const r2 = await t.say("yes");
   assert.doesNotMatch(r2.replies[0]!, /Please check your order|Reply YES/);
@@ -500,11 +500,11 @@ test("a double tap on yes places one order, and a second read-back of the same o
   const d = { items: t.store.listOrders()[0]!.items, pickup_local: FRI_6PM, customer_name: "Asha", notes: "", readback_hash: null as string | null, stage: "awaiting_confirmation" as const };
   const { draftHash } = await import("../src/guards.js");
   d.readback_hash = draftHash(d);
-  t.store.putDraft("+15195550101", d);
+  t.store.putDraft("+15198043658", d);
   const r = await t.say("yes");
   assert.equal(t.store.listOrders().length, 1);
   assert.match(r.replies[0]!, /already confirmed/);
-  assert.equal(t.store.getDraft("+15195550101"), null);
+  assert.equal(t.store.getDraft("+15198043658"), null);
 });
 
 test("asking for another order still works", async () => {
@@ -534,15 +534,15 @@ test("asking for a real person gives a clear status, the Instagram page, and one
   assert.match(again.replies[0]!, /already with Annapurna Home Foods/);
   assert.equal(t.store.listAlerts(true).length, 1, "no second alert");
   // the owner replying closes the request
-  t.store.closeHandoffs("+15195550101");
-  assert.equal(t.store.openHandoff("+15195550101"), undefined);
+  t.store.closeHandoffs("+15198043658");
+  assert.equal(t.store.openHandoff("+15198043658"), undefined);
 });
 
 test("a phone number in settings is shared with the customer", async () => {
   const t = setup();
-  t.store.putSettings({ ...t.store.getSettings(), contactPhone: "519-555-0100" });
+  t.store.putSettings({ ...t.store.getSettings(), contactPhone: "519-804-0100" });
   const r = await t.say("what is your phone number");
-  assert.match(r.replies[0]!, /Phone: 519-555-0100/);
+  assert.match(r.replies[0]!, /Phone: 519-804-0100/);
 });
 
 test("a normal order message does not trigger the handoff", async () => {
@@ -627,7 +627,7 @@ test("extras on their own with no main dish that day wait for the shop", async (
 
 test("Round 13: pending catering headcount change never routes to cancel a placed order", async () => {
   const t = setup({ judge: () => ({ cancelPlaced: 0.99 }) });
-  const waId = "+15195550101";
+  const waId = "+15198043658";
   t.store.upsertCustomer(waId, "Asha");
   for (let i = 0; i < 3; i++) {
     t.store.insertOrder({

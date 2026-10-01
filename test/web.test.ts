@@ -32,7 +32,7 @@ async function rig(over: { web?: Partial<Config["web"]>; ownerToken?: string; si
     try { json = JSON.parse(text); } catch { /* not json */ }
     return { status: r.status, json, text, headers: r.headers };
   };
-  const start = async (name = "Asha", contact = "519-555-0101", headers?: Record<string, string>) => {
+  const start = async (name = "Asha", contact = "519-804-3658", headers?: Record<string, string>) => {
     const r = await call("POST", "/web/session", { body: { name, contact, consent: true }, headers });
     assert.equal(r.status, 200, r.text);
     return r.json.token as string;
@@ -87,9 +87,18 @@ describe("limiter", () => {
 });
 
 test("customer identity validation accepts real values and rejects junk", () => {
-  for (const ok of ["519-555-0101", "+1 (519) 555 0101", "maddy@example.com", "5195550101", "6478043658"]) assert.equal(validContact(ok), true, ok);
-  for (const bad of ["", "abc", "12345", "not an email@", "a@b", "519+5550101", "1234567890", "12345678890", "1111111111", "0000000000", "5191550101", "+1 (123) 456-7890", "1234567890123456", "<script>alert(1)</script>", "x".repeat(81)]) assert.equal(validContact(bad), false, bad);
-  for (const ok of ["Asha", "M. Kiran", "Siva-Parvathi", "José", "O'Connor"]) assert.equal(validName(ok), true, ok);
+  for (const ok of [
+    "519-804-3658", "+1 (519) 804 3658", "5192345678", "6478043658",
+    "maddy@example.com", "first.last+orders@example.co"
+  ]) assert.equal(validContact(ok), true, ok);
+  for (const bad of [
+    "", "abc", "12345", "not an email@", "a@b", "a@b.c", "519+8043658",
+    "1234567890", "12345678890", "1111111111", "0000000000", "5191550101",
+    "9112345678", "5199115678", "5195550101", "+1 (123) 456-7890",
+    "<b>x</b>@a.com", "test@example..com", "test@-example.com", ".test@example.com", "test@exam_ple.com",
+    "1234567890123456", "<script>alert(1)</script>", "x".repeat(81)
+  ]) assert.equal(validContact(bad), false, bad);
+  for (const ok of ["Asha", "M. Kiran", "Siva-Parvathi", "José", "O'Connor", "Maxy", "M"]) assert.equal(validName(ok), true, ok);
   for (const bad of ["", "1234", "M@xy", "Madhu_1", "<script>alert(1)</script>", "A < B", "x".repeat(61)]) assert.equal(validName(bad), false, bad);
 });
 
@@ -119,7 +128,7 @@ describe("web: files and headers", () => {
     withRig(async ({ call }) => {
       assert.equal((await call("GET", "/")).status, 404);
       assert.equal((await call("GET", "/web/menu")).status, 404);
-      assert.equal((await call("POST", "/web/session", { body: { name: "A", contact: "5195550101", consent: true } })).status, 404);
+      assert.equal((await call("POST", "/web/session", { body: { name: "A", contact: "5198043658", consent: true } })).status, 404);
       assert.equal((await call("GET", "/api/state", { token: "secret" })).status, 200);
     }, { web: { enabled: false } }));
 });
@@ -149,12 +158,12 @@ describe("web: menu and sessions", () => {
   test("session needs a name, a valid contact and consent", () =>
     withRig(async ({ call }) => {
       const s = (body: unknown) => call("POST", "/web/session", { body });
-      assert.equal((await s({ name: "", contact: "5195550101", consent: true })).status, 400);
+      assert.equal((await s({ name: "", contact: "5198043658", consent: true })).status, 400);
       assert.equal((await s({ name: "A", contact: "nope", consent: true })).status, 400);
-      assert.equal((await s({ name: "A", contact: "5195550101" })).status, 400);
-      assert.equal((await s({ name: "A", contact: "5195550101", consent: "true" })).status, 400);
+      assert.equal((await s({ name: "A", contact: "5198043658" })).status, 400);
+      assert.equal((await s({ name: "A", contact: "5198043658", consent: "true" })).status, 400);
       assert.equal((await call("POST", "/web/session", { body: "not json" })).status, 400);
-      const ok = await s({ name: "  Asha  ", contact: "5195550101", consent: true });
+      const ok = await s({ name: "  Asha  ", contact: "5198043658", consent: true });
       assert.equal(ok.status, 200);
       assert.ok(ok.json.token.length >= 30);
       assert.equal(ok.json.name, "Asha");
@@ -239,7 +248,7 @@ describe("web: chat and orders", () => {
 
   test("Round 5: large explicit quantity bypasses the model and creates no phantom order", () =>
     withRig(async ({ t, start, say, call }) => {
-      const token = await start("Bulk Buyer", "5195550130");
+      const token = await start("Bulk Buyer", "5198040130");
       const before = t.llm.prompts.length;
       const r = await say(token, "25 Chicken Kheema Fry combos, spicy, pickup this Saturday 4pm");
       assert.equal(t.llm.prompts.length, before);
@@ -386,7 +395,7 @@ describe("web: chat and orders", () => {
 
   test("Round 5: custom recipe bypasses model; Sunday noon parses; customer price is ignored", () =>
     withRig(async ({ t, start, say, call }) => {
-      const token = await start("Custom Buyer", "5195550131");
+      const token = await start("Custom Buyer", "5198040131");
       const before = t.llm.prompts.length;
       const r = await say(token, "Chicken Pulao with Mirchi Ka Salan, extra spicy, double masala, custom recipe");
       assert.equal(t.llm.prompts.length, before);
@@ -403,7 +412,7 @@ describe("web: chat and orders", () => {
 
   test("Round 5: model error is recoverable and model prose cannot fake order confirmation", () =>
     withRig(async ({ t, start, say, call }) => {
-      const token = await start("Recovery Buyer", "5195550132");
+      const token = await start("Recovery Buyer", "5198040132");
       t.llm.push(new Error("boom"));
       const failed = await say(token, "1 Bagara Rice and Chicken Fry combo BOGO Saturday 11 AM");
       assert.equal(failed.json.recoverableError, true);
@@ -417,7 +426,7 @@ describe("web: chat and orders", () => {
 
   test("custom catering: owner price + approval then customer YES creates a real order and notification", () =>
     withRig(async ({ t, start, say, call }) => {
-      const token = await start("KM", "5195550101");
+      const token = await start("KM", "5198043658");
 
       t.llm.push(modelReply({
         reply: "Thanks! Annapurna Home Foods will confirm this custom catering request here.",
@@ -465,7 +474,7 @@ describe("web: chat and orders", () => {
 
   test("custom catering: pickup + owner price + customer confirmation creates the order", () =>
     withRig(async ({ t, start, say, call }) => {
-      const token = await start("KM", "5195550101");
+      const token = await start("KM", "5198043658");
 
       t.llm.push(modelReply({
         reply: "A tray order for 15 people is a custom catering request. Annapurna Home Foods will confirm the details and pricing here.",
@@ -528,7 +537,7 @@ describe("web: chat and orders", () => {
 
   test("a normal menu order after a custom order stays normal and uses menu pricing", () =>
     withRig(async ({ t, start, say, call }) => {
-      const token = await start("KM", "5195550101");
+      const token = await start("KM", "5198043658");
 
       // First place a real custom order for 15 people.
       t.llm.push(modelReply({
@@ -595,7 +604,7 @@ describe("web: chat and orders", () => {
 
   test("customer can request cancellation without the order being auto-cancelled", () =>
     withRig(async ({ t, start, say, call }) => {
-      const token = await start("Asha", "5195550101");
+      const token = await start("Asha", "5198043658");
       t.llm.push(modelReply({ items: [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "kheema fry" }], pickup: FRI_6PM, stage: "awaiting_confirmation" }));
       await say(token, "1 kheema fry friday 6pm");
       const id = (await say(token, "yes")).json.orderId;
@@ -628,8 +637,8 @@ describe("web: chat and orders", () => {
 
   test("customers cannot see each other's chats or orders", () =>
     withRig(async ({ t, start, say, call }) => {
-      const a = await start("Asha", "5195550101");
-      const b = await start("Bala", "5195550102");
+      const a = await start("Asha", "5198043658");
+      const b = await start("Bala", "5198040102");
       t.llm.push(modelReply({ reply: "A-secret-reply", items: [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "kheema fry" }], pickup: FRI_6PM, stage: "awaiting_confirmation" }));
       await say(a, "one kheema fry friday 6pm");
       await say(a, "yes");
@@ -780,7 +789,7 @@ describe("web: chat and orders", () => {
 describe("web: abuse limits", () => {
   test("new chats per IP per hour", () =>
     withRig(async ({ call, advance }) => {
-      const body = { name: "A", contact: "5195550101", consent: true };
+      const body = { name: "A", contact: "5198043658", consent: true };
       for (let i = 0; i < 2; i++) assert.equal((await call("POST", "/web/session", { body })).status, 200);
       const blocked = await call("POST", "/web/session", { body });
       assert.equal(blocked.status, 429);
@@ -852,8 +861,8 @@ describe("web: abuse limits", () => {
 
   test("global daily cap stops the Claude bill with a 503", () =>
     withRig(async ({ t, start, say }) => {
-      const a = await start("A", "5195550101");
-      const b = await start("B", "5195550102");
+      const a = await start("A", "5198043658");
+      const b = await start("B", "5198040102");
       t.llm.push(modelReply(), modelReply());
       assert.equal((await say(a, "hi")).status, 200);
       assert.equal((await say(b, "hi")).status, 200);
@@ -865,7 +874,7 @@ describe("web: abuse limits", () => {
   test("client IP comes from the proxy header only when PROXY_HOPS is set", async () => {
     // hops = 1: the last X-Forwarded-For entry is the one the proxy added. A spoofed first entry must not help.
     await withRig(async ({ call }) => {
-      const body = { name: "A", contact: "5195550101", consent: true };
+      const body = { name: "A", contact: "5198043658", consent: true };
       const spoof = (n: number) => ({ "x-forwarded-for": `9.9.9.${n}, 1.2.3.4` });
       assert.equal((await call("POST", "/web/session", { body, headers: spoof(1) })).status, 200);
       assert.equal((await call("POST", "/web/session", { body, headers: spoof(2) })).status, 429);
@@ -873,7 +882,7 @@ describe("web: abuse limits", () => {
     }, { web: { proxyHops: 1, sessionsPerIpHour: 1 } });
     // hops = 0: the header is ignored, so everyone shares the socket address
     await withRig(async ({ call }) => {
-      const body = { name: "A", contact: "5195550101", consent: true };
+      const body = { name: "A", contact: "5198043658", consent: true };
       assert.equal((await call("POST", "/web/session", { body, headers: { "x-forwarded-for": "9.9.9.1" } })).status, 200);
       assert.equal((await call("POST", "/web/session", { body, headers: { "x-forwarded-for": "9.9.9.2" } })).status, 429);
     }, { web: { proxyHops: 0, sessionsPerIpHour: 1 } });
@@ -899,7 +908,7 @@ describe("web: abuse limits", () => {
 
   test("oversized request bodies get a clean 413", () =>
     withRig(async ({ call }) => {
-      const r = await call("POST", "/web/session", { body: JSON.stringify({ name: "x".repeat(300_000), contact: "5195550101", consent: true }) });
+      const r = await call("POST", "/web/session", { body: JSON.stringify({ name: "x".repeat(300_000), contact: "5198043658", consent: true }) });
       assert.equal(r.status, 413);
       assert.equal((await call("GET", "/health")).status, 200);
     }));

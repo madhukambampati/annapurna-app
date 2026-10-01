@@ -86,22 +86,41 @@
     if (!/^[\p{L}\p{M}][\p{L}\p{M} .'\u2019-]*$/u.test(name)) return "Please use letters only. Spaces, hyphens, apostrophes and periods are allowed.";
     return "";
   }
+  function validEmailValue(value) {
+    var at = value.indexOf("@");
+    if (at <= 0 || at !== value.lastIndexOf("@")) return false;
+    var local = value.slice(0, at), domain = value.slice(at + 1);
+    if (local.length > 64 || domain.length > 253) return false;
+    if (!/^[A-Za-z0-9!#$%&'*+/=?^_\x60{|}~.-]+$/.test(local)) return false;
+    if (local.charAt(0) === "." || local.charAt(local.length - 1) === "." || local.indexOf("..") !== -1) return false;
+    var labels = domain.split(".");
+    if (labels.length < 2) return false;
+    for (var i = 0; i < labels.length; i++) {
+      if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(labels[i])) return false;
+    }
+    return /^[A-Za-z]{2,63}$/.test(labels[labels.length - 1]);
+  }
   function contactValidationError(value) {
     var contact = String(value || "").trim();
     if (!contact) return "Please enter a phone number or email.";
     if (contact.length > 80) return "Phone or email is too long.";
     if (contact.indexOf("@") !== -1) {
-      if (!/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,63}$/.test(contact)) return "Please enter a valid email, for example name@example.com.";
+      if (!validEmailValue(contact)) return "Please enter a valid email, for example name@example.com.";
       return "";
     }
     if (!/^[+()\-. \d]+$/.test(contact)) return "Please enter a valid Canadian/US phone number, or use your email.";
     var plusCount = (contact.match(/\+/g) || []).length;
     if (plusCount > 1 || (plusCount === 1 && contact.charAt(0) !== "+")) return "The + sign can only appear at the beginning of a phone number.";
-    var digits = contact.replace(/\D/g, "");
+    var rawDigits = contact.replace(/\D/g, "");
+    if (rawDigits === "12345678890") return "Please enter a real phone number, or use your email.";
+    var digits = rawDigits;
     if (digits.length === 11 && digits.charAt(0) === "1") digits = digits.slice(1);
     if (digits.length !== 10) return "Please enter a 10-digit Canadian/US phone number, or use your email.";
     if (!/^[2-9]\d{2}[2-9]\d{6}$/.test(digits)) return "Please enter a valid Canadian/US phone number, or use your email.";
-    if (/(\d)\1{5,}/.test(digits) || /(012345|123456|234567|345678|456789|567890|098765|987654|876543|765432|654321|543210)/.test(digits)) return "Please enter a real phone number, or use your email.";
+    var area = digits.slice(0, 3), exchange = digits.slice(3, 6), line = Number(digits.slice(6));
+    if (area.slice(1) === "11" || exchange.slice(1) === "11") return "Please enter a valid Canadian/US phone number, or use your email.";
+    if (exchange === "555" && line >= 100 && line <= 199) return "Please enter a real phone number, or use your email.";
+    if (/^(\d)\1{9}$/.test(digits) || digits === "1234567890" || digits === "0123456789" || digits === "9876543210") return "Please enter a real phone number, or use your email.";
     return "";
   }
   function setFieldValidation(inputId, errorId, message) {

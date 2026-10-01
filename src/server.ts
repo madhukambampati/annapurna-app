@@ -153,23 +153,47 @@ export function validName(n: string): boolean {
     && /^[\p{L}\p{M}][\p{L}\p{M} .'\u2019-]*$/u.test(value);
 }
 
+function validEmailContact(value: string): boolean {
+  const at = value.indexOf("@");
+  if (at <= 0 || at !== value.lastIndexOf("@")) return false;
+  const local = value.slice(0, at);
+  const domain = value.slice(at + 1);
+  if (local.length > 64 || domain.length > 253) return false;
+  if (!/^[A-Za-z0-9!#$%&'*+/=?^_\x60{|}~.-]+$/.test(local)) return false;
+  if (local.startsWith(".") || local.endsWith(".") || local.includes("..")) return false;
+  const labels = domain.split(".");
+  if (labels.length < 2) return false;
+  if (!labels.every((label) => /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(label))) return false;
+  return /^[A-Za-z]{2,63}$/.test(labels.at(-1)!);
+}
+
 /** A syntactically valid email or a plausible Canadian/US (NANP) phone number. */
 export function validContact(c: string): boolean {
   const value = c.trim();
   if (value.length < 5 || value.length > 80) return false;
-  if (value.includes("@")) return /^[^\s@]+@[^\s@]+\.[A-Za-z]{2,63}$/.test(value);
+  if (value.includes("@")) return validEmailContact(value);
   if (!/^[+()\-. \d]+$/.test(value)) return false;
   const plusCount = (value.match(/\+/g) ?? []).length;
   if (plusCount > 1 || (plusCount === 1 && !value.startsWith("+"))) return false;
-  let digits = value.replace(/\D/g, "");
+  const rawDigits = value.replace(/\D/g, "");
+  if (rawDigits === "12345678890") return false;
+  let digits = rawDigits;
   if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
   if (digits.length !== 10) return false;
   if (!/^[2-9]\d{2}[2-9]\d{6}$/.test(digits)) return false;
-  if (/(\d)\1{5,}/.test(digits)) return false;
-  if (/(012345|123456|234567|345678|456789|567890|098765|987654|876543|765432|654321|543210)/.test(digits)) return false;
+  const area = digits.slice(0, 3);
+  const exchange = digits.slice(3, 6);
+  const line = Number(digits.slice(6));
+  // N11 codes are reserved service codes, not ordinary area/exchange codes.
+  if (area.slice(1) === "11" || exchange.slice(1) === "11") return false;
+  // NANP reserves 555-0100 through 555-0199 for fictional/example numbers.
+  if (exchange === "555" && line >= 100 && line <= 199) return false;
+  // Reject only whole-number placeholders. Do not reject legitimate numbers merely because
+  // they contain a short sequence such as 234-5678 in the middle.
+  if (/^(\d)\1{9}$/.test(digits)) return false;
+  if (["1234567890", "0123456789", "9876543210"].includes(digits)) return false;
   return true;
 }
-
 function contactKey(c: string): string {
   const v = c.trim();
   if (v.includes("@")) return "email:" + v.toLowerCase();

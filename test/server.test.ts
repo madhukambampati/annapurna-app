@@ -46,15 +46,15 @@ describe("http server", () => {
 
   test("simulator: message -> read-back -> yes -> order shows up in the console", async () => {
     t.llm.push(modelReply({ items: [{ id: "kheema_fry", qty: 2, pack: "bogo", asked_for: "kheema fry" }], pickup: FRI_6PM, name: "Asha", stage: "awaiting_confirmation" }));
-    const a = await post("/sim/message", { from: "+15195550101", text: "2 kheema fry bogo friday 6pm" });
+    const a = await post("/sim/message", { from: "+15198043658", text: "2 kheema fry bogo friday 6pm" });
     assert.equal(a.status, 200);
     assert.match(a.json.replies[0], /Total: \$56/);
-    const b = await post("/sim/message", { from: "+15195550101", text: "yes" });
+    const b = await post("/sim/message", { from: "+15198043658", text: "yes" });
     assert.equal(b.json.orderId, 1);
     const s = await call("/api/state", { token: "secret" });
     assert.equal(s.json.orders.length, 1);
     assert.equal(s.json.orders[0].status, "cook");
-    const h = await call("/sim/history?from=%2B15195550101");
+    const h = await call("/sim/history?from=%2B15198043658");
     assert.equal(h.json.messages.length, 4);
   });
 
