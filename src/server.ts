@@ -145,6 +145,14 @@ function lowValueOwnerReply(text: string): boolean {
   return /^(?:ok(?:ay)?|yes|no|sure|thanks|thank you|no thank you|yes please|got it|fine|alright|order\s+confirm(?:ed|ing)|confirm(?:ed|ing)\s+ord\w*)[\s.!?]*$/i.test(text.trim());
 }
 
+/** A customer cancellation request is resolved when the owner clearly accepts or declines it. */
+function ownerResolvedCancellation(text: string): number | 0 | null {
+  if (!/\b(?:cancel|cancellation)\b/i.test(text)) return null;
+  if (!/\b(?:cancelled|canceled|approv(?:e|ed)|accept(?:ed)?|declin(?:e|ed)|cannot|can(?:not|'t)|unable|not\s+able|not\s+possible|won't|will\s+not|remains?\s+active|keep(?:ing)?)\b/i.test(text)) return null;
+  const m = /\border\s*#?\s*(\d+)\b/i.exec(text);
+  return m ? Number(m[1]) : 0;
+}
+
 /** Customer display name: letters plus normal name punctuation only. */
 export function validName(n: string): boolean {
   const value = n.trim();
@@ -559,6 +567,16 @@ export function createServer(d: ServerDeps): Server {
             }
 
             store.closeHandoffs(waId);
+            const resolvedCancellation = ownerResolvedCancellation(customerText);
+            if (resolvedCancellation !== null) {
+              const pending = store.listAlerts(true).filter((a) =>
+                a.waId === waId && a.orderId != null && a.note.startsWith("Cancellation requested")
+              );
+              const targets = resolvedCancellation > 0
+                ? pending.filter((a) => a.orderId === resolvedCancellation)
+                : pending.length === 1 ? pending : [];
+              for (const a of targets) store.markAlertDone(a.id);
+            }
             return send(req, res, 200, { message: { id, who: "owner", text: customerText, ts: now() } });
           }
         }

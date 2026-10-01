@@ -1125,3 +1125,22 @@ test("Round 9: bare owner prices become complete quote messages and lifecycle no
     const ready = t.store.getMessages(waId, 200).filter((m) => /ready for pickup/i.test(m.text)).at(-1)!;
     assert.equal(ready.who, "agent");
   }));
+
+test("Round 14: an owner cancellation decision closes the pending cancellation alert", () =>
+  withRig(async ({ t, start, say, call }) => {
+    const token = await start("Asha", "5198043658");
+    t.llm.push(modelReply({ items: [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "kheema fry" }], pickup: FRI_6PM, stage: "awaiting_confirmation" }));
+    await say(token, "1 kheema fry friday 6pm");
+    const id = (await say(token, "yes")).json.orderId;
+    await call("POST", `/web/orders/${id}/cancel-request`, { token });
+    assert.equal(t.store.listAlerts(true).some((a) => a.orderId === id && /Cancellation requested/.test(a.note)), true);
+
+    const waId = t.store.listCustomers()[0]!.waId;
+    const reply = await call("POST", `/api/customers/${encodeURIComponent(waId)}/reply`, {
+      token: "secret",
+      body: { text: `Sorry, we can't cancel order #${id} because it is already being prepared.` },
+    });
+    assert.equal(reply.status, 200);
+    assert.equal(t.store.getOrder(id)!.status, "hold");
+    assert.equal(t.store.listAlerts(true).some((a) => a.orderId === id && /Cancellation requested/.test(a.note)), false);
+  }));
