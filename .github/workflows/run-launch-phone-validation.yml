@@ -1,0 +1,35 @@
+name: Run launch phone validation patch
+
+on:
+  push:
+    branches:
+      - annapurna-working
+    paths:
+      - .github/workflows/run-launch-phone-validation.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: annapurna-working
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: node scripts/launch-phone-validation.cjs
+      - run: npm test
+      - name: Commit validated fix and clean temporary files
+        run: |
+          rm scripts/launch-phone-validation.cjs
+          rm .github/workflows/run-launch-phone-validation.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/app.js src/server.ts test/web.test.ts scripts/launch-phone-validation.cjs .github/workflows/run-launch-phone-validation.yml
+          git commit -m "Harden launch phone validation"
+          git push origin annapurna-working
