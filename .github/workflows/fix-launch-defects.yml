@@ -37,14 +37,12 @@ jobs:
             fs.writeFileSync(path, s);
           }
 
-          // R8: clear the generic highlighted-field message as soon as all field errors are resolved.
           replaceOne(
             'public/app.js',
             `  $("fName").addEventListener("input", function () {\n    if ($("fName").getAttribute("aria-invalid") === "true") setFieldValidation("fName", "fNameErr", nameValidationError($("fName").value));\n  });\n  $("fContact").addEventListener("input", function () {\n    if ($("fContact").getAttribute("aria-invalid") === "true") setFieldValidation("fContact", "fContactErr", contactValidationError($("fContact").value));\n  });`,
             `  function clearResolvedStartError() {\n    var err = $("startErr");\n    if (!err || !/^Please fix the highlighted field/.test(err.textContent || "")) return;\n    if (!nameValidationError($("fName").value) && !contactValidationError($("fContact").value)) err.textContent = "";\n  }\n  $("fName").addEventListener("input", function () {\n    if ($("fName").getAttribute("aria-invalid") === "true") setFieldValidation("fName", "fNameErr", nameValidationError($("fName").value));\n    clearResolvedStartError();\n  });\n  $("fContact").addEventListener("input", function () {\n    if ($("fContact").getAttribute("aria-invalid") === "true") setFieldValidation("fContact", "fContactErr", contactValidationError($("fContact").value));\n    clearResolvedStartError();\n  });`
           );
 
-          // R3: expose order notes to the customer and render them in Your orders.
           replaceOne(
             'src/server.ts',
             `            id: o.id, status: o.status, pickup: o.pickup, pickupText: formatWhen(o.pickup), items: o.items.map(itemLabel), total: total(o.items), address: s.address,`,
@@ -56,14 +54,12 @@ jobs:
             `        h("div", { class: "ord-meta" },\n          h("div", {}, h("span", {}, "Pickup"), h("b", {}, o.pickupText)),\n          o.notes ? h("div", {}, h("span", {}, "Note"), h("b", {}, o.notes)) : null,\n          (o.status === "ready" || o.status === "cook") && o.address ? h("div", {}, h("span", {}, "Location"), h("b", {}, o.address)) : null),`
           );
 
-          // R6b: only approved/accepted orders count toward sales.
           replaceOne(
             'public/desk.js',
             `.filter((o) => o.status !== "cancelled" && Number(o.createdAt || 0) >= launchAt && localDateKey(o.createdAt, tz) === today)`,
             `.filter((o) => !["hold", "cancelled"].includes(o.status) && Number(o.createdAt || 0) >= launchAt && localDateKey(o.createdAt, tz) === today)`
           );
 
-          // R7: cancellation alerts close when the order closes or the customer deletes the chat.
           replaceOne(
             'src/store.ts',
             `    // Non-order alerts depend on chat context. Once the customer deletes the chat they must not\n    // remain as orphaned "Open chat" tasks for the owner. Order-linked alerts stay for kitchen safety.\n    this.db.prepare("UPDATE alerts SET done = 1 WHERE wa_id = ? AND order_id IS NULL").run(waId);`,
@@ -80,7 +76,6 @@ jobs:
             `          const updated = store.setOrderStatus(o.id, to, o.status === "hold" && to === "cook");\n          if (to === "cancelled" || to === "done") store.closeOrderAlerts(o.id);\n          const s = store.getSettings();`
           );
 
-          // R9: on very small phones preserve navigation and hide only the optional Vindhu subtitle line.
           {
             const path = 'public/index.html';
             let s = fs.readFileSync(path, 'utf8');
@@ -93,7 +88,6 @@ jobs:
             }
           }
 
-          // Regression coverage for R3 and R7.
           replaceOne(
             'test/web.test.ts',
             `      t.llm.push(modelReply({ reply: "Sure, noted.", items: [{ id: "kheema_fry", qty: 2, pack: "bogo", asked_for: "kheema fry" }], pickup: FRI_6PM, stage: "awaiting_confirmation" }));`,
@@ -107,12 +101,12 @@ jobs:
           replaceOne(
             'test/web.test.ts',
             `      assert.match(alert!.note, /Cancellation requested/);\n      assert.ok(r.json.messages.some((m: any) => /cancellation request/i.test(m.text)));\n      assert.match(t.notifier.sent.at(-1)!.title, /Cancellation request/);`,
-            `      assert.match(alert!.note, /Cancellation requested/);\n      assert.ok(r.json.messages.some((m: any) => /cancellation request/i.test(m.text)));\n      assert.match(t.notifier.sent.at(-1)!.title, /Cancellation request/);\n      const cancelled = await call("POST", \`/api/orders/${id}/status\`, { token: "secret", body: { status: "cancelled" } });\n      assert.equal(cancelled.status, 200);\n      assert.equal(t.store.listAlerts(true).some((a) => a.orderId === id), false);`
+            `      assert.match(alert!.note, /Cancellation requested/);\n      assert.ok(r.json.messages.some((m: any) => /cancellation request/i.test(m.text)));\n      assert.match(t.notifier.sent.at(-1)!.title, /Cancellation request/);\n      const cancelled = await call("POST", "/api/orders/" + id + "/status", { token: "secret", body: { status: "cancelled" } });\n      assert.equal(cancelled.status, 200);\n      assert.equal(t.store.listAlerts(true).some((a) => a.orderId === id), false);`
           );
           replaceOne(
             'test/web.test.ts',
             `      t.store.insertAlert({ waId: wa, cust: "Asha", note: "Custom/bulk request: old pending request", orderId: null, createdAt: Date.now() });\n      assert.ok(t.store.listAlerts(true).some((a) => a.waId === wa && a.orderId == null));\n      assert.equal((await call("DELETE", "/web/me", { token })).status, 200);\n      assert.equal(t.store.getMessages(wa, 50).length, 0);\n      assert.equal(t.store.listAlerts(true).some((a) => a.waId === wa && a.orderId == null), false);`,
-            `      t.store.insertAlert({ waId: wa, cust: "Asha", note: "Custom/bulk request: old pending request", orderId: null, createdAt: Date.now() });\n      const placedOrder = t.store.listOrders()[0]!;\n      t.store.insertAlert({ waId: wa, cust: "Asha", note: \`Cancellation requested for order #${placedOrder.id}\`, orderId: placedOrder.id, createdAt: Date.now() });\n      assert.ok(t.store.listAlerts(true).some((a) => a.waId === wa && a.orderId == null));\n      assert.ok(t.store.listAlerts(true).some((a) => a.waId === wa && a.note.startsWith("Cancellation requested")));\n      assert.equal((await call("DELETE", "/web/me", { token })).status, 200);\n      assert.equal(t.store.getMessages(wa, 50).length, 0);\n      assert.equal(t.store.listAlerts(true).some((a) => a.waId === wa && a.orderId == null), false);\n      assert.equal(t.store.listAlerts(true).some((a) => a.waId === wa && a.note.startsWith("Cancellation requested")), false);`
+            `      t.store.insertAlert({ waId: wa, cust: "Asha", note: "Custom/bulk request: old pending request", orderId: null, createdAt: Date.now() });\n      const placedOrder = t.store.listOrders()[0]!;\n      t.store.insertAlert({ waId: wa, cust: "Asha", note: "Cancellation requested for order #" + placedOrder.id, orderId: placedOrder.id, createdAt: Date.now() });\n      assert.ok(t.store.listAlerts(true).some((a) => a.waId === wa && a.orderId == null));\n      assert.ok(t.store.listAlerts(true).some((a) => a.waId === wa && a.note.startsWith("Cancellation requested")));\n      assert.equal((await call("DELETE", "/web/me", { token })).status, 200);\n      assert.equal(t.store.getMessages(wa, 50).length, 0);\n      assert.equal(t.store.listAlerts(true).some((a) => a.waId === wa && a.orderId == null), false);\n      assert.equal(t.store.listAlerts(true).some((a) => a.waId === wa && a.note.startsWith("Cancellation requested")), false);`
           );
           NODE
 
