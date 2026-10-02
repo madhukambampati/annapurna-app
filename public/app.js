@@ -4,6 +4,7 @@
   var TOKEN_KEY = "annapurna-token";
   var RESUME_TOKEN_KEY = "annapurna-resume-token";
   var NAME_KEY = "annapurna-name";
+  var THEME_KEY = "annapurna-theme";
   var CHIPS = ["What's on the menu?", "Tell me about the weekly plans", "What weekend combos are running?"];
   var STATUS = {
     hold: ["Waiting for our OK", "hold"],
@@ -38,6 +39,40 @@
   var failedMessageText = "";
 
   function store(k, v) { try { if (v === null) localStorage.removeItem(k); else if (v !== undefined) localStorage.setItem(k, v); else return localStorage.getItem(k); } catch (e) { /* private mode */ } return null; }
+
+  function timeTheme() {
+    var hour = new Date().getHours();
+    return (hour >= 19 || hour < 7) ? "dark" : "light";
+  }
+  function applyTheme(theme, remember) {
+    var value = theme === "dark" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", value);
+    if (remember) store(THEME_KEY, value);
+    var btn = $("themeToggle");
+    if (btn) {
+      var dark = value === "dark";
+      btn.textContent = dark ? "☀️" : "🌙";
+      btn.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+      btn.title = dark ? "Light mode" : "Dark mode";
+    }
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", value === "dark" ? "#101a13" : "#1d6b4d");
+  }
+  function initTheme() {
+    var saved = store(THEME_KEY);
+    var manual = saved === "light" || saved === "dark";
+    applyTheme(manual ? saved : timeTheme(), false);
+    var btn = $("themeToggle");
+    if (btn) btn.addEventListener("click", function () {
+      var current = document.documentElement.getAttribute("data-theme") || timeTheme();
+      applyTheme(current === "dark" ? "light" : "dark", true);
+    });
+    if (!manual) window.setInterval(function () {
+      if (store(THEME_KEY) !== "light" && store(THEME_KEY) !== "dark") applyTheme(timeTheme(), false);
+    }, 60000);
+  }
+
+  initTheme();
 
   /* tiny DOM helper: text only, never innerHTML, so customer text can never run as HTML */
   function h(tag, attrs) {

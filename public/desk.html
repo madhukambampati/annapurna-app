@@ -6,6 +6,17 @@
 <meta name="robots" content="noindex,nofollow">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#1d6b4d">
+<script id="themeBootV1">
+(function () {
+  var theme = "";
+  try { theme = localStorage.getItem("annapurna-theme") || ""; } catch (e) {}
+  if (theme !== "light" && theme !== "dark") {
+    var hour = new Date().getHours();
+    theme = (hour >= 19 || hour < 7) ? "dark" : "light";
+  }
+  document.documentElement.setAttribute("data-theme", theme);
+})();
+</script>
 <title>Annapurna Order Desk</title>
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <style>
@@ -640,6 +651,15 @@ body.owner-mode .more-card{border-radius:20px}
 @media(max-width:700px){.owner-filters,.chat-filters{grid-template-columns:1fr 1fr}.owner-filters input,.chat-filters input{grid-column:1/-1}}
 @media(max-width:420px){.owner-filters,.chat-filters{grid-template-columns:1fr}.owner-filters input,.chat-filters input{grid-column:auto}.owner-filters .pri,.owner-filters .ghost{width:100%}}
 </style>
+<style id="ownerManualThemeV1">
+html[data-theme="light"]{color-scheme:light;--bg:#efe8d8;--panel:#fffdf8;--panel2:#f6efe0;--line:#e6dcc6;--line2:#d2c6ac;--cream:#1b2a21;--muted:#56645a;--gold:#1d6b4d;--on-gold:#fff;--chilli:#b83527;--leaf:#1d6b4d;--me:#dfeee5;--agent:#f6efe0;--maddy:#fff0c9;--paper:#fffdf8;--ink:#1b2a21;--flag:#b83527;--bad:#b83527}
+html[data-theme="dark"]{color-scheme:dark;--bg:#0b120d;--panel:#16211a;--panel2:#1d2c22;--line:#26382c;--line2:#33493a;--cream:#eaf1e6;--muted:#a5b6a9;--gold:#46b385;--on-gold:#06210f;--chilli:#ff9282;--leaf:#5cc79a;--me:#1a3a2b;--agent:#1d2c22;--maddy:#3a2d0e;--paper:#1d2c22;--ink:#eaf1e6;--flag:#ff9282;--bad:#ff9282}
+.owner-head-actions{display:flex;align-items:center;gap:8px;flex:none}
+.owner-theme-toggle{width:40px;height:40px;display:grid;place-items:center;flex:none;padding:0;border-radius:50%;border:1px solid rgba(255,255,255,.20);background:rgba(255,255,255,.10);color:#fff;font-size:18px;line-height:1;box-shadow:none}
+.owner-theme-toggle:hover{background:rgba(255,255,255,.18)}
+.owner-theme-toggle:active{transform:scale(.94)}
+@media(max-width:520px){.owner-head-actions{gap:5px}.owner-theme-toggle{width:36px;height:36px;font-size:16px}.owner-pill{display:none}}
+</style>
 </head>
 <body class="owner-mode">
 <header class="owner-head">
@@ -647,7 +667,10 @@ body.owner-mode .more-card{border-radius:20px}
     <img src="/icon.svg" alt="" width="48" height="48">
     <span><h1>Annapurna Kitchen</h1><p class="sub" id="sub">Order desk · only you see this page</p></span>
   </button>
-  <div class="owner-pill">Owner console</div>
+  <div class="owner-head-actions">
+    <button class="owner-theme-toggle" id="ownerThemeToggle" type="button" aria-label="Switch theme" title="Change theme">🌙</button>
+    <div class="owner-pill">Owner console</div>
+  </div>
 </header>
 <div id="err" class="err" role="alert" hidden></div>
 <div class="tabs" role="tablist" id="tabs"></div>
