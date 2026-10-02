@@ -1593,6 +1593,15 @@ html[data-theme="dark"] .handoff .ic{color:var(--accent)}
 @media(max-width:420px){.theme-toggle{width:30px;height:30px;font-size:14px}.customer-mode .top{padding-left:7px;padding-right:7px}.customer-mode .brand{max-width:66px!important}}
 @media(max-width:320px){.theme-toggle{width:27px;height:27px;font-size:13px}.customer-mode .brand{max-width:50px!important}}
 </style>
+
+<style id="viewportPanFixV1">
+/* Keep the document pinned to the viewport on touch devices. Internal scrollers still work. */
+html{width:100%;max-width:100%;overflow-x:hidden;overscroll-behavior-x:none}
+body{width:100%;max-width:100vw;overflow-x:hidden;overscroll-behavior-x:none}
+body.customer-mode{position:relative}
+.customer-mode .app{width:100%;max-width:min(820px,100vw);overflow-x:hidden}
+.customer-mode .top,.customer-mode .customer-home,.customer-mode .chat,.customer-mode .msgs,.customer-mode .composer,.customer-mode .sheet{min-width:0;max-width:100%}
+</style>
 </head>
 <body>
 <template id="tplMascot">

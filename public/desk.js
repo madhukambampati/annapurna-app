@@ -219,6 +219,7 @@ function orderFilterBar() {
   const status = h("select", { "aria-label": "Filter order status" },
     [["all","All statuses"],["hold","Needs approval"],["cook","To cook"],["ready","Ready"],["done","Picked up"],["cancelled","Cancelled"]].map(([v,l]) => h("option", { value: v, selected: orderStatusFilter === v }, l)));
   const apply = () => { orderQuery = q.value.trim(); orderStatusFilter = status.value; render(); };
+  status.addEventListener("change", apply);
   return h("form", { class: "owner-filters", onsubmit: (e) => { e.preventDefault(); apply(); } },
     q, status,
     h("button", { class: "pri", type: "submit" }, "Apply"),
@@ -264,12 +265,24 @@ function ticket(o) {
 function renderOrders() {
   const q = orderQuery.toLowerCase();
   const orderPool = state.orders.filter(orderMatches);
-  const open = state.alerts.filter((a) => !a.done && (!q || [a.id, a.orderId, a.cust, a.contact, a.note].join(" ").toLowerCase().includes(q.replace(/^#/, ""))));
+  const attentionAllowed = orderStatusFilter === "all" || orderStatusFilter === "hold";
+  const open = attentionAllowed
+    ? state.alerts.filter((a) => !a.done && (!q || [a.id, a.orderId, a.cust, a.contact, a.note].join(" ").toLowerCase().includes(q.replace(/^#/, ""))))
+    : [];
   const held = orderPool.filter((o) => o.status === "hold");
   const cooking = orderPool.filter((o) => o.status === "cook").sort((a, b) => String(a.pickup || "9").localeCompare(String(b.pickup || "9")));
   const ready = orderPool.filter((o) => o.status === "ready").sort((a, b) => String(a.pickup || "9").localeCompare(String(b.pickup || "9")));
-  const done = orderPool.filter((o) => o.status === "done").slice(-12).reverse();
-  const cancelled = orderPool.filter((o) => o.status === "cancelled").slice(-8).reverse();
+  const allDone = orderPool.filter((o) => o.status === "done");
+  const allCancelled = orderPool.filter((o) => o.status === "cancelled");
+  const done = allDone.slice(-12).reverse();
+  const cancelled = allCancelled.slice(-8).reverse();
+
+  const lane = (title, note, list, cls) => h("section", { class: "owner-lane " + cls },
+    h("div", { class: "owner-section-head" },
+      h("div", {}, h("h2", {}, title), h("p", { class: "sub" }, note)),
+      h("span", { class: "lane-count" }, String(list.length))),
+    list.length ? h("div", { class: "cols" }, list.map(ticket)) : h("div", { class: "empty" }, "Nothing here"));
+
   const out = [
     h("div", { class: "owner-page-title" },
       h("div", {}, h("h2", {}, "Orders"), h("p", { class: "sub" }, "Accept, prepare and hand off customer orders.")),
@@ -280,6 +293,41 @@ function renderOrders() {
   ];
 
   out.push(orderFilterBar());
+
+  // A selected status is a true focused view. Do not hide cancelled/picked-up orders
+  // inside the collapsed history section, and do not show unrelated empty lanes.
+  if (orderStatusFilter !== "all") {
+    if (orderStatusFilter === "hold") {
+      if (open.length || held.length) {
+        out.push(h("section", { class: "owner-attention" },
+          h("div", { class: "owner-section-head" }, h("div", {}, h("h2", {}, "Needs approval"), h("p", { class: "sub" }, "Orders and requests waiting for your review."))),
+          open.map((a) => {
+            const o = a.orderId ? state.orders.find((x) => x.id === a.orderId) : null;
+            return h("div", { class: "need" },
+              h("span", {}, h("b", {}, a.cust + (a.contact ? " · " + a.contact : "")), h("small", {}, a.note)),
+              h("span", { class: "need-actions" },
+                isWeb(a.waId) ? h("button", { onclick: () => openChat(a.waId) }, "Open chat") : null,
+                o && ["hold", "cook", "ready"].includes(o.status) ? h("button", { class: "bad", onclick: () => cancelOrder(o, () => act(`/api/alerts/${a.id}/done`)) }, "Cancel #" + o.id) : null,
+                h("button", { onclick: () => act(`/api/alerts/${a.id}/done`) }, "Done")));
+          }),
+          held.length ? h("div", { class: "held-wrap" }, h("div", { class: "cols" }, held.map(ticket))) : null));
+      } else {
+        out.push(h("div", { class: "empty owner-empty-large" }, h("b", {}, "No orders need approval"), h("span", {}, "There are no held orders matching this filter.")));
+      }
+      return out;
+    }
+
+    const focused = {
+      cook: ["To cook", "Confirmed and waiting to be prepared.", cooking, "lane-cook"],
+      ready: ["Ready for pickup", "Packed and waiting for the customer.", ready, "lane-ready"],
+      done: ["Picked up", "Completed orders.", allDone.slice().reverse(), "lane-done"],
+      cancelled: ["Cancelled orders", "All cancelled orders matching your search.", allCancelled.slice().reverse(), "lane-cancelled"]
+    }[orderStatusFilter];
+
+    if (focused && focused[2].length) out.push(lane(focused[0], focused[1], focused[2], focused[3]));
+    else out.push(h("div", { class: "empty owner-empty-large" }, h("b", {}, "No matching orders"), h("span", {}, "Try another search or clear the filter.")));
+    return out;
+  }
 
   if (open.length || held.length) {
     out.push(h("section", { class: "owner-attention" },
@@ -299,16 +347,9 @@ function renderOrders() {
   }
 
   if (!orderPool.length && !open.length) {
-    const filtered = orderQuery || orderStatusFilter !== "all";
-    out.push(h("div", { class: "empty owner-empty-large" }, h("b", {}, filtered ? "No matching orders" : "No orders yet"), h("span", {}, filtered ? "Try another search or clear the filter." : "Customer orders will appear here as soon as they are submitted.")));
+    out.push(h("div", { class: "empty owner-empty-large" }, h("b", {}, "No orders yet"), h("span", {}, "Customer orders will appear here as soon as they are submitted.")));
     return out;
   }
-
-  const lane = (title, note, list, cls) => h("section", { class: "owner-lane " + cls },
-    h("div", { class: "owner-section-head" },
-      h("div", {}, h("h2", {}, title), h("p", { class: "sub" }, note)),
-      h("span", { class: "lane-count" }, String(list.length))),
-    list.length ? h("div", { class: "cols" }, list.map(ticket)) : h("div", { class: "empty" }, "Nothing here"));
 
   out.push(h("div", { class: "order-lanes" },
     lane("To cook", "Confirmed and waiting to be prepared.", cooking, "lane-cook"),

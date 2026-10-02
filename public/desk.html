@@ -660,6 +660,12 @@ html[data-theme="dark"]{color-scheme:dark;--bg:#0b120d;--panel:#16211a;--panel2:
 .owner-theme-toggle:active{transform:scale(.94)}
 @media(max-width:520px){.owner-head-actions{gap:5px}.owner-theme-toggle{width:36px;height:36px;font-size:16px}.owner-pill{display:none}}
 </style>
+
+<style id="ownerViewportPanFixV1">
+html{width:100%;max-width:100%;overflow-x:hidden;overscroll-behavior-x:none}
+body.owner-mode{width:100%;max-width:min(1180px,100vw);overflow-x:hidden;overscroll-behavior-x:none;box-sizing:border-box}
+body.owner-mode #panel,body.owner-mode .owner-page-title,body.owner-mode .owner-filters,body.owner-mode .order-lanes,body.owner-mode .owner-lane,body.owner-mode .cols,body.owner-mode .ticket{min-width:0;max-width:100%}
+</style>
 </head>
 <body class="owner-mode">
 <header class="owner-head">
