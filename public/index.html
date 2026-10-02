@@ -6,6 +6,17 @@
 <title>Annapurna Home Foods: order here</title>
 <meta name="description" content="Order authentic home-cooked South Indian food from Annapurna in Kitchener. Chat to order, pick up fresh.">
 <meta name="theme-color" content="#1d6b4d">
+<script id="themeBootV1">
+(function () {
+  var theme = "";
+  try { theme = localStorage.getItem("annapurna-theme") || ""; } catch (e) {}
+  if (theme !== "light" && theme !== "dark") {
+    var hour = new Date().getHours();
+    theme = (hour >= 19 || hour < 7) ? "dark" : "light";
+  }
+  document.documentElement.setAttribute("data-theme", theme);
+})();
+</script>
 <meta name="color-scheme" content="light dark">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -1568,6 +1579,20 @@ body.customer-mode{min-height:100svh;background:var(--bg)}
   .customer-mode .tab{min-width:36px;font-size:8.5px}
 }
 </style>
+<style id="manualThemeV1">
+/* Default is time-aware (dark 7 PM–6:59 AM). A customer's manual choice is saved in this browser. */
+html[data-theme="light"]{color-scheme:light;--bg:#efe8d8;--page:#f7f2e7;--surface:#fffdf8;--surface2:#f6efe0;--ink:#1b2a21;--muted:#56645a;--dim:#7c897f;--line:#e6dcc6;--line2:#d2c6ac;--brand:#1d6b4d;--brand2:#155239;--on-brand:#fff;--brand-soft:#dfeee5;--accent:#f1a824;--accent-soft:#fff0c9;--on-accent:#3b2700;--chilli:#b83527;--chilli-soft:#fde4df;--cust:#1d6b4d;--on-cust:#fff;--agent:#fffdf8;--owner:#fff0c9;--shadow:0 18px 50px rgba(27,42,33,.14)}
+html[data-theme="dark"]{color-scheme:dark;--bg:#0b120d;--page:#101a13;--surface:#17231b;--surface2:#1d2c22;--ink:#eaf1e6;--muted:#a5b6a9;--dim:#7d9084;--line:#26382c;--line2:#33493a;--brand:#46b385;--brand2:#5cc79a;--on-brand:#06210f;--brand-soft:#1a3a2b;--accent:#f3b544;--accent-soft:#3a2d0e;--on-accent:#f7e3ad;--chilli:#ff9282;--chilli-soft:#3d1b17;--cust:#2b7d5c;--on-cust:#fff;--agent:#17231b;--owner:#3a2d0e;--shadow:0 18px 50px rgba(0,0,0,.5)}
+html[data-theme="light"] body.customer-mode{--si-leaf:#176247;--si-leaf-deep:#0e4933;--si-turmeric:#e4a11b;--si-turmeric-soft:#fff2cf;--si-chilli:#b93b2d;--si-coffee:#6f4329;--si-jasmine:#fffdf7;--si-rice:#f7f1e5;--si-line:#e8dcc5;--si-shadow:0 12px 32px rgba(35,61,44,.09)}
+html[data-theme="dark"] body.customer-mode{--si-leaf:#52bc8b;--si-leaf-deep:#6acb9c;--si-turmeric:#efb545;--si-turmeric-soft:#3b2d0d;--si-chilli:#f18b78;--si-coffee:#d4a27f;--si-jasmine:#17231b;--si-rice:#101a13;--si-line:#2c3d31;--si-shadow:0 12px 32px rgba(0,0,0,.28)}
+html[data-theme="light"] .handoff .ic{color:var(--on-accent)}
+html[data-theme="dark"] .handoff .ic{color:var(--accent)}
+.theme-toggle{flex:none;width:36px;height:36px;padding:0;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;background:var(--surface2);color:var(--ink);font-size:17px;line-height:1;cursor:pointer;box-shadow:0 5px 14px rgba(20,50,32,.06);transition:transform .16s ease,background .16s ease,border-color .16s ease}
+.theme-toggle:hover{background:var(--brand-soft);border-color:var(--brand)}
+.theme-toggle:active{transform:scale(.92)}
+@media(max-width:420px){.theme-toggle{width:30px;height:30px;font-size:14px}.customer-mode .top{padding-left:7px;padding-right:7px}.customer-mode .brand{max-width:66px!important}}
+@media(max-width:320px){.theme-toggle{width:27px;height:27px;font-size:13px}.customer-mode .brand{max-width:50px!important}}
+</style>
 </head>
 <body>
 <template id="tplMascot">
@@ -1615,6 +1640,7 @@ body.customer-mode{min-height:100svh;background:var(--bg)}
       <button class="tab" id="btnOrders" type="button" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12l-1 12H7z"/><path d="M9 8V7a3 3 0 0 1 6 0v1"/></svg>Orders<span class="dotn" id="ordDot" hidden></span></button>
       <button class="tab" id="btnHelp" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a9 9 0 1 0-9-9c0 1.6.4 3 1.2 4.3L3 21l4.7-1.2A9 9 0 0 0 12 21z"/><path d="M9.7 9.5a2.4 2.4 0 1 1 3.4 2.2c-.7.4-1.1.9-1.1 1.6M12 16.4v.1"/></svg>Help</button>
     </nav>
+    <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch theme" title="Change theme">🌙</button>
   </header>
   <div class="handoff" id="handoffBar" role="status" hidden>
     <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="9"/></svg>

@@ -2,6 +2,7 @@
 const $ = (id) => document.getElementById(id);
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const CHIPS = ["What's on the menu?", "2 chicken kheema fry combos, buy 1 get 1, pickup Friday 6pm", "Full meal plan for 2 people, pickup Monday 5pm", "yes", "I want to cancel my order"];
+const THEME_KEY = "annapurna-theme";
 
 let state = { orders: [], alerts: [], menu: [], settings: {}, customers: [], features: {}, ownerLaunchAt: 0 };
 let tab = "dashboard";
@@ -10,7 +11,44 @@ let chat = { waId: "", messages: [], customer: null };
 let sim = { from: "+15195550101", name: "", msgs: [] };
 let token = "";
 let orderQuery = "", orderStatusFilter = "all", chatQuery = "";
+
+function ownerTimeTheme() {
+  const hour = new Date().getHours();
+  return (hour >= 19 || hour < 7) ? "dark" : "light";
+}
+function applyOwnerTheme(theme, remember = false) {
+  const value = theme === "dark" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", value);
+  if (remember) { try { localStorage.setItem(THEME_KEY, value); } catch { /* storage blocked */ } }
+  const btn = $("ownerThemeToggle");
+  if (btn) {
+    const dark = value === "dark";
+    btn.textContent = dark ? "☀️" : "🌙";
+    btn.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+    btn.title = dark ? "Light mode" : "Dark mode";
+  }
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", value === "dark" ? "#0b120d" : "#1d6b4d");
+}
+function initOwnerTheme() {
+  let saved = "";
+  try { saved = localStorage.getItem(THEME_KEY) || ""; } catch { /* storage blocked */ }
+  const manual = saved === "light" || saved === "dark";
+  applyOwnerTheme(manual ? saved : ownerTimeTheme());
+  const btn = $("ownerThemeToggle");
+  if (btn) btn.addEventListener("click", () => {
+    const current = document.documentElement.getAttribute("data-theme") || ownerTimeTheme();
+    applyOwnerTheme(current === "dark" ? "light" : "dark", true);
+  });
+  if (!manual) window.setInterval(() => {
+    let currentSaved = "";
+    try { currentSaved = localStorage.getItem(THEME_KEY) || ""; } catch { /* ignore */ }
+    if (currentSaved !== "light" && currentSaved !== "dark") applyOwnerTheme(ownerTimeTheme());
+  }, 60000);
+}
+
 try { token = localStorage.getItem("annapurna-owner") || ""; } catch { /* storage blocked */ }
+initOwnerTheme();
 
 function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
