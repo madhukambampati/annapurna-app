@@ -666,6 +666,94 @@ html{width:100%;max-width:100%;overflow-x:hidden;overscroll-behavior-x:none}
 body.owner-mode{width:100%;max-width:min(1180px,100vw);overflow-x:hidden;overscroll-behavior-x:none;box-sizing:border-box}
 body.owner-mode #panel,body.owner-mode .owner-page-title,body.owner-mode .owner-filters,body.owner-mode .order-lanes,body.owner-mode .owner-lane,body.owner-mode .cols,body.owner-mode .ticket{min-width:0;max-width:100%}
 </style>
+
+<style id="ownerTraditionalSouthIndianV1">
+/* OWNER HERITAGE V1 — presentation only. Existing owner actions and filters are untouched. */
+body.owner-mode{
+  --heritage-green:#0f5137;--heritage-deep:#083c2a;--heritage-gold:#d89a28;--heritage-cream:#fff8e9;
+  background:
+    radial-gradient(520px 300px at 100% 0%,rgba(216,154,40,.10),transparent 72%),
+    radial-gradient(520px 300px at 0% 70%,rgba(15,81,55,.07),transparent 75%),
+    var(--bg);
+}
+body.owner-mode::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;opacity:.18;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'%3E%3Cg fill='none' stroke='%23d89a28' stroke-width='1.5'%3E%3Cpath d='M20 110c22-38 44-38 66 0-22 38-44 38-66 0Zm44-44c38 22 38 44 0 66-38-22-38-44 0-66Z'/%3E%3Ccircle cx='64' cy='110' r='10'/%3E%3Cpath d='M160 28c24 18 36 36 36 54s-12 36-36 54c-24-18-36-36-36-54s12-36 36-54Z'/%3E%3C/g%3E%3C/svg%3E");
+  background-size:220px 220px;background-position:right 26px bottom 30px;
+}
+body.owner-mode .owner-head{
+  position:relative;overflow:hidden;
+  background:
+    radial-gradient(250px 120px at 94% -10%,rgba(239,181,61,.25),transparent 72%),
+    linear-gradient(135deg,var(--heritage-deep),var(--heritage-green));
+  border:1px solid rgba(216,154,40,.55);
+  box-shadow:0 18px 44px rgba(7,55,37,.20);
+}
+body.owner-mode .owner-head::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:7px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,var(--heritage-gold) 15% 85%,transparent);
+  opacity:.75;
+}
+body.owner-mode .owner-brand h1{font-family:var(--f-display);letter-spacing:.01em}
+body.owner-mode .owner-pill{color:#ffe1a0;border-color:rgba(255,224,156,.26)}
+body.owner-mode .card,body.owner-mode .ticket,body.owner-mode .order-lane,body.owner-mode .owner-kpi,body.owner-mode .chatgrid{
+  border-color:color-mix(in srgb,var(--heritage-gold) 18%,var(--line));
+}
+body.owner-mode .order-lane{box-shadow:0 10px 26px rgba(30,45,35,.05)}
+body.owner-mode .owner-filters{border-color:color-mix(in srgb,var(--heritage-gold) 18%,var(--line));background:color-mix(in srgb,var(--heritage-cream) 48%,var(--panel))}
+body.owner-mode .empty{border-color:color-mix(in srgb,var(--heritage-green) 22%,var(--line2));background:color-mix(in srgb,var(--heritage-cream) 34%,transparent)}
+
+@media(min-width:900px){
+  body.owner-mode{
+    max-width:1480px;
+    display:grid;
+    grid-template-columns:230px minmax(0,1fr);
+    grid-template-rows:auto auto 1fr;
+    column-gap:18px;
+    align-items:start;
+    padding:16px 18px 44px;
+  }
+  body.owner-mode .owner-head{grid-column:1/-1;grid-row:1;margin-bottom:18px}
+  body.owner-mode #err{grid-column:2;grid-row:2}
+  body.owner-mode #tabs{
+    grid-column:1;grid-row:2 / span 2;
+    position:sticky;top:16px;z-index:18;
+    display:flex;flex-direction:column;align-items:stretch;gap:6px;
+    width:100%;max-width:none;margin:0;padding:16px 12px 96px;
+    border:1px solid color-mix(in srgb,var(--heritage-gold) 22%,var(--line));
+    border-radius:22px;
+    background:
+      radial-gradient(160px 140px at 50% 100%,rgba(216,154,40,.12),transparent 74%),
+      color-mix(in srgb,var(--heritage-cream) 74%,var(--panel));
+    box-shadow:0 14px 34px rgba(30,45,35,.08);
+  }
+  body.owner-mode #tabs::after{
+    content:"Inti Ruchi · Mana Sampradayam";
+    position:absolute;left:14px;right:14px;bottom:20px;
+    padding-top:14px;border-top:1px solid color-mix(in srgb,var(--heritage-gold) 38%,var(--line));
+    text-align:center;color:var(--heritage-green);font:700 12px/1.25 var(--f-display);letter-spacing:.04em;
+  }
+  body.owner-mode #tabs button{
+    flex:none;width:100%;min-height:46px;text-align:left;justify-content:flex-start;
+    border-radius:13px;padding:10px 12px;
+  }
+  body.owner-mode #tabs button[aria-selected=true]{
+    background:linear-gradient(135deg,var(--heritage-deep),var(--heritage-green));
+    color:#fff;box-shadow:0 7px 18px rgba(15,81,55,.20);
+  }
+  body.owner-mode #panel{grid-column:2;grid-row:3;min-width:0}
+  body.owner-mode .owner-page-title{margin-top:0}
+  body.owner-mode .owner-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+  body.owner-mode .order-lanes{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:899px){
+  body.owner-mode{display:block}
+}
+@media(max-width:620px){
+  body.owner-mode::before{opacity:.10}
+  body.owner-mode .owner-head{border-radius:18px}
+}
+</style>
 </head>
 <body class="owner-mode">
 <header class="owner-head">
