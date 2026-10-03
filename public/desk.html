@@ -666,6 +666,71 @@ html{width:100%;max-width:100%;overflow-x:hidden;overscroll-behavior-x:none}
 body.owner-mode{width:100%;max-width:min(1180px,100vw);overflow-x:hidden;overscroll-behavior-x:none;box-sizing:border-box}
 body.owner-mode #panel,body.owner-mode .owner-page-title,body.owner-mode .owner-filters,body.owner-mode .order-lanes,body.owner-mode .owner-lane,body.owner-mode .cols,body.owner-mode .ticket{min-width:0;max-width:100%}
 </style>
+
+<style id="ownerHeritagePreviewV2">
+/* PREVIEW ONLY — traditional Annapurna branding with the existing operational owner desk. */
+body.owner-mode{
+  --heritage-green:#0f4d37;--heritage-green-2:#176247;--heritage-gold:#e3aa3b;--heritage-red:#b94232;
+  background:
+    radial-gradient(circle at 16px 16px,rgba(227,170,59,.055) 1.2px,transparent 1.3px) 0 0/32px 32px,
+    linear-gradient(180deg,var(--bg),color-mix(in srgb,var(--bg) 90%,#fff 10%));
+}
+body.owner-mode .owner-head{
+  position:relative;overflow:hidden;
+  background:
+    radial-gradient(260px 120px at 82% -20%,rgba(227,170,59,.28),transparent 72%),
+    linear-gradient(135deg,#0b3e2d,#11543c 62%,#176247);
+  border:1px solid rgba(227,170,59,.34);box-shadow:0 16px 36px rgba(8,45,31,.16);
+}
+body.owner-mode .owner-head::after{
+  content:"";position:absolute;right:-28px;bottom:-38px;width:120px;height:120px;border:1px solid rgba(245,216,148,.20);transform:rotate(45deg);pointer-events:none;
+}
+body.owner-mode .owner-brand img{box-shadow:0 0 0 1px rgba(227,170,59,.42),0 7px 18px rgba(0,0,0,.15)}
+body.owner-mode .owner-brand h1{font-family:var(--f-display);letter-spacing:.01em}
+body.owner-mode .owner-brand .sub{color:#f3d997}
+body.owner-mode .owner-pill{color:#fff3cf;border-color:rgba(227,170,59,.38);background:rgba(227,170,59,.10)}
+body.owner-mode .owner-theme-toggle{border-color:rgba(227,170,59,.42)}
+body.owner-mode .owner-page-title h2,body.owner-mode h2{color:color-mix(in srgb,var(--cream) 88%,var(--heritage-green) 12%)}
+body.owner-mode .owner-filters{border-color:color-mix(in srgb,var(--heritage-gold) 18%,var(--line));box-shadow:0 8px 22px rgba(30,45,35,.045)}
+body.owner-mode .order-lane{border-color:color-mix(in srgb,var(--heritage-gold) 14%,var(--line));box-shadow:0 9px 22px rgba(30,45,35,.04)}
+body.owner-mode .ticket{border-color:color-mix(in srgb,var(--heritage-gold) 12%,var(--line))}
+body.owner-mode .owner-note{border-color:color-mix(in srgb,var(--heritage-gold) 20%,var(--line))}
+
+@media(min-width:900px){
+  body.owner-mode{
+    display:grid;grid-template-columns:205px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);
+    column-gap:18px;align-items:start;max-width:1280px;
+  }
+  body.owner-mode .owner-head{grid-column:1/-1;width:100%;margin-bottom:0}
+  body.owner-mode>#err{grid-column:1/-1}
+  body.owner-mode>#tabs{
+    grid-column:1;grid-row:2;position:sticky;top:14px;width:100%;margin:14px 0 0;padding:10px;
+    display:flex;flex-direction:column;align-items:stretch;gap:6px;
+    border:1px solid color-mix(in srgb,var(--heritage-gold) 18%,var(--line));border-radius:18px;
+    background:
+      radial-gradient(120px 160px at -10% 105%,rgba(23,98,71,.08),transparent 70%),
+      color-mix(in srgb,var(--panel) 97%,#fff5df 3%);
+    box-shadow:0 12px 28px rgba(30,45,35,.06);backdrop-filter:none;-webkit-backdrop-filter:none;
+  }
+  body.owner-mode>#tabs::after{
+    content:"Inti Ruchi\A Mana Sampradayam";white-space:pre;margin-top:8px;padding:13px 8px 5px;
+    border-top:1px solid color-mix(in srgb,var(--heritage-gold) 22%,var(--line));
+    color:var(--muted);font:700 11px/1.45 var(--f-display);text-align:center;
+  }
+  body.owner-mode>#tabs button{
+    flex:none;width:100%;min-height:46px;justify-content:flex-start;text-align:left;padding:10px 12px;border-radius:12px;
+  }
+  body.owner-mode>#tabs button[aria-selected=true]{
+    background:linear-gradient(135deg,#0f4d37,#176247);color:#fff;border-color:#176247;box-shadow:0 7px 16px rgba(15,77,55,.18)
+  }
+  body.owner-mode>#panel{grid-column:2;grid-row:2;min-width:0;padding-top:2px}
+}
+html[data-theme="dark"] body.owner-mode>#tabs{background:linear-gradient(180deg,#15231a,#17231b);border-color:rgba(239,181,69,.18)}
+@media(max-width:620px){
+  body.owner-mode .owner-head{border-radius:17px}
+  body.owner-mode .owner-brand .sub{color:rgba(255,232,178,.78)}
+}
+</style>
 </head>
 <body class="owner-mode">
 <header class="owner-head">
