@@ -1,0 +1,57 @@
+name: UI preview V8 wire
+on:
+  push:
+    branches: [ui-preview]
+    paths:
+      - '.github/workflows/ui-preview-v8-wire.yml'
+permissions:
+  contents: write
+jobs:
+  wire-test-clean:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ui-preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Wire V8 customer UI
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('public/index.html')
+          s=p.read_text()
+          if '/heritage-v8.css' not in s:
+              s=s.replace('<link rel="stylesheet" href="/heritage-v6.css?v=6">','<link rel="stylesheet" href="/heritage-v6.css?v=6">\n<link rel="stylesheet" href="/heritage-v8.css?v=8">',1)
+          marker='    <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch theme" title="Change theme">🌙</button>'
+          if 'header-order-v8' not in s:
+              button='    <button class="header-order-v8" type="button" onclick="document.getElementById(\'homeOrder\')?.click()" aria-label="Order with Vindhu">💬 <span>Order with Vindhu</span> →</button>\n'
+              s=s.replace(marker,button+marker,1)
+          p.write_text(s)
+          PY
+      - name: Verify V8 wiring
+        run: |
+          test -s public/heritage-v8.css
+          grep -q 'heritage-v8.css?v=8' public/index.html
+          grep -q 'header-order-v8' public/index.html
+          grep -q '#onboard #bubble' public/heritage-v8.css
+          grep -q '#onboard\[hidden\]' public/heritage-v8.css
+      - name: Browser JavaScript syntax
+        run: node --check public/app.js && node --check public/desk.js
+      - name: Full regression suite
+        run: npm test
+      - name: Check whitespace
+        run: git diff --check
+      - name: Commit tested V8 preview and remove temporary runner
+        run: |
+          rm -f .github/workflows/ui-preview-v8-wire.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/index.html public/heritage-v8.css .github/workflows/ui-preview-v8-wire.yml
+          git commit -m 'Match customer preview to approved South Indian layout V8'
+          git push origin HEAD:ui-preview
