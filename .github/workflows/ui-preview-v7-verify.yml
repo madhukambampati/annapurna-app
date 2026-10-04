@@ -1,0 +1,28 @@
+name: UI preview V7 verify
+on:
+  push:
+    branches:
+      - ui-preview
+    paths:
+      - '.github/workflows/ui-preview-v7-verify.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ui-preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: node --check public/app.js
+      - run: node --check public/desk.js
+      - run: npm test
+      - run: git diff --check
+      - run: grep -q '#onboard\[hidden\]' public/heritage-v6.css
+      - run: grep -q -- '-webkit-text-fill-color:#173d2e' public/heritage-v6.css
+      - run: grep -q 'data:image/jpeg;base64' public/heritage-v6.css
