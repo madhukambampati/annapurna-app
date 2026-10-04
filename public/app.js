@@ -218,9 +218,14 @@
 
   /* ---------- screens ---------- */
   function show(which) {
-    $("onboard").hidden = which !== "onboard";
-    $("home").hidden = which !== "home";
-    $("chat").hidden = which !== "chat";
+    document.body.setAttribute("data-screen", which);
+    ["onboard", "home", "chat"].forEach(function (id) {
+      var visible = id === which;
+      document.querySelectorAll("#" + id).forEach(function (el) {
+        el.hidden = !visible;
+        el.style.display = visible ? "" : "none";
+      });
+    });
     $("btnHome").hidden = which === "onboard";
     $("btnOrders").hidden = which === "onboard";
     [["btnHome","home"],["btnMenu","menu"],["btnOrders","orders"],["btnHelp","help"]].forEach(function (x) {
