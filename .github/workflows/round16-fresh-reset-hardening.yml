@@ -20,10 +20,13 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Apply patch
-        run: python scripts/round16-patch.py
+        run: |
+          python scripts/round16-patch.py
+          python scripts/round16-addon-guard.py
       - name: Verify intended changes
         run: |
           grep -q 'deterministicFreshDraft' src/agent.ts
+          grep -q 'mentionsAddon' src/agent.ts
           grep -q 'freshResetContext' src/agent.ts
           grep -q 'promptHistory.splice(0, promptHistory.length - 1)' src/agent.ts
           grep -q 'Claude timed out before replying' src/agent.ts
@@ -36,7 +39,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/round16-fresh-reset-hardening.yml scripts/round16-patch.py
+          git rm .github/workflows/round16-fresh-reset-hardening.yml scripts/round16-patch.py scripts/round16-addon-guard.py
           git add src/agent.ts test/agent.test.ts
           git commit -m "Harden fresh-order reset against model timeouts"
           git push origin HEAD:round16-fresh-reset-hardening
