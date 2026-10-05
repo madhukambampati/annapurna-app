@@ -985,9 +985,11 @@
       stopPolling();
       show("onboard");
       var deletedNotice = $("startErr");
+      deletedNotice.classList.add("info");
       deletedNotice.textContent = "Your chat was deleted.";
       setTimeout(function () {
         if (deletedNotice.textContent === "Your chat was deleted.") deletedNotice.textContent = "";
+        deletedNotice.classList.remove("info");
       }, 3500);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }).catch(function (e) { confirmingDelete = false; renderHelp(); toast(errText(e)); });
@@ -1080,7 +1082,7 @@
   function clearResolvedStartError() {
     var err = $("startErr");
     if (!err) return;
-    if (err.textContent === "Your chat was deleted.") { err.textContent = ""; return; }
+    if (err.textContent === "Your chat was deleted.") { err.textContent = ""; err.classList.remove("info"); return; }
     if (!/^Please fix the highlighted field/.test(err.textContent || "")) return;
     if (!nameValidationError($("fName").value) && !contactValidationError($("fContact").value)) err.textContent = "";
   }

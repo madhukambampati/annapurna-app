@@ -57,6 +57,22 @@ test("a bare 'yes' with no read-back pending never creates an order", async () =
   assert.equal(t.store.listOrders().length, 0);
 });
 
+test("reset wrapper with no active draft is stripped before the model call", async () => {
+  const t = setup();
+  t.llm.push(modelReply({
+    reply: "Sure!",
+    items: [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "chicken kheema fry combo" }],
+    pickup: FRI_6PM,
+    stage: "awaiting_confirmation",
+  }));
+  const r = await t.say("Forget everything before this. Fresh order: 1 chicken kheema fry combo, Friday 6pm");
+  assert.equal(t.llm.prompts.length, 1);
+  assert.doesNotMatch(t.llm.prompts[0]!, /forget everything before this/i);
+  assert.match(t.llm.prompts[0]!, /1 chicken kheema fry combo, Friday 6pm/i);
+  assert.doesNotMatch(r.route, /model_error/);
+  assert.match(r.replies.at(-1)!, /Please check your order/);
+});
+
 test("regression: asked for Bagara rice and chicken fry, model wrote kheema fry", async () => {
   const t = setup({ judge: yesJudge });
   const menu = t.store.getMenu();
@@ -105,10 +121,10 @@ test("a weekend combo that is switched off cannot be ordered", async () => {
   const menu = t.store.getMenu();
   menu.find((m) => m.id === "kheema_fry")!.live = false;
   t.store.putMenu(menu);
-  t.llm.push(modelReply({ reply: "Sure!", items: [KHEEMA_BOGO], pickup: FRI_6PM, stage: "awaiting_confirmation" }));
   const r = await t.say("2 kheema fry combos friday 6pm");
   assert.match(r.replies[0]!, /Chicken Kheema Fry combo isn't running right now/);
-  assert.equal(t.store.getDraft("+15198043658")!.items.length, 0);
+  assert.equal(t.llm.prompts.length, 0, "switched-off combo handling must not depend on the model");
+  assert.equal(t.store.getDraft("+15198043658"), null);
   assert.equal(t.store.listAlerts(true).length, 1);
 });
 
