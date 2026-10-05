@@ -194,7 +194,7 @@ function renderDashboard() {
 
   if (activeAlerts + held) {
     out.push(h("div", { class: "owner-callout" },
-      h("div", {}, h("strong", {}, (activeAlerts + held) + " item" + (activeAlerts + held === 1 ? "" : "s") + " need you"), h("span", {}, "Review held orders or customer requests before cooking.")),
+      h("div", {}, h("strong", {}, (activeAlerts + held) + " item" + (activeAlerts + held === 1 ? "" : "s") + " need you"), h("span", {}, " · Review held orders or customer requests before cooking.")),
       h("button", { class: "pri", onclick: () => { tab = "orders"; render(); } }, "Review now")));
   }
 

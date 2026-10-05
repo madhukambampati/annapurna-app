@@ -137,6 +137,21 @@ function clearlyNormalMenuOrder(text: string, menu: MenuItem[]): boolean {
   });
 }
 
+function requestedSwitchedOffCombo(text: string, menu: MenuItem[]): MenuItem | null {
+  const said = tokens(text);
+  if (!said.size) return null;
+  let best: { item: MenuItem; specificity: number } | null = null;
+  for (const item of menu) {
+    if (item.kind !== "combo" || item.live) continue;
+    for (const label of [item.name, ...item.aliases]) {
+      const want = tokens(label);
+      if (want.size < 2 || ![...want].every((t) => said.has(t))) continue;
+      if (!best || want.size > best.specificity) best = { item, specificity: want.size };
+    }
+  }
+  return best?.item ?? null;
+}
+
 function deterministicCustomItems(text: string, menu: MenuItem[]): Draft["items"] {
   const tt = tokens(text);
   const qty = customHeadcount(text) ?? bulkMenuQuantity(text, menu) ?? 1;
@@ -261,8 +276,9 @@ export class Agent {
     // A pending draft can be reset without deleting the whole chat. If the same message also
     // contains a replacement order, continue processing only that fresh-order part in this turn.
     const abandoningCustom = !!draft?.custom && CUSTOM_ABANDON.test(text);
-    const resettingDraft = !!draft && DRAFT_RESET.test(text);
+    const resettingDraft = DRAFT_RESET.test(text);
     if (abandoningCustom || resettingDraft) {
+      const hadDraft = !!draft;
       const wasCustom = !!draft?.custom;
       const hadQuote = draft?.custom?.price != null;
       const remainder = resetRemainder(text);
@@ -276,9 +292,13 @@ export class Agent {
           `${customer.name || msg.name || "Customer"} withdrew the pending custom/bulk request. Do not prepare or price that request.`,
         );
       }
-      out.replies.push(wasCustom
-        ? `No problem — I cleared that pending custom/bulk request${hadQuote ? " and its old quoted price" : ""}. Nothing from it will carry into your next order. Any already-confirmed orders are unchanged.`
-        : "No problem — I cleared the current unplaced order. Any already-confirmed orders are unchanged.");
+      if (hadDraft) {
+        out.replies.push(wasCustom
+          ? `No problem — I cleared that pending custom/bulk request${hadQuote ? " and its old quoted price" : ""}. Nothing from it will carry into your next order. Any already-confirmed orders are unchanged.`
+          : "No problem — I cleared the current unplaced order. Any already-confirmed orders are unchanged.");
+      } else if (!remainder) {
+        out.replies.push("You are starting fresh. Tell me what you would like to order.");
+      }
       draft = null;
       if (!remainder) {
         out.route = wasCustom ? "custom_abandoned" : "draft_reset";
@@ -286,6 +306,24 @@ export class Agent {
         return out;
       }
       text = remainder;
+    }
+
+    // A specifically requested combo that is switched off is handled by code before Claude.
+    // This guarantees a clear customer answer and an owner alert even if the model would omit the item.
+    const switchedOffCombo = requestedSwitchedOffCombo(text, menu);
+    if (switchedOffCombo) {
+      out.route = "not_live";
+      out.issues.push("not_live");
+      out.replies.push(`Sorry, ${switchedOffCombo.name} isn't running right now, so I can't take that one. I've let Annapurna Home Foods know.`);
+      await this.raise(
+        msg.from,
+        customer.name || msg.name || "Customer",
+        `Asked for ${switchedOffCombo.name}, which is switched off right now.`,
+        null,
+        out,
+      );
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
     }
 
     // After a stale custom quote has been refused, a clearly unrelated normal menu order starts cleanly.
