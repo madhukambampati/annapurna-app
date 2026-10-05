@@ -124,3 +124,30 @@ html[data-theme="dark"] body.customer-mode .home-section{background:#101a13!impo
 html[data-theme="dark"] body.customer-mode .home-tile{background:linear-gradient(180deg,#1a281e,#152119)!important;border-color:#6c5832!important}
 html[data-theme="dark"] body.customer-mode .tile-copy b{color:#edf4e9!important}
 html[data-theme="dark"] body.customer-mode .tile-copy small{color:#b2beb3!important}
+
+
+/* V15 — supplied full-color South Indian hero on the before-login screen too. */
+body.customer-mode .header-order-v8{display:none!important}
+body.customer-mode .onboard .heroTop{display:none!important}
+body.customer-mode .onboard .hero{
+  min-height:430px!important;
+  padding:270px 28px 28px!important;
+  background:
+    linear-gradient(180deg,rgba(4,55,38,.02) 0%,rgba(4,55,38,.05) 44%,rgba(4,55,38,.90) 100%),
+    url('/assets/vindhu_hero_with_food.png?v=15') center center/cover no-repeat!important;
+  background-position:center center!important;
+  background-size:cover!important;
+}
+body.customer-mode .onboard .hero::before{display:none!important}
+body.customer-mode .onboard .hero h1,
+body.customer-mode .onboard .hero h2,
+body.customer-mode .onboard .hero p{position:relative!important;z-index:3!important;color:#fff!important;text-shadow:0 2px 12px rgba(0,0,0,.34)!important}
+body.customer-mode .onboard .hero .kicker,
+body.customer-mode .onboard .hero .eyebrow{position:relative!important;z-index:3!important;color:#ffe0a0!important}
+@media(max-width:759px){
+  body.customer-mode .onboard .hero{
+    min-height:360px!important;
+    padding:220px 16px 22px!important;
+    background-position:center center!important;
+  }
+}
