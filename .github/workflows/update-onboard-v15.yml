@@ -1,0 +1,75 @@
+name: Update onboarding hero V15
+on:
+  push:
+    branches: [ui-preview]
+    paths: ['.github/workflows/update-onboard-v15.yml']
+permissions:
+  contents: write
+jobs:
+  update-test-clean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ui-preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Update before-login hero to supplied South Indian image
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('public/heritage-v11.css')
+          s = p.read_text()
+          old = "background:linear-gradient(90deg,rgba(8,76,52,.98) 0%,rgba(12,92,63,.94) 43%,rgba(11,78,54,.44) 60%,rgba(11,78,54,.05) 76%),url('/assets/heritage-hero-v5.svg') 72% center/cover no-repeat!important;"
+          new = "background:linear-gradient(180deg,rgba(4,55,38,.04) 0%,rgba(4,55,38,.08) 45%,rgba(4,55,38,.90) 100%),url('/assets/vindhu_hero_with_food.png?v=15') center/cover no-repeat!important;"
+          if old not in s:
+              raise SystemExit('Expected onboarding background rule not found')
+          s = s.replace(old, new, 1)
+          s += r'''
+
+/* V15 — use the supplied full-color South Indian hero before login too. */
+body.customer-mode .header-order-v8{display:none!important}
+body.customer-mode .onboard .heroTop{display:none!important}
+body.customer-mode .onboard .hero{
+  min-height:430px!important;
+  padding:270px 28px 28px!important;
+  background-position:center center!important;
+  background-size:cover!important;
+}
+body.customer-mode .onboard .hero::before{display:none!important}
+body.customer-mode .onboard .hero h1,
+body.customer-mode .onboard .hero h2,
+body.customer-mode .onboard .hero p{position:relative!important;z-index:3!important;color:#fff!important;text-shadow:0 2px 12px rgba(0,0,0,.34)!important}
+body.customer-mode .onboard .hero .kicker,
+body.customer-mode .onboard .hero .eyebrow{position:relative!important;z-index:3!important;color:#ffe0a0!important}
+@media(max-width:759px){
+  body.customer-mode .onboard .hero{
+    min-height:360px!important;
+    padding:220px 16px 22px!important;
+    background-position:center center!important;
+  }
+}
+'''
+          p.write_text(s)
+          PY
+      - name: Verify wiring
+        run: |
+          grep -q "vindhu_hero_with_food.png?v=15" public/heritage-v11.css
+          grep -q "header-order-v8{display:none!important}" public/heritage-v11.css
+          grep -q '"/assets/vindhu_hero_with_food.png"' src/server.ts
+      - name: Full regression suite
+        run: npm test
+      - name: Check whitespace
+        run: git diff --check
+      - name: Commit tested update and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/update-onboard-v15.yml
+          git add public/heritage-v11.css
+          git commit -m "Use supplied South Indian hero before login V15"
+          git push origin HEAD:ui-preview
