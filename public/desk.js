@@ -180,11 +180,19 @@ function renderDashboard() {
       return sum + (t == null ? 0 : t);
     }, 0);
 
+  const totalSales = state.orders
+    .filter((o) => o.status !== "cancelled")
+    .reduce((sum, o) => {
+      const t = totalOf(o.items);
+      return sum + (t == null ? 0 : t);
+    }, 0);
+
   const kpis = h("section", { class: "owner-kpis", "aria-label": "Kitchen overview" },
     h("div", { class: "owner-kpi kpi-cook", style: "--tone:#1d6b4d", "data-icon": "♨" }, h("small", {}, "To cook"), h("strong", {}, cooking), h("span", {}, "Confirmed orders")),
     h("div", { class: "owner-kpi kpi-ready", style: "--tone:#2f8fb0", "data-icon": "✓" }, h("small", {}, "Ready"), h("strong", {}, ready), h("span", {}, "Waiting for pickup")),
     h("div", { class: "owner-kpi kpi-attn", style: "--tone:#e7882b", "data-icon": "!" }, h("small", {}, "Needs attention"), h("strong", {}, activeAlerts + held), h("span", {}, "Alerts + held orders")),
-    h("div", { class: "owner-kpi kpi-sales", style: "--tone:#8b5a2b", "data-icon": "$" }, h("small", {}, "Today's sales"), h("strong", {}, money(sales)), h("span", {}, "Fresh orders today"))
+    h("div", { class: "owner-kpi kpi-sales", style: "--tone:#8b5a2b", "data-icon": "$" }, h("small", {}, "Today's sales"), h("strong", {}, money(sales)), h("span", {}, "Fresh orders today")),
+    h("div", { class: "owner-kpi kpi-total-sales", style: "--tone:#476b52", "data-icon": "$" }, h("small", {}, "Total sales"), h("strong", {}, money(totalSales)), h("span", {}, "All non-cancelled orders"))
   );
 
   const out = [
