@@ -1,0 +1,46 @@
+name: Apply supplied image wiring V14
+on:
+  push:
+    branches: [ui-preview]
+    paths:
+      - '.github/workflows/apply-supplied-images-v14.yml'
+permissions:
+  contents: write
+jobs:
+  apply-test-clean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ui-preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Wire supplied artwork routes and remove duplicate header CTA
+        run: node scripts/wire-supplied-images-v14.cjs
+      - name: Verify code wiring
+        run: |
+          grep -q '"/assets/vindhu_hero_with_food.png"' src/server.ts
+          grep -q '"/assets/combos_photo.png"' src/server.ts
+          grep -q '"/assets/weekly_plans_photo.png"' src/server.ts
+          grep -q "vindhu_hero_with_food.png?v=14" public/heritage-v11.css
+          grep -q "combos_photo.png?v=14" public/heritage-v11.css
+          grep -q "weekly_plans_photo.png?v=14" public/heritage-v11.css
+          ! grep -q '<button class="header-order-v8"' public/index.html
+      - name: Browser JS syntax
+        run: node --check public/app.js && node --check public/desk.js
+      - name: Full regression suite
+        run: npm test
+      - name: Check whitespace
+        run: git diff --check
+      - name: Commit tested V14 and remove temporary runner
+        run: |
+          rm -f scripts/wire-supplied-images-v14.cjs .github/workflows/apply-supplied-images-v14.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Wire supplied South Indian image assets V14'
+          git push origin HEAD:ui-preview
