@@ -57,20 +57,31 @@ test("a bare 'yes' with no read-back pending never creates an order", async () =
   assert.equal(t.store.listOrders().length, 0);
 });
 
-test("reset wrapper with no active draft is stripped before the model call", async () => {
+test("reset wrapper exact order is rebuilt without Claude, even when an old draft exists", async () => {
   const t = setup();
-  t.llm.push(modelReply({
-    reply: "Sure!",
-    items: [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "chicken kheema fry combo" }],
-    pickup: FRI_6PM,
-    stage: "awaiting_confirmation",
-  }));
+  t.llm.push(modelReply({ reply: "Old draft", items: [KHEEMA_BOGO], pickup: FRI_6PM, stage: "collecting" }));
+  await t.say("2 chicken kheema fry combos buy 1 get 1, friday 6pm");
+  const calls = t.llm.prompts.length;
+  t.llm.push(new Error("Claude should not be called for deterministic fresh reset"));
   const r = await t.say("Forget everything before this. Fresh order: 1 chicken kheema fry combo, Friday 6pm");
-  assert.equal(t.llm.prompts.length, 1);
-  assert.doesNotMatch(t.llm.prompts[0]!, /forget everything before this/i);
-  assert.match(t.llm.prompts[0]!, /1 chicken kheema fry combo, Friday 6pm/i);
-  assert.doesNotMatch(r.route, /model_error/);
+  assert.equal(r.route, "fresh_order");
+  assert.equal(t.llm.prompts.length, calls, "fresh reset should not call Claude for an exact one-item order");
   assert.match(r.replies.at(-1)!, /Please check your order/);
+  assert.match(r.replies.at(-1)!, /1 x Chicken Kheema Fry combo: \$18/);
+  assert.doesNotMatch(r.route, /model_error/);
+});
+
+test("complex fresh reset gives Claude only the post-reset message, never old chat history", async () => {
+  const t = setup();
+  t.llm.push(modelReply({ reply: "Old response" }));
+  await t.say("Tell me about the weekly plans");
+  t.llm.push(modelReply({ reply: "Need details", stage: "collecting" }));
+  const r = await t.say("Forget everything before this. Fresh order: I want chicken kheema fry and extra raita for Friday 6pm");
+  assert.doesNotMatch(r.route, /model_error/);
+  const prompt = t.llm.prompts.at(-1)!;
+  assert.match(prompt, /I want chicken kheema fry and extra raita for Friday 6pm/i);
+  assert.doesNotMatch(prompt, /Tell me about the weekly plans/i);
+  assert.doesNotMatch(prompt, /Forget everything before this/i);
 });
 
 test("regression: asked for Bagara rice and chicken fry, model wrote kheema fry", async () => {
