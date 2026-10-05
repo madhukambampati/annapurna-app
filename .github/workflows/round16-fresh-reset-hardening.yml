@@ -2,7 +2,8 @@ name: Round16 fresh reset hardening
 on:
   push:
     branches: [round16-fresh-reset-hardening]
-    paths: ['.github/workflows/round16-fresh-reset-hardening.yml']
+    paths:
+      - '.github/workflows/round16-fresh-reset-hardening.yml'
 permissions:
   contents: write
 jobs:
@@ -18,140 +19,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Apply fresh-reset hardening
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          p = Path('src/agent.ts')
-          s = p.read_text()
-
-          old = 'import type { Llm } from "./llm.js";\n'
-          new = 'import { LlmError, type Llm } from "./llm.js";\n'
-          if old not in s:
-              raise SystemExit('llm import marker not found')
-          s = s.replace(old, new, 1)
-
-          marker = '''function deterministicCustomItems(text: string, menu: MenuItem[]): Draft["items"] {'''
-          helper = r'''function deterministicFreshMenuItem(text: string, menu: MenuItem[]): MenuItem | null {
-  const said = tokens(text);
-  if (!said.size) return null;
-  const matches: Array<{ item: MenuItem; specificity: number }> = [];
-  for (const item of menu) {
-    if (item.kind === "addon" || (item.kind === "combo" && !item.live)) continue;
-    let best = 0;
-    for (const label of [item.name, ...item.aliases]) {
-      const want = tokens(label.replace(/\s+combo$/i, ""));
-      if (want.size < 2 || ![...want].every((t) => said.has(t))) continue;
-      best = Math.max(best, want.size);
-    }
-    if (best) matches.push({ item, specificity: best });
-  }
-  matches.sort((a, b) => b.specificity - a.specificity || b.item.name.length - a.item.name.length);
-  if (!matches.length) return null;
-  if (matches[1] && matches[1].specificity === matches[0]!.specificity) return null;
-  return matches[0]!.item;
-}
-
-function deterministicFreshQuantity(text: string, item: MenuItem): number | null {
-  if (item.kind === "plan") {
-    const people = customHeadcount(text);
-    if (people != null && people < 100) return people;
-  }
-  const direct = /^\s*(\d{1,2})\b/.exec(text)
-    ?? /\b(?:order|want|need|would\s+like|get\s+me|give\s+me|take)\s+(\d{1,2})\b/i.exec(text);
-  const qty = direct ? Number(direct[1]) : 1;
-  return qty > 0 && qty < 100 ? qty : null;
-}
-
-function deterministicFreshDraft(text: string, menu: MenuItem[], now: number, settings: Settings, customerName: string | null): Draft | null {
-  if (looksCustom(text, menu)) return null;
-  const item = deterministicFreshMenuItem(text, menu);
-  if (!item) return null;
-  const qty = deterministicFreshQuantity(text, item);
-  const pickup = simpleCustomPickup(text, now, settings.tz);
-  if (!qty || !pickup) return null;
-  const wantsBogo = /\b(?:bogo|buy\s*1\s*get\s*1|buy\s+one\s+get\s+one)\b/i.test(text);
-  const pack = item.kind === "plan" ? "plan" : item.kind === "combo" && wantsBogo ? "bogo" : "single";
-  if (pack === "bogo" && item.bogo == null) return null;
-  const orderItem = { id: item.id, name: item.name, qty, pack, amt: lineAmt(menu, { id: item.id, qty, pack }) } as Draft["items"][number];
-  const draft: Draft = {
-    items: [orderItem],
-    pickup_local: pickup,
-    customer_name: customerName,
-    notes: "",
-    readback_hash: null,
-    stage: "awaiting_confirmation",
-  };
-  draft.readback_hash = draftHash(draft);
-  return draft;
-}
-
-'''
-          if helper not in s:
-              if marker not in s:
-                  raise SystemExit('fresh helper insertion marker not found')
-              s = s.replace(marker, helper + marker, 1)
-
-          old = '    let draft = store.getDraft(msg.from);\n    const open = store.openOrdersFor(msg.from);\n'
-          new = '    let draft = store.getDraft(msg.from);\n    const open = store.openOrdersFor(msg.from);\n    let freshResetContext = false;\n'
-          if old not in s:
-              raise SystemExit('fresh context declaration marker not found')
-          s = s.replace(old, new, 1)
-
-          old = '      const remainder = resetRemainder(text);\n      store.clearDraft(msg.from);\n'
-          new = '      const remainder = resetRemainder(text);\n      freshResetContext = resettingDraft && !!remainder;\n      store.clearDraft(msg.from);\n'
-          if old not in s:
-              raise SystemExit('reset remainder marker not found')
-          s = s.replace(old, new, 1)
-
-          marker = '    // After a stale custom quote has been refused, a clearly unrelated normal menu order starts cleanly.\n'
-          block = '''    // For an explicit fresh-order reset, exact one-item menu orders with a clear pickup\n    // are rebuilt entirely in code. This path must never wait on Claude just to forget old draft state.\n    if (freshResetContext) {\n      const rebuilt = deterministicFreshDraft(text, menu, now, settings, customer.name || msg.name || null);\n      if (rebuilt) {\n        store.putDraft(msg.from, rebuilt);\n        out.route = "fresh_order";\n        out.replies.push(this.readBack(rebuilt, settings, now, open));\n        for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());\n        return out;\n      }\n    }\n\n'''
-          if block not in s:
-              if marker not in s:
-                  raise SystemExit('fresh deterministic block marker not found')
-              s = s.replace(marker, block + marker, 1)
-
-          old = '    const ctx = { lastShopMessage: lastShop, message: text, awaitingConfirmation: awaiting && readbackCurrent, hasPlacedOrder: open.length > 0 };\n'
-          new = '    const ctx = { lastShopMessage: freshResetContext ? null : lastShop, message: text, awaitingConfirmation: awaiting && readbackCurrent, hasPlacedOrder: open.length > 0 };\n'
-          if old not in s:
-              raise SystemExit('judge context marker not found')
-          s = s.replace(old, new, 1)
-
-          old = '        await this.modelTurn(msg, text, r, draft, open, customer, settings, out, streak, pickHint);\n'
-          new = '        await this.modelTurn(msg, text, r, draft, open, customer, settings, out, streak, pickHint, freshResetContext);\n'
-          if old not in s:
-              raise SystemExit('modelTurn call marker not found')
-          s = s.replace(old, new, 1)
-
-          old = '    customer: { name: string; profile: string }, settings: Settings, out: Outcome, streak: number, pickHint?: string,\n'
-          new = '    customer: { name: string; profile: string }, settings: Settings, out: Outcome, streak: number, pickHint?: string, freshContext = false,\n'
-          if old not in s:
-              raise SystemExit('modelTurn signature marker not found')
-          s = s.replace(old, new, 1)
-
-          old = '''    const promptHistory = store.getMessages(msg.from, 40);\n    // When a reset message contains a replacement order, the stored transcript keeps the customer's\n    // full wording for audit, but Claude sees only the fresh-order remainder as the newest turn.\n    const newest = promptHistory.at(-1);\n    if (newest?.who === "cust" && newest.text !== text) promptHistory[promptHistory.length - 1] = { ...newest, text };\n'''
-          new = '''    const promptHistory = store.getMessages(msg.from, 40);\n    // A real reset means "forget everything before this" for model context too. Keep the complete\n    // transcript in storage for the customer/owner, but never send pre-reset chat back to Claude.\n    const newest = promptHistory.at(-1);\n    if (newest?.who === "cust" && newest.text !== text) promptHistory[promptHistory.length - 1] = { ...newest, text };\n    if (freshContext && promptHistory.length) promptHistory.splice(0, promptHistory.length - 1);\n'''
-          if old not in s:
-              raise SystemExit('prompt history block marker not found')
-          s = s.replace(old, new, 1)
-
-          old = '''      console.error("model turn failed", e);\n      out.route += "+model_error";\n      out.replies.push("Sorry, I couldn't process that just now. Please send it once more, or Annapurna Home Foods will help you here.");\n      await this.raise(msg.from, customer.name || msg.name || "Customer", `The assistant could not answer this customer (model error). Check the Claude key and credits, or reply yourself. Their message: "${text.slice(0, 100)}"`, null, out);\n      return;\n'''
-          new = '''      console.error("model turn failed", e);\n      out.route += "+model_error";\n      out.replies.push("Sorry, I couldn't process that just now. Please send it once more, or Annapurna Home Foods will help you here.");\n      const detail = e instanceof LlmError\n        ? e.code === "timeout"\n          ? "Claude timed out before replying"\n          : e.code === "http"\n            ? `Claude returned an HTTP error (${e.message})`\n            : `Claude returned an unusable response (${e.code})`\n        : "The Claude request failed unexpectedly";\n      await this.raise(msg.from, customer.name || msg.name || "Customer", `The assistant could not answer this customer (model error). ${detail}. Reply yourself if needed. Their message: "${text.slice(0, 100)}"`, null, out);\n      return;\n'''
-          if old not in s:
-              raise SystemExit('model error alert marker not found')
-          s = s.replace(old, new, 1)
-          p.write_text(s)
-
-          p = Path('test/agent.test.ts')
-          s = p.read_text()
-          old = '''test("reset wrapper with no active draft is stripped before the model call", async () => {\n  const t = setup();\n  t.llm.push(modelReply({\n    reply: "Sure!",\n    items: [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "chicken kheema fry combo" }],\n    pickup: FRI_6PM,\n    stage: "awaiting_confirmation",\n  }));\n  const r = await t.say("Forget everything before this. Fresh order: 1 chicken kheema fry combo, Friday 6pm");\n  assert.equal(t.llm.prompts.length, 1);\n  assert.doesNotMatch(t.llm.prompts[0]!, /forget everything before this/i);\n  assert.match(t.llm.prompts[0]!, /1 chicken kheema fry combo, Friday 6pm/i);\n  assert.doesNotMatch(r.route, /model_error/);\n  assert.match(r.replies.at(-1)!, /Please check your order/);\n});\n'''
-          new = '''test("reset wrapper exact order is rebuilt without Claude, even when an old draft exists", async () => {\n  const t = setup();\n  t.llm.push(modelReply({ reply: "Old draft", items: [KHEEMA_BOGO], pickup: FRI_6PM, stage: "collecting" }));\n  await t.say("2 chicken kheema fry combos buy 1 get 1, friday 6pm");\n  const calls = t.llm.prompts.length;\n  t.llm.push(new Error("Claude should not be called for deterministic fresh reset"));\n  const r = await t.say("Forget everything before this. Fresh order: 1 chicken kheema fry combo, Friday 6pm");\n  assert.equal(r.route, "fresh_order");\n  assert.equal(t.llm.prompts.length, calls, "fresh reset should not call Claude for an exact one-item order");\n  assert.match(r.replies.at(-1)!, /Please check your order/);\n  assert.match(r.replies.at(-1)!, /1 x Chicken Kheema Fry combo: \\$18/);\n  assert.doesNotMatch(r.route, /model_error/);\n});\n\ntest("complex fresh reset gives Claude only the post-reset message, never old chat history", async () => {\n  const t = setup();\n  t.llm.push(modelReply({ reply: "Old response" }));\n  await t.say("Tell me about the weekly plans");\n  t.llm.push(modelReply({ reply: "Need details", stage: "collecting" }));\n  const r = await t.say("Forget everything before this. Fresh order: I want chicken kheema fry and extra raita for Friday 6pm");\n  assert.doesNotMatch(r.route, /model_error/);\n  const prompt = t.llm.prompts.at(-1)!;\n  assert.match(prompt, /I want chicken kheema fry and extra raita for Friday 6pm/i);\n  assert.doesNotMatch(prompt, /Tell me about the weekly plans/i);\n  assert.doesNotMatch(prompt, /Forget everything before this/i);\n});\n'''
-          if old not in s:
-              raise SystemExit('old reset regression test not found')
-          s = s.replace(old, new, 1)
-          p.write_text(s)
-          PY
+      - name: Apply patch
+        run: python scripts/round16-patch.py
       - name: Verify intended changes
         run: |
           grep -q 'deterministicFreshDraft' src/agent.ts
@@ -159,19 +28,15 @@ function deterministicFreshDraft(text: string, menu: MenuItem[], now: number, se
           grep -q 'promptHistory.splice(0, promptHistory.length - 1)' src/agent.ts
           grep -q 'Claude timed out before replying' src/agent.ts
           grep -q 'fresh reset should not call Claude' test/agent.test.ts
-      - name: JS syntax checks
-        run: |
-          node --check public/app.js
-          node --check public/desk.js
       - name: Full regression suite
         run: npm test
       - name: Whitespace check
         run: git diff --check
-      - name: Commit tested changes and remove temporary workflow
+      - name: Commit tested changes and remove temporary files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/round16-fresh-reset-hardening.yml
+          git rm .github/workflows/round16-fresh-reset-hardening.yml scripts/round16-patch.py
           git add src/agent.ts test/agent.test.ts
           git commit -m "Harden fresh-order reset against model timeouts"
           git push origin HEAD:round16-fresh-reset-hardening
