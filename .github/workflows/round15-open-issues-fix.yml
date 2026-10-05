@@ -39,7 +39,7 @@ jobs:
           s = s.replace(old, new, 1)
 
           marker = '''function deterministicCustomItems(text: string, menu: MenuItem[]): Draft["items"] {'''
-          helper = '''function requestedSwitchedOffCombo(text: string, menu: MenuItem[]): MenuItem | null {\n  const said = tokens(text);\n  if (!said.size) return null;\n  let best: { item: MenuItem; specificity: number } | null = null;\n  for (const item of menu) {\n    if (item.kind !== "combo" || item.live) continue;\n    for (const label of [item.name, ...item.aliases]) {\n      const want = tokens(label);\n      if (!want.size || ![...want].every((t) => said.has(t))) continue;\n      if (!best || want.size > best.specificity) best = { item, specificity: want.size };\n    }\n  }\n  return best?.item ?? null;\n}\n\n'''
+          helper = '''function requestedSwitchedOffCombo(text: string, menu: MenuItem[]): MenuItem | null {\n  const said = tokens(text);\n  if (!said.size) return null;\n  let best: { item: MenuItem; specificity: number } | null = null;\n  for (const item of menu) {\n    if (item.kind !== "combo" || item.live) continue;\n    for (const label of [item.name, ...item.aliases]) {\n      const want = tokens(label);\n      if (want.size < 2 || ![...want].every((t) => said.has(t))) continue;\n      if (!best || want.size > best.specificity) best = { item, specificity: want.size };\n    }\n  }\n  return best?.item ?? null;\n}\n\n'''
           if helper not in s:
               if marker not in s:
                   raise SystemExit('deterministicCustomItems marker not found')
@@ -114,6 +114,7 @@ jobs:
         run: |
           grep -q 'const resettingDraft = DRAFT_RESET.test(text);' src/agent.ts
           grep -q 'requestedSwitchedOffCombo' src/agent.ts
+          grep -q 'want.size < 2' src/agent.ts
           grep -q 'switched-off combo handling must not depend on the model' test/agent.test.ts
           grep -q 'err.info' public/index.html
           grep -q 'classList.add("info")' public/app.js
