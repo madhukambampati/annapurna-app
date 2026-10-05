@@ -1,0 +1,137 @@
+name: Round15 open issues hardening
+on:
+  push:
+    branches: [round15-open-issues-fix]
+    paths: ['.github/workflows/round15-open-issues-fix.yml']
+permissions:
+  contents: write
+jobs:
+  patch-test-clean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: round15-open-issues-fix
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply deterministic fixes and cosmetic polish
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          # 1) Agent: strip reset wrappers even when no draft exists, and detect switched-off combos before Claude.
+          p = Path('src/agent.ts')
+          s = p.read_text()
+          old = '    const abandoningCustom = !!draft?.custom && CUSTOM_ABANDON.test(text);\n    const resettingDraft = !!draft && DRAFT_RESET.test(text);\n    if (abandoningCustom || resettingDraft) {\n      const wasCustom = !!draft?.custom;\n'
+          new = '    const abandoningCustom = !!draft?.custom && CUSTOM_ABANDON.test(text);\n    const resettingDraft = DRAFT_RESET.test(text);\n    if (abandoningCustom || resettingDraft) {\n      const hadDraft = !!draft;\n      const wasCustom = !!draft?.custom;\n'
+          if old not in s:
+              raise SystemExit('reset block header not found')
+          s = s.replace(old, new, 1)
+
+          old = '      out.replies.push(wasCustom\n        ? `No problem — I cleared that pending custom/bulk request${hadQuote ? " and its old quoted price" : ""}. Nothing from it will carry into your next order. Any already-confirmed orders are unchanged.`\n        : "No problem — I cleared the current unplaced order. Any already-confirmed orders are unchanged.");\n      draft = null;\n      if (!remainder) {\n'
+          new = '      if (hadDraft) {\n        out.replies.push(wasCustom\n          ? `No problem — I cleared that pending custom/bulk request${hadQuote ? " and its old quoted price" : ""}. Nothing from it will carry into your next order. Any already-confirmed orders are unchanged.`\n          : "No problem — I cleared the current unplaced order. Any already-confirmed orders are unchanged.");\n      } else if (!remainder) {\n        out.replies.push("You are starting fresh. Tell me what you would like to order.");\n      }\n      draft = null;\n      if (!remainder) {\n'
+          if old not in s:
+              raise SystemExit('reset reply block not found')
+          s = s.replace(old, new, 1)
+
+          marker = '''function deterministicCustomItems(text: string, menu: MenuItem[]): Draft["items"] {'''
+          helper = '''function requestedSwitchedOffCombo(text: string, menu: MenuItem[]): MenuItem | null {\n  const said = tokens(text);\n  if (!said.size) return null;\n  let best: { item: MenuItem; specificity: number } | null = null;\n  for (const item of menu) {\n    if (item.kind !== "combo" || item.live) continue;\n    for (const label of [item.name, ...item.aliases]) {\n      const want = tokens(label);\n      if (!want.size || ![...want].every((t) => said.has(t))) continue;\n      if (!best || want.size > best.specificity) best = { item, specificity: want.size };\n    }\n  }\n  return best?.item ?? null;\n}\n\n'''
+          if helper not in s:
+              if marker not in s:
+                  raise SystemExit('deterministicCustomItems marker not found')
+              s = s.replace(marker, helper + marker, 1)
+
+          marker = '    // After a stale custom quote has been refused, a clearly unrelated normal menu order starts cleanly.\n'
+          block = '''    // A specifically requested combo that is switched off is handled by code before Claude.\n    // This guarantees a clear customer answer and an owner alert even if the model would omit the item.\n    const switchedOffCombo = requestedSwitchedOffCombo(text, menu);\n    if (switchedOffCombo) {\n      out.route = "not_live";\n      out.issues.push("not_live");\n      out.replies.push(`Sorry, ${switchedOffCombo.name} isn't running right now, so I can't take that one. I've let Annapurna Home Foods know.`);\n      await this.raise(\n        msg.from,\n        customer.name || msg.name || "Customer",\n        `Asked for ${switchedOffCombo.name}, which is switched off right now.`,\n        null,\n        out,\n      );\n      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());\n      return out;\n    }\n\n'''
+          if block not in s:
+              if marker not in s:
+                  raise SystemExit('stale custom marker not found')
+              s = s.replace(marker, block + marker, 1)
+          p.write_text(s)
+
+          # 2) Agent regression tests.
+          p = Path('test/agent.test.ts')
+          s = p.read_text()
+          marker = 'test("regression: asked for Bagara rice and chicken fry, model wrote kheema fry", async () => {'
+          test_reset = '''test("reset wrapper with no active draft is stripped before the model call", async () => {\n  const t = setup();\n  t.llm.push(modelReply({\n    reply: "Sure!",\n    items: [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "chicken kheema fry combo" }],\n    pickup: FRI_6PM,\n    stage: "awaiting_confirmation",\n  }));\n  const r = await t.say("Forget everything before this. Fresh order: 1 chicken kheema fry combo, Friday 6pm");\n  assert.equal(t.llm.prompts.length, 1);\n  assert.doesNotMatch(t.llm.prompts[0]!, /forget everything before this/i);\n  assert.match(t.llm.prompts[0]!, /1 chicken kheema fry combo, Friday 6pm/i);\n  assert.doesNotMatch(r.route, /model_error/);\n  assert.match(r.replies.at(-1)!, /Please check your order/);\n});\n\n'''
+          if test_reset not in s:
+              if marker not in s:
+                  raise SystemExit('agent test insertion marker not found')
+              s = s.replace(marker, test_reset + marker, 1)
+
+          old = '''  t.llm.push(modelReply({ reply: "Sure!", items: [KHEEMA_BOGO], pickup: FRI_6PM, stage: "awaiting_confirmation" }));\n  const r = await t.say("2 kheema fry combos friday 6pm");\n  assert.match(r.replies[0]!, /Chicken Kheema Fry combo isn't running right now/);\n  assert.equal(t.store.getDraft("+15198043658")!.items.length, 0);\n  assert.equal(t.store.listAlerts(true).length, 1);\n'''
+          new = '''  const r = await t.say("2 kheema fry combos friday 6pm");\n  assert.match(r.replies[0]!, /Chicken Kheema Fry combo isn't running right now/);\n  assert.equal(t.llm.prompts.length, 0, "switched-off combo handling must not depend on the model");\n  assert.equal(t.store.getDraft("+15198043658"), null);\n  assert.equal(t.store.listAlerts(true).length, 1);\n'''
+          if old not in s:
+              raise SystemExit('switched-off test block not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+
+          # 3) Owner dashboard spacing.
+          p = Path('public/desk.js')
+          s = p.read_text()
+          old = 'h("span", {}, "Review held orders or customer requests before cooking.")'
+          new = 'h("span", {}, " · Review held orders or customer requests before cooking.")'
+          if old not in s:
+              raise SystemExit('owner callout copy not found')
+          p.write_text(s.replace(old, new, 1))
+
+          # 4) Landing eyebrow: remove the separator dot.
+          p = Path('public/heritage-v11.css')
+          s = p.read_text()
+          old = 'body.customer-mode .home-eyebrow::before{content:"NAMASTE!  ·  "!important}'
+          new = 'body.customer-mode .home-eyebrow::before{content:"NAMASTE!  "!important}'
+          if old not in s:
+              raise SystemExit('NAMASTE separator rule not found')
+          p.write_text(s.replace(old, new, 1))
+
+          # 5) Deleted-chat notice should be informational, not red error styling.
+          p = Path('public/index.html')
+          s = p.read_text()
+          old = '.err{color:var(--chilli);font-size:14px;min-height:1.2em}\n'
+          new = '.err{color:var(--chilli);font-size:14px;min-height:1.2em}\n.err.info{color:var(--brand2)}\n'
+          if old not in s:
+              raise SystemExit('err css rule not found')
+          p.write_text(s.replace(old, new, 1))
+
+          p = Path('public/app.js')
+          s = p.read_text()
+          old = '''      var deletedNotice = $("startErr");\n      deletedNotice.textContent = "Your chat was deleted.";\n      setTimeout(function () {\n        if (deletedNotice.textContent === "Your chat was deleted.") deletedNotice.textContent = "";\n      }, 3500);\n'''
+          new = '''      var deletedNotice = $("startErr");\n      deletedNotice.classList.add("info");\n      deletedNotice.textContent = "Your chat was deleted.";\n      setTimeout(function () {\n        if (deletedNotice.textContent === "Your chat was deleted.") deletedNotice.textContent = "";\n        deletedNotice.classList.remove("info");\n      }, 3500);\n'''
+          if old not in s:
+              raise SystemExit('deleted notice block not found')
+          s = s.replace(old, new, 1)
+          old = '    if (err.textContent === "Your chat was deleted.") { err.textContent = ""; return; }\n'
+          new = '    if (err.textContent === "Your chat was deleted.") { err.textContent = ""; err.classList.remove("info"); return; }\n'
+          if old not in s:
+              raise SystemExit('clear deleted notice block not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Verify intended changes
+        run: |
+          grep -q 'const resettingDraft = DRAFT_RESET.test(text);' src/agent.ts
+          grep -q 'requestedSwitchedOffCombo' src/agent.ts
+          grep -q 'switched-off combo handling must not depend on the model' test/agent.test.ts
+          grep -q 'err.info' public/index.html
+          grep -q 'classList.add("info")' public/app.js
+          grep -q 'content:"NAMASTE!  "' public/heritage-v11.css
+          grep -q ' · Review held orders' public/desk.js
+      - name: JS syntax checks
+        run: |
+          node --check public/app.js
+          node --check public/desk.js
+      - name: Full regression suite
+        run: npm test
+      - name: Whitespace check
+        run: git diff --check
+      - name: Commit tested fixes and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/round15-open-issues-fix.yml
+          git add src/agent.ts test/agent.test.ts public/desk.js public/heritage-v11.css public/index.html public/app.js
+          git commit -m "Fix reset flow, unavailable combos and UI polish"
+          git push origin HEAD:round15-open-issues-fix
