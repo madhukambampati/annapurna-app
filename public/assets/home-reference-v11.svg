@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" role="img" aria-label="Traditional South Indian home food scene">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f6e6ba"/><stop offset=".48" stop-color="#c68542"/><stop offset="1" stop-color="#5b2f1d"/></linearGradient>
+  <linearGradient id="sari" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0b6a47"/><stop offset="1" stop-color="#063e2c"/></linearGradient>
+  <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff0a6"/><stop offset=".45" stop-color="#d89a22"/><stop offset="1" stop-color="#8f5710"/></linearGradient>
+  <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#a9592d"/><stop offset="1" stop-color="#64321f"/></linearGradient>
+  <radialGradient id="glow"><stop stop-color="#fff3bd" stop-opacity=".95"/><stop offset="1" stop-color="#fff3bd" stop-opacity="0"/></radialGradient>
+  <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#3b1d0d" flood-opacity=".32"/></filter>
+  <filter id="soft"><feGaussianBlur stdDeviation="8"/></filter>
+</defs>
+<rect width="1200" height="700" fill="url(#bg)"/>
+<circle cx="1040" cy="120" r="180" fill="url(#glow)" opacity=".6"/>
+<g opacity=".22" fill="#fff7d7" filter="url(#soft)"><circle cx="935" cy="95" r="38"/><circle cx="1050" cy="185" r="52"/><circle cx="815" cy="160" r="26"/><circle cx="1120" cy="330" r="34"/></g>
+<!-- warm home interior -->
+<g opacity=".4" stroke="#f6d990" stroke-width="5" fill="none"><rect x="760" y="70" width="250" height="260" rx="8"/><path d="M885 70v260M760 198h250"/></g>
+<g fill="#2e6d40"><path d="M0 0h1200v34H0z"/><path d="M0 30c35 0 35 62 70 62s35-62 70-62 35 62 70 62 35-62 70-62 35 62 70 62 35-62 70-62 35 62 70 62 35-62 70-62 35 62 70 62 35-62 70-62 35 62 70 62 35-62 70-62 35 62 70 62 35-62 70-62 35 62 70 62 35-62 70-62 35 62 70 62v-62z"/></g>
+<!-- jasmine strings -->
+<g fill="#fff8df" stroke="#d8b557" stroke-width="1.5"><g transform="translate(150 30)"><circle cy="24" r="7"/><circle cy="44" r="7"/><circle cy="64" r="7"/><circle cy="84" r="7"/></g><g transform="translate(350 30)"><circle cy="24" r="7"/><circle cy="44" r="7"/><circle cy="64" r="7"/></g><g transform="translate(600 30)"><circle cy="24" r="7"/><circle cy="44" r="7"/><circle cy="64" r="7"/><circle cy="84" r="7"/></g><g transform="translate(1050 30)"><circle cy="24" r="7"/><circle cy="44" r="7"/><circle cy="64" r="7"/></g></g>
+<!-- woman -->
+<g transform="translate(505 98)" filter="url(#shadow)">
+  <ellipse cx="180" cy="438" rx="155" ry="42" fill="#3e2418" opacity=".28"/>
+  <path d="M60 390c20-120 68-194 127-194 71 0 121 82 143 195l-51 38H102z" fill="url(#sari)"/>
+  <path d="M116 224c22-28 105-34 130 3l-16 179H127z" fill="#f8f0d5"/>
+  <path d="M116 224l20 170 21-10-10-173zm130 3-18 175-19-9 9-175z" fill="url(#gold)"/>
+  <ellipse cx="182" cy="146" rx="76" ry="92" fill="#b9653d"/>
+  <path d="M107 146c0-88 36-129 90-129 64 0 96 48 90 132-18-40-45-67-93-70-42-3-64 18-87 67z" fill="#26150f"/>
+  <path d="M255 101c33 39 32 132 13 185-12-43-11-95-1-138z" fill="#21120d"/>
+  <path d="M260 112c32 29 52 106 38 164-17-30-31-64-39-106z" fill="#1c110d"/>
+  <!-- braid and jasmine -->
+  <path d="M261 120c24 38 35 95 32 150 0 51-12 92-25 126" stroke="#1d120d" stroke-width="28" fill="none" stroke-linecap="round"/>
+  <g fill="#fff9e8"><circle cx="274" cy="119" r="10"/><circle cx="287" cy="132" r="9"/><circle cx="279" cy="146" r="10"/><circle cx="292" cy="160" r="9"/><circle cx="282" cy="177" r="10"/><circle cx="294" cy="193" r="9"/></g>
+  <!-- face -->
+  <path d="M145 156q17 12 35 0" stroke="#6c2e23" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <ellipse cx="151" cy="132" rx="9" ry="7" fill="#20100d"/><ellipse cx="213" cy="132" rx="9" ry="7" fill="#20100d"/><circle cx="155" cy="130" r="2.5" fill="#fff"/><circle cx="217" cy="130" r="2.5" fill="#fff"/>
+  <circle cx="182" cy="112" r="6" fill="#b71923"/>
+  <path d="M181 136q-5 18 4 21" stroke="#7b3a2b" stroke-width="3" fill="none"/>
+  <!-- jewelry -->
+  <path d="M142 192q40 28 80 0" stroke="url(#gold)" stroke-width="10" fill="none"/><circle cx="182" cy="208" r="10" fill="#d99f2e"/>
+  <circle cx="120" cy="154" r="11" fill="#dfa42b"/><circle cx="244" cy="154" r="11" fill="#dfa42b"/>
+  <!-- namaste hands -->
+  <path d="M112 300c40-9 62-41 72-79 10 38 32 70 72 79-15 18-35 31-72 31s-57-13-72-31z" fill="#b9653d"/>
+  <path d="M181 220v116" stroke="#7b3a2b" stroke-width="4"/>
+  <path d="M165 241c8-26 15-40 19-47 4 7 11 21 19 47" fill="#c8754a" stroke="#8c4633" stroke-width="3"/>
+  <path d="M145 278h74" stroke="url(#gold)" stroke-width="7"/>
+</g>
+<!-- table -->
+<path d="M0 535c345-31 717-12 1200 5v160H0z" fill="url(#wood)"/>
+<!-- banana leaf platter -->
+<g transform="translate(665 430)" filter="url(#shadow)"><path d="M0 137c91-135 322-163 496-46-132 141-332 170-496 46z" fill="#2c7a43"/><path d="M32 132c117-63 250-87 418-50" stroke="#8bc06d" stroke-width="8" fill="none"/>
+<!-- bowls -->
+<g><ellipse cx="175" cy="88" rx="66" ry="27" fill="#b4782b"/><ellipse cx="175" cy="81" rx="59" ry="22" fill="#e7b35f"/><ellipse cx="175" cy="80" rx="51" ry="17" fill="#b54120"/><circle cx="165" cy="80" r="8" fill="#f8d15c"/><circle cx="194" cy="78" r="7" fill="#4d8f38"/>
+<ellipse cx="300" cy="72" rx="64" ry="26" fill="#ad6d23"/><ellipse cx="300" cy="66" rx="58" ry="21" fill="#efbf6a"/><ellipse cx="300" cy="66" rx="50" ry="16" fill="#d77b1b"/><circle cx="285" cy="63" r="7" fill="#397d38"/><circle cx="318" cy="68" r="8" fill="#a32723"/></g>
+<!-- idli -->
+<g fill="#fff8e8" stroke="#ded2b1" stroke-width="3"><ellipse cx="220" cy="126" rx="52" ry="25"/><ellipse cx="280" cy="132" rx="52" ry="25"/><ellipse cx="340" cy="126" rx="52" ry="25"/></g>
+<!-- dosa -->
+<path d="M380 92l235-42-31 76-209 10z" fill="#dc8a24" stroke="#a45c18" stroke-width="4"/><path d="M392 95l192-35" stroke="#f4bf5b" stroke-width="9" opacity=".75"/>
+<!-- vada -->
+<g fill="#b86d24"><circle cx="465" cy="146" r="26"/><circle cx="522" cy="152" r="26"/></g><g fill="#4b2d18"><circle cx="465" cy="146" r="10"/><circle cx="522" cy="152" r="10"/></g>
+</g>
+<!-- brass lamp -->
+<g transform="translate(1080 185)" fill="url(#gold)" stroke="#8c5916" stroke-width="3"><ellipse cx="45" cy="360" rx="52" ry="14"/><path d="M24 350h42l-13-140H37z"/><ellipse cx="45" cy="210" rx="40" ry="12"/><path d="M13 206q32-52 64 0z"/><path d="M45 206v-71" stroke-width="10"/><ellipse cx="45" cy="132" rx="28" ry="9"/><path d="M31 130q14-32 28 0z"/></g>
+</svg>
