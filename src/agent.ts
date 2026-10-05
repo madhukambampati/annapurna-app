@@ -2,7 +2,7 @@ import type { Config } from "./config.js";
 import { clearCustomQuote, customQuoteIsCurrent, customTermsKey } from "./custom.js";
 import { checkFlags, checkWeekday, draftHash, extrasOnly, friendlyName, mainOrderFor, sanitizeItems, tokens, type Issue } from "./guards.js";
 import { HeuristicJudge, type Judge, type Judgment } from "./judge.js";
-import type { Llm } from "./llm.js";
+import { LlmError, type Llm } from "./llm.js";
 import { findItem, itemLabel, lineAmt, money, total, optionPicks } from "./menu.js";
 import type { Notifier } from "./notify.js";
 import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
@@ -152,6 +152,66 @@ function requestedSwitchedOffCombo(text: string, menu: MenuItem[]): MenuItem | n
   return best?.item ?? null;
 }
 
+function deterministicFreshMenuItem(text: string, menu: MenuItem[]): MenuItem | null {
+  const said = tokens(text);
+  if (!said.size) return null;
+  const matches: Array<{ item: MenuItem; specificity: number }> = [];
+  for (const item of menu) {
+    if (item.kind === "addon" || (item.kind === "combo" && !item.live)) continue;
+    let best = 0;
+    for (const label of [item.name, ...item.aliases]) {
+      const want = tokens(label.replace(/\s+combo$/i, ""));
+      if (want.size < 2 || ![...want].every((t) => said.has(t))) continue;
+      best = Math.max(best, want.size);
+    }
+    if (best) matches.push({ item, specificity: best });
+  }
+  matches.sort((a, b) => b.specificity - a.specificity || b.item.name.length - a.item.name.length);
+  if (!matches.length) return null;
+  if (matches[1] && matches[1].specificity === matches[0]!.specificity) return null;
+  return matches[0]!.item;
+}
+
+function deterministicFreshQuantity(text: string, item: MenuItem): number | null {
+  if (item.kind === "plan") {
+    const people = customHeadcount(text);
+    if (people != null && people < 100) return people;
+  }
+  const direct = /^\s*(\d{1,2})\b/.exec(text)
+    ?? /\b(?:order|want|need|would\s+like|get\s+me|give\s+me|take)\s+(\d{1,2})\b/i.exec(text);
+  const qty = direct ? Number(direct[1]) : 1;
+  return qty > 0 && qty < 100 ? qty : null;
+}
+
+function deterministicFreshDraft(text: string, menu: MenuItem[], now: number, settings: Settings, customerName: string | null): Draft | null {
+  if (looksCustom(text, menu)) return null;
+  const said = tokens(text);
+  const mentionsAddon = menu.some((candidate) => candidate.kind === "addon" && [candidate.name, ...candidate.aliases].some((label) => {
+    const want = tokens(label);
+    return want.size >= 2 && [...want].every((t) => said.has(t));
+  }));
+  if (mentionsAddon) return null;
+  const item = deterministicFreshMenuItem(text, menu);
+  if (!item) return null;
+  const qty = deterministicFreshQuantity(text, item);
+  const pickup = simpleCustomPickup(text, now, settings.tz);
+  if (!qty || !pickup) return null;
+  const wantsBogo = /\b(?:bogo|buy\s*1\s*get\s*1|buy\s+one\s+get\s+one)\b/i.test(text);
+  const pack = item.kind === "plan" ? "plan" : item.kind === "combo" && wantsBogo ? "bogo" : "single";
+  if (pack === "bogo" && item.bogo == null) return null;
+  const orderItem = { id: item.id, name: item.name, qty, pack, amt: lineAmt(menu, { id: item.id, qty, pack }) } as Draft["items"][number];
+  const draft: Draft = {
+    items: [orderItem],
+    pickup_local: pickup,
+    customer_name: customerName,
+    notes: "",
+    readback_hash: null,
+    stage: "awaiting_confirmation",
+  };
+  draft.readback_hash = draftHash(draft);
+  return draft;
+}
+
 function deterministicCustomItems(text: string, menu: MenuItem[]): Draft["items"] {
   const tt = tokens(text);
   const qty = customHeadcount(text) ?? bulkMenuQuantity(text, menu) ?? 1;
@@ -268,6 +328,7 @@ export class Agent {
 
     let draft = store.getDraft(msg.from);
     const open = store.openOrdersFor(msg.from);
+    let freshResetContext = false;
 
     // Important: only the active draft decides whether an order is custom.
     // Do not infer custom/catering state from older chat history: customers often place a normal
@@ -282,6 +343,7 @@ export class Agent {
       const wasCustom = !!draft?.custom;
       const hadQuote = draft?.custom?.price != null;
       const remainder = resetRemainder(text);
+      freshResetContext = resettingDraft && !!remainder;
       store.clearDraft(msg.from);
       if (wasCustom) {
         for (const a of store.listAlerts(true)) {
@@ -324,6 +386,19 @@ export class Agent {
       );
       for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
       return out;
+    }
+
+    // For an explicit fresh-order reset, exact one-item menu orders with a clear pickup
+    // are rebuilt entirely in code. This path must never wait on Claude just to forget old draft state.
+    if (freshResetContext) {
+      const rebuilt = deterministicFreshDraft(text, menu, now, settings, customer.name || msg.name || null);
+      if (rebuilt) {
+        store.putDraft(msg.from, rebuilt);
+        out.route = "fresh_order";
+        out.replies.push(this.readBack(rebuilt, settings, now, open));
+        for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+        return out;
+      }
     }
 
     // After a stale custom quote has been refused, a clearly unrelated normal menu order starts cleanly.
@@ -485,7 +560,7 @@ export class Agent {
     const awaiting = draft?.stage === "awaiting_confirmation";
     const readbackCurrent = !!draft && !!draft.readback_hash && draft.readback_hash === draftHash(draft);
 
-    const ctx = { lastShopMessage: lastShop, message: text, awaitingConfirmation: awaiting && readbackCurrent, hasPlacedOrder: open.length > 0 };
+    const ctx = { lastShopMessage: freshResetContext ? null : lastShop, message: text, awaitingConfirmation: awaiting && readbackCurrent, hasPlacedOrder: open.length > 0 };
     let judgment: Judgment;
     try {
       judgment = await this.d.judge.judge(ctx);
@@ -557,7 +632,7 @@ export class Agent {
         break;
       }
       default:
-        await this.modelTurn(msg, text, r, draft, open, customer, settings, out, streak, pickHint);
+        await this.modelTurn(msg, text, r, draft, open, customer, settings, out, streak, pickHint, freshResetContext);
     }
 
     for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
@@ -568,7 +643,7 @@ export class Agent {
 
   private async modelTurn(
     msg: Inbound, text: string, r: Route, draft: Draft | null, open: Order[],
-    customer: { name: string; profile: string }, settings: Settings, out: Outcome, streak: number, pickHint?: string,
+    customer: { name: string; profile: string }, settings: Settings, out: Outcome, streak: number, pickHint?: string, freshContext = false,
   ): Promise<void> {
     const { store } = this.d;
     const now = this.now();
@@ -578,10 +653,11 @@ export class Agent {
     const hint = r.kind === "clarify" ? r.hint : frozen ? "The customer is only asking a question or chatting. Answer it. Do not start or change the order, and keep stage as it is." : r.kind === "owner_topic" ? "This is a topic only Maddy can settle (payment, delivery, refund, allergy, custom or complaint). Do not answer it yourself. Say warmly that Annapurna Home Foods will reach out to them here in this chat. Never name Maddy to the customer." : undefined;
 
     const promptHistory = store.getMessages(msg.from, 40);
-    // When a reset message contains a replacement order, the stored transcript keeps the customer's
-    // full wording for audit, but Claude sees only the fresh-order remainder as the newest turn.
+    // A real reset means "forget everything before this" for model context too. Keep the complete
+    // transcript in storage for the customer/owner, but never send pre-reset chat back to Claude.
     const newest = promptHistory.at(-1);
     if (newest?.who === "cust" && newest.text !== text) promptHistory[promptHistory.length - 1] = { ...newest, text };
+    if (freshContext && promptHistory.length) promptHistory.splice(0, promptHistory.length - 1);
     const prompt = buildPrompt({
       now, settings, menu, customer: { waId: msg.from, name: customer.name, contact: "", profile: customer.profile, uncertainStreak: streak },
       draft, history: promptHistory, hint: [pickHint, hint].filter(Boolean).join(" ") || undefined,
@@ -597,7 +673,14 @@ export class Agent {
       console.error("model turn failed", e);
       out.route += "+model_error";
       out.replies.push("Sorry, I couldn't process that just now. Please send it once more, or Annapurna Home Foods will help you here.");
-      await this.raise(msg.from, customer.name || msg.name || "Customer", `The assistant could not answer this customer (model error). Check the Claude key and credits, or reply yourself. Their message: "${text.slice(0, 100)}"`, null, out);
+      const detail = e instanceof LlmError
+        ? e.code === "timeout"
+          ? "Claude timed out before replying"
+          : e.code === "http"
+            ? `Claude returned an HTTP error (${e.message})`
+            : `Claude returned an unusable response (${e.code})`
+        : "The Claude request failed unexpectedly";
+      await this.raise(msg.from, customer.name || msg.name || "Customer", `The assistant could not answer this customer (model error). ${detail}. Reply yourself if needed. Their message: "${text.slice(0, 100)}"`, null, out);
       return;
     }
 
