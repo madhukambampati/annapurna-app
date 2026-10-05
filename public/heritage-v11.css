@@ -42,7 +42,7 @@ body.customer-mode .home-copy{
   display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:flex-start!important;text-align:left!important;
   background:linear-gradient(90deg,#fffdf8 0%,#fff8e8 86%,rgba(255,248,232,.93) 100%)!important;
 }
-body.customer-mode .home-eyebrow{display:inline-flex!important;color:#9d6812!important;background:transparent!important;border:0!important;padding:0!important;font-size:11px!important;font-weight:900!important;letter-spacing:.19em!important;text-transform:uppercase!important}
+body.customer-mode .home-eyebrow{display:none!important}
 body.customer-mode .home-eyebrow::before{content:"NAMASTE!  "!important}
 body.customer-mode .home-copy h2{margin:12px 0 9px!important;max-width:610px!important;color:#064a33!important;font-size:clamp(48px,4.4vw,67px)!important;line-height:.96!important;letter-spacing:-.04em!important;text-shadow:none!important}
 body.customer-mode .home-copy>p{max-width:560px!important;margin:0!important;color:#42554a!important;font-size:15px!important;line-height:1.42!important}
