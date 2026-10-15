@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /desk
+Disallow: /api/
+Disallow: /web/
+Disallow: /sim/
+
+Sitemap: https://annapurnahomefoods.shop/sitemap.xml
