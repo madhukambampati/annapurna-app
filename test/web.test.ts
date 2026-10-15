@@ -7,7 +7,14 @@ import { RateLimiter } from "../src/limiter.js";
 import { createServer, validContact, validName } from "../src/server.js";
 import { FRI_6PM, NOW, modelReply, setup } from "./helpers.js";
 
-const ASSETS = { "index.html": "<html>shop</html>", "desk.html": "<html>desk</html>", "app.js": "//app", "desk.js": "//desk" };
+const ASSETS = {
+  "index.html": "<html>shop</html>",
+  "desk.html": "<html>desk</html>",
+  "app.js": "//app",
+  "desk.js": "//desk",
+  "robots.txt": "User-agent: *\nSitemap: https://annapurnahomefoods.shop/sitemap.xml\n",
+  "sitemap.xml": "<?xml version=\"1.0\"?><urlset><url><loc>https://annapurnahomefoods.shop/</loc></url></urlset>",
+};
 const DAY = 86_400_000;
 
 interface Res { status: number; json: any; text: string; headers: Headers }
@@ -113,6 +120,8 @@ describe("web: files and headers", () => {
       assert.equal(home.headers.get("x-frame-options"), "DENY");
       assert.equal((await call("GET", "/desk")).text, "<html>desk</html>");
       assert.equal((await call("GET", "/app.js")).text, "//app");
+      assert.match((await call("GET", "/robots.txt")).text, /Sitemap: https:\/\/annapurnahomefoods\.shop\/sitemap\.xml/);
+      assert.match((await call("GET", "/sitemap.xml")).text, /https:\/\/annapurnahomefoods\.shop\//);
       for (const bad of ["/desk.html", "/index.html", "/package.json", "/src/server.js", "/../package.json", "/%2e%2e/package.json", "/public/app.js", "/.env", "/annapurna.db"]) {
         assert.equal((await call("GET", bad)).status, 404, bad);
       }
