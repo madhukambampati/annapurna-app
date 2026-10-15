@@ -29,6 +29,8 @@ const ALLOWED: Record<OrderStatus, OrderStatus[]> = {
 /** Only these files are ever served. Nothing is read from a path the client supplies. */
 const ASSETS: Record<string, { file: string; type: string }> = {
   "/": { file: "index.html", type: "text/html; charset=utf-8" },
+  "/robots.txt": { file: "robots.txt", type: "text/plain; charset=utf-8" },
+  "/sitemap.xml": { file: "sitemap.xml", type: "application/xml; charset=utf-8" },
   "/desk": { file: "desk.html", type: "text/html; charset=utf-8" },
   "/app.js": { file: "app.js", type: "text/javascript; charset=utf-8" },
   "/desk.js": { file: "desk.js", type: "text/javascript; charset=utf-8" },
@@ -322,6 +324,13 @@ export function createServer(d: ServerDeps): Server {
       const url = new URL(req.url ?? "/", "http://x");
       const path = url.pathname;
       const m = req.method ?? "GET";
+      const host = String(req.headers.host ?? "").split(":")[0]!.toLowerCase();
+
+      if (host === "www.annapurnahomefoods.shop") {
+        const location = `https://annapurnahomefoods.shop${url.pathname}${url.search}`;
+        res.writeHead(308, { ...baseHeaders(req), location, "cache-control": "public, max-age=3600" });
+        return void res.end();
+      }
 
       if (m === "GET" && path === "/health") return send(req, res, 200, { ok: true });
 
