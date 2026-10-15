@@ -326,8 +326,10 @@ export function createServer(d: ServerDeps): Server {
       const m = req.method ?? "GET";
       const host = String(req.headers.host ?? "").split(":")[0]!.toLowerCase();
 
-      if (host === "www.annapurnahomefoods.shop") {
-        const location = `https://annapurnahomefoods.shop${url.pathname}${url.search}`;
+      // Canonicalize only browser entry pages. API calls keep working even if an old tab
+      // was opened on www before the canonical redirect was introduced.
+      if (host === "www.annapurnahomefoods.shop" && m === "GET" && (path === "/" || path === "/desk")) {
+        const location = `https://annapurnahomefoods.shop${path}${url.search}`;
         res.writeHead(308, { ...baseHeaders(req), location, "cache-control": "public, max-age=3600" });
         return void res.end();
       }
