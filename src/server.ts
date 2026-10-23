@@ -6,10 +6,10 @@ import type { Config } from "./config.js";
 import { customTermsKey } from "./custom.js";
 import { cookSummary } from "./cook.js";
 import { RateLimiter } from "./limiter.js";
-import { dayRange, itemDays, itemLabel, money, total } from "./menu.js";
+import { dayRange, itemDays, itemLabel, money, storeOpenOn, total } from "./menu.js";
 import { friendlyName } from "./guards.js";
 import type { Store } from "./store.js";
-import { DAYN, dayLabel, formatWhen, nextDateForDow } from "./time.js";
+import { DAYN, dayLabel, formatWhen, nextDateForDow, pad, zonedParts } from "./time.js";
 import type { MenuItem, Order, OrderStatus, Settings } from "./types.js";
 
 const MAX_BODY = 100_000;
@@ -17,6 +17,31 @@ const MAX_DRAIN = 2_000_000;
 const MAX_TEXT = 1000;
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
+
+function validDateKey(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(value + "T00:00:00Z");
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
+function businessStatus(s: Settings, epoch: number) {
+  const p = zonedParts(epoch, s.tz);
+  const today = `${p.y}-${pad(p.m)}-${pad(p.d)}`;
+  const sinceMonday = (p.dow + 6) % 7;
+  const monday = new Date(Date.UTC(p.y, p.m - 1, p.d - sinceMonday));
+  const week = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday.getTime() + i * DAY);
+    const date = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+    return {
+      date,
+      day: DAYN[d.getUTCDay()],
+      label: d.toLocaleDateString("en-CA", { timeZone: "UTC", month: "short", day: "numeric" }),
+      open: storeOpenOn(s, date),
+      today: date === today,
+    };
+  });
+  return { today, open: storeOpenOn(s, today), week };
+}
 
 const ALLOWED: Record<OrderStatus, OrderStatus[]> = {
   hold: ["cook", "cancelled"],
@@ -376,6 +401,7 @@ export function createServer(d: ServerDeps): Server {
           return send(req, res, 200, {
             items, weekly: s.weeklyMenu.split("\n").map((l) => l.trim()).filter(Boolean), pickupDays: s.days.map((n) => DAYN[n]), noticeHrs: s.noticeHrs,
             address: s.address, contact: { instagram: s.contactInstagram, phone: s.contactPhone },
+            storeStatus: businessStatus(s, now()),
           });
         }
 
@@ -522,10 +548,11 @@ export function createServer(d: ServerDeps): Server {
             .sort((x, y) => y.last!.id - x.last!.id)
             .slice(0, 100);
           const contactOf = (waId: string) => store.getCustomer(waId)?.contact ?? "";
+          const settings = store.getSettings();
           return send(req, res, 200, {
             orders: store.listOrders().map((o) => ({ ...o, contact: contactOf(o.waId) })),
             alerts: store.listAlerts().map((a) => ({ ...a, contact: contactOf(a.waId) })),
-            menu: store.getMenu(), settings: store.getSettings(), ownerLaunchAt: store.ownerFreshLaunchAt(),
+            menu: store.getMenu(), settings, storeStatus: businessStatus(settings, now()), ownerLaunchAt: store.ownerFreshLaunchAt(),
             customers, features: { simulator: cfg.simulator, web: w.enabled },
           });
         }
@@ -541,6 +568,16 @@ export function createServer(d: ServerDeps): Server {
         }
         if (m === "GET" && path === "/api/cook") {
           return send(req, res, 200, cookSummary(store.listOrders(), store.getMenu(), url.searchParams.get("date") ?? undefined));
+        }
+        if (m === "POST" && path === "/api/store-status") {
+          const b = await readJson(req);
+          const date = cleanText(b.date, 10);
+          if (!validDateKey(date)) throw new HttpError(400, "date must be YYYY-MM-DD");
+          if (typeof b.open !== "boolean") throw new HttpError(400, "open must be true or false");
+          const s = { ...store.getSettings() };
+          s.dayOpen = { ...(s.dayOpen ?? {}), [date]: b.open };
+          store.putSettings(s);
+          return send(req, res, 200, { storeStatus: businessStatus(s, now()) });
         }
         let mt = /^\/api\/customers\/([^/]{1,80})\/(messages|reply)$/.exec(path);
         if (mt) {
