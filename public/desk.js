@@ -4,7 +4,7 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const CHIPS = ["What's on the menu?", "2 chicken kheema fry combos, buy 1 get 1, pickup Friday 6pm", "Full meal plan for 2 people, pickup Monday 5pm", "yes", "I want to cancel my order"];
 const THEME_KEY = "annapurna-theme";
 
-let state = { orders: [], alerts: [], menu: [], settings: {}, customers: [], features: {}, ownerLaunchAt: 0 };
+let state = { orders: [], alerts: [], menu: [], settings: {}, storeStatus: null, customers: [], features: {}, ownerLaunchAt: 0 };
 let tab = "dashboard";
 let cook = null;
 let chat = { waId: "", messages: [], customer: null };
@@ -187,6 +187,19 @@ function renderDashboard() {
       return sum + (t == null ? 0 : t);
     }, 0);
 
+  const ss = state.storeStatus || { today, open: true, week: [] };
+  const setDay = (date, open) => act("/api/store-status", { date, open });
+  const storeCard = h("section", { class: "owner-store-status " + (ss.open ? "is-open" : "is-closed") },
+    h("div", { class: "owner-store-main" },
+      h("span", { class: "owner-store-icon", "aria-hidden": "true" }, ss.open ? "✓" : "×"),
+      h("div", {}, h("small", {}, "TODAY'S STORE STATUS"), h("strong", {}, ss.open ? "Open today" : "Closed today"), h("span", {}, ss.open ? "Customers can place new orders." : "Customers can browse, but new orders are blocked."))),
+    h("div", { class: "owner-store-actions" },
+      h("button", { class: ss.open ? "pri" : "ghost", disabled: !!ss.open, onclick: () => setDay(ss.today, true) }, "Open today"),
+      h("button", { class: ss.open ? "ghost danger" : "pri danger", disabled: !ss.open, onclick: () => setDay(ss.today, false) }, "Close today")),
+    h("div", { class: "owner-week-switches" }, (ss.week || []).map((d) =>
+      h("button", { class: "owner-day-switch " + (d.open ? "open" : "closed") + (d.today ? " today" : ""), onclick: () => setDay(d.date, !d.open), title: "Click to mark " + d.day + " " + (d.open ? "closed" : "open") },
+        h("b", {}, String(d.day || "").slice(0,3)), h("span", {}, d.label || d.date), h("em", {}, d.open ? "Open" : "Closed")))));
+
   const kpis = h("section", { class: "owner-kpis", "aria-label": "Kitchen overview" },
     h("div", { class: "owner-kpi kpi-cook", style: "--tone:#1d6b4d", "data-icon": "♨" }, h("small", {}, "To cook"), h("strong", {}, cooking), h("span", {}, "Confirmed orders")),
     h("div", { class: "owner-kpi kpi-ready", style: "--tone:#2f8fb0", "data-icon": "✓" }, h("small", {}, "Ready"), h("strong", {}, ready), h("span", {}, "Waiting for pickup")),
@@ -197,6 +210,7 @@ function renderDashboard() {
 
   const out = [
     h("div", {}, h("h2", {}, "Kitchen overview"), h("p", { class: "sub" }, "What needs your attention right now.")),
+    storeCard,
     kpis
   ];
 
