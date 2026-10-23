@@ -2069,6 +2069,8 @@ html[data-theme="dark"] body.customer-mode #startForm::before{color:#e8f1e8!impo
 .daily-status-onboard .status-calendar .ic,.daily-status-home .status-calendar .ic{width:29px;height:29px}
 .daily-status-copy{min-width:0}.daily-status-copy small{display:block;font-size:10.5px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .daily-status-copy h3{margin:1px 0 2px;font:700 32px/1.04 var(--f-display);color:#a61d18}.daily-status-copy p{margin:0;color:var(--muted);font-size:13px}
+.onboard-status-days{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.onboard-status-days span{display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;background:#fde1dd;color:#ad1f19;font-size:10.5px;font-weight:800;border:1px solid rgba(173,31,25,.12)}
+.daily-status-onboard.open .onboard-status-days span{background:var(--brand-soft);color:var(--brand2);border-color:color-mix(in srgb,var(--brand) 16%,transparent)}
 .daily-status-onboard.open,.daily-status-home.open{border-color:color-mix(in srgb,var(--brand) 30%,var(--line));background:linear-gradient(115deg,color-mix(in srgb,var(--brand-soft) 70%,var(--surface)),var(--surface))}
 .daily-status-onboard.open .status-calendar,.daily-status-home.open .status-calendar{background:var(--brand-soft);color:var(--brand2)}
 .daily-status-onboard.open .daily-status-copy h3,.daily-status-home.open .daily-status-copy h3{color:var(--brand2)}
@@ -2251,7 +2253,7 @@ html[data-theme="dark"] .daily-status-onboard:not(.open) .daily-status-copy h3,h
     </form>
     <section class="daily-status-onboard" id="onboardStoreStatus" hidden>
       <span class="status-calendar"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 8h16M5 5h14v15H5z"/></svg></span>
-      <div class="daily-status-copy"><small>Today's status</small><h3 id="onboardStatusTitle">Open Today</h3><p id="onboardStatusText">We're taking orders today.</p></div>
+      <div class="daily-status-copy"><small>Today's status</small><h3 id="onboardStatusTitle">Open Today</h3><p id="onboardStatusText">We're taking orders today.</p><div class="onboard-status-days" id="onboardStatusDays"></div></div>
     </section>
     <p class="tiny"><strong>Payment:</strong> Interac e-Transfer or cash at pickup. Your pickup time is confirmed with your order.</p>
     <p class="tiny">You can delete your chat any time from Help. Placed orders are kept so we can cook them.</p>
