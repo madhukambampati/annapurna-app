@@ -346,7 +346,7 @@
       rows.map(function (r) { return h("div", { class: "row" + (r[0] === "Total" ? " total" : "") }, h("span", {}, r[0]), h("span", {}, r[1])); }),
       warn ? h("div", { class: "warnrow" }, warn) : null,
       h("div", { class: "acts" },
-        h("button", { class: "btn", type: "button", onclick: function () { send("Yes, confirm", m.id ? "confirm:" + m.id : undefined); } }, icon("check"), "Yes, place order"),
+        h("button", { class: "btn" + (isStoreClosed() ? " store-closed-btn" : ""), type: "button", disabled: isStoreClosed(), onclick: function () { if (!isStoreClosed()) send("Yes, confirm", m.id ? "confirm:" + m.id : undefined); } }, icon("check"), isStoreClosed() ? "Closed today" : "Yes, place order"),
         h("button", { class: "btn ghost", type: "button", onclick: function () { $("text").value = "I'd like to change "; resizeBox(); $("text").focus(); } }, "Change something")),
       h("time", {}, m.ts ? clock(m.ts) : ""));
     return card;
