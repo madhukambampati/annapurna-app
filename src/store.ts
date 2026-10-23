@@ -42,7 +42,27 @@ export class Store {
       /* column already there */
     }
     this.migrateMenu();
+    this.seedOct2026WeekendClosure();
     this.initializeFreshVindhuOwnerChat();
+  }
+
+  /**
+   * One-time business-calendar seed requested for the Oct 23–25, 2026 closure.
+   * It updates existing production settings once, so the deployed site immediately shows
+   * Friday, Saturday and Sunday as closed. The owner can still reopen any date from Owner Desk.
+   */
+  private seedOct2026WeekendClosure(): void {
+    const key = "store_status_seed_20261023_25_v1";
+    if (this.db.prepare("SELECT 1 FROM kv WHERE key = ?").get(key)) return;
+    const s = this.getSettings();
+    s.dayOpen = {
+      ...(s.dayOpen ?? {}),
+      "2026-10-23": false,
+      "2026-10-24": false,
+      "2026-10-25": false,
+    };
+    this.putSettings(s);
+    this.kvPut(key, { dates: ["2026-10-23", "2026-10-24", "2026-10-25"], at: Date.now() });
   }
 
   /**
