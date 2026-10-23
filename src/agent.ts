@@ -3,7 +3,7 @@ import { clearCustomQuote, customQuoteIsCurrent, customTermsKey } from "./custom
 import { checkFlags, checkWeekday, draftHash, extrasOnly, friendlyName, mainOrderFor, sanitizeItems, tokens, type Issue } from "./guards.js";
 import { HeuristicJudge, type Judge, type Judgment } from "./judge.js";
 import { LlmError, type Llm } from "./llm.js";
-import { findItem, itemLabel, lineAmt, money, total, optionPicks } from "./menu.js";
+import { findItem, itemLabel, lineAmt, money, total, optionPicks, storeOpenNow } from "./menu.js";
 import type { Notifier } from "./notify.js";
 import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
 import { route as decideRoute, type Route } from "./router.js";
@@ -368,6 +368,20 @@ export class Agent {
         return out;
       }
       text = remainder;
+    }
+
+    const storeClosedToday = !storeOpenNow(settings, now);
+    const orderingWhileClosed =
+      clearlyNormalMenuOrder(text, menu) ||
+      CUSTOM_WORDS.test(text) ||
+      CUSTOM_RECIPE_WORDS.test(text) ||
+      CUSTOM_HEADCOUNT.test(text) ||
+      (!!draft && (BARE_OK.test(text) || CONFIRM_BUTTON.test(text) || CUSTOM_CONFIRM.test(text)));
+    if (storeClosedToday && orderingWhileClosed) {
+      out.route = "store_closed";
+      out.replies.push("We're closed today and aren't taking new orders. You can still browse the menu and weekly plan, then place your order when we're open.");
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
     }
 
     // A specifically requested combo that is switched off is handled by code before Claude.
@@ -861,6 +875,11 @@ export class Agent {
   private async placeCustomOrder(waId: string, draft: Draft, s: Settings, out: Outcome): Promise<void> {
     const { store } = this.d;
     const now = this.now();
+    if (!storeOpenNow(s, now)) {
+      out.route = "confirm_custom_order+store_closed";
+      out.replies.push("We're closed today and aren't taking new orders. Your details are still here; please confirm again when we're open.");
+      return;
+    }
     const custom = draft.custom;
     if (!custom || custom.price == null || !draft.pickup_local) return;
     // Last line of defence: even a stale/corrupt draft cannot create a custom order using a quote
@@ -935,6 +954,11 @@ export class Agent {
   private async placeOrder(waId: string, draft: Draft, s: Settings, out: Outcome): Promise<void> {
     const { store } = this.d;
     const now = this.now();
+    if (!storeOpenNow(s, now)) {
+      out.route = "confirm_order+store_closed";
+      out.replies.push("We're closed today and aren't taking new orders. Your order hasn't been placed. You can still browse the menu and weekly plan.");
+      return;
+    }
     const menu = store.getMenu();
     // The menu may have changed between the read-back and the yes. Never charge a price the
     // customer did not see, and never place a combo that was switched off in the meantime.
