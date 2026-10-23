@@ -1,3 +1,4 @@
+import { epochToLocal } from "./time.js";
 import type { MenuItem, OrderItem, Pack, Settings } from "./types.js";
 
 /** Combos and prices as printed on the Annapurna posters (Sept 2026). Plans are not on the posters. Switch combos on/off with `live` from the desk. */
@@ -141,7 +142,17 @@ export function defaultSettings(): Settings {
     comboDays: [5, 6, 0],
     contactInstagram: "annapurna_hometaste",
     contactPhone: "",
+    dayOpen: {},
   };
+}
+
+/** Daily business switch. Missing dates intentionally default open so an old closure never carries into tomorrow. */
+export function storeOpenOn(s: Settings, dateIso: string): boolean {
+  return s.dayOpen?.[dateIso] !== false;
+}
+
+export function storeOpenNow(s: Settings, now: number): boolean {
+  return storeOpenOn(s, epochToLocal(now, s.tz).slice(0, 10));
 }
 
 /** Pickup days that apply to one menu item. An item's own days win, then the combo days, then the plan days. */
