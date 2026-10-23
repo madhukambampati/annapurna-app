@@ -34,7 +34,7 @@
 
   var token = "", lastId = 0, busy = false, seen = {}, orders = [], pollTimer = 0;
   var appVersion = "", versionTimer = 0;
-  var sheetOpen = "", lastFocus = null, menuData = null, handoff = null, confirmingDelete = false, confirmingEndSession = false;
+  var sheetOpen = "", lastFocus = null, menuData = null, storeStatus = null, handoff = null, confirmingDelete = false, confirmingEndSession = false;
   var pendingOrderText = "";
   var failedMessageText = "";
 
@@ -244,6 +244,44 @@
   }
 
   /* ---------- customer home ---------- */
+  function isStoreClosed() { return !!storeStatus && storeStatus.open === false; }
+
+  function renderStoreStatus() {
+    if (!storeStatus) return;
+    var closed = isStoreClosed();
+    document.body.classList.toggle("store-closed", closed);
+    var title = closed ? "Closed Today" : "Open Today";
+    var copy = closed
+      ? "We're not taking new orders today. You can still browse the menu and weekly plan."
+      : "We're taking orders today. Browse the menu or start an order with Vindhu.";
+    [["onboardStoreStatus","onboardStatusTitle","onboardStatusText"],["homeStoreStatus","homeStatusTitle","homeStatusText"]].forEach(function (ids) {
+      var box = $(ids[0]); if (!box) return;
+      box.hidden = false; box.classList.toggle("open", !closed);
+      $(ids[1]).textContent = title; $(ids[2]).textContent = copy;
+    });
+    var week = $("homeWeekStatus");
+    if (week) {
+      week.replaceChildren();
+      (storeStatus.week || []).forEach(function (d) {
+        week.append(h("div", { class: "status-day" + (d.open ? "" : " closed") + (d.today ? " today" : "") },
+          h("b", {}, String(d.day || "").slice(0,3)),
+          h("span", {}, d.label || d.date),
+          h("em", {}, d.open ? "Open" : "Closed")));
+      });
+    }
+    var start = $("homeOrder");
+    if (start) {
+      start.disabled = closed;
+      var b = start.querySelector("b"), sm = start.querySelector("small");
+      if (b) b.textContent = closed ? "Closed today" : "Start an order";
+      if (sm) sm.textContent = closed ? "Browse menu or plan ahead" : "Chat with Vindhu";
+    }
+    var startBtn = $("startBtn");
+    if (startBtn && !startBtn.disabled) startBtn.textContent = closed ? "Continue with Vindhu" : "Start ordering with Vindhu";
+    var text = $("text");
+    if (text) text.placeholder = closed ? "Ask about the menu, weekly plan or a future pickup" : "Type your order or a question";
+  }
+
   function initHome() {
     var slot = $("homeMascot");
     if (slot && !slot.firstChild) slot.append(mascot("pop"));
@@ -280,7 +318,7 @@
     initHome();
     var home = $("home");
     if (home) home.scrollTop = 0;
-    loadMenu();
+    loadMenu(true).then(renderStoreStatus);
     loadOrders();
     startPolling();
   }
@@ -664,9 +702,14 @@
   function startPolling() { stopPolling(); pollTimer = setInterval(poll, 7000); }
   function stopPolling() { if (pollTimer) clearInterval(pollTimer); pollTimer = 0; }
 
-  function loadMenu() {
-    if (menuData) return Promise.resolve(menuData);
-    return fetch("/web/menu").then(function (r) { return r.json(); }).then(function (m) { menuData = m; return m; }).catch(function () { return null; });
+  function loadMenu(force) {
+    if (menuData && !force) return Promise.resolve(menuData);
+    return fetch("/web/menu").then(function (r) { return r.json(); }).then(function (m) {
+      menuData = m;
+      storeStatus = m.storeStatus || null;
+      renderStoreStatus();
+      return m;
+    }).catch(function () { return null; });
   }
 
   function openChat(prefill) {
@@ -799,6 +842,7 @@
   /* ---------- menu ---------- */
   function dish(x) {
     var off = !x.live;
+    var storeClosed = isStoreClosed();
     var noPrice = x.kind === "combo" && x.single == null && x.bogo == null;
     var price = h("div", { class: "dprice" });
     if (x.kind === "plan") price.append(h("div", { class: "price-row" }, h("span", { class: "lab" }, "Per person, per week"), h("span", { class: "amt" }, money(x.plan))));
@@ -806,7 +850,7 @@
       price.append(h("div", { class: "price-row" }, h("span", { class: "lab" }, x.kind === "combo" ? "Single" : x.kind === "addon" ? "Each" : "Price"), h("span", { class: "amt" }, money(x.single))));
       if (x.kind === "combo" && x.bogo != null) price.append(h("div", { class: "price-row" }, h("span", { class: "lab" }, "Buy 1 Get 1"), h("span", { class: "amt alt" }, money(x.bogo))));
     }
-    if (!off && !noPrice) {
+    if (!off && !noPrice && !storeClosed) {
       price.append(h("button", { class: "btn sm", type: "button", onclick: function () {
         var choice = "I'd like to order the " + x.name + " ";
         closeSheet();
@@ -816,6 +860,8 @@
         $("startErr").textContent = "Enter your details to continue with the item you selected.";
         $("fName").focus();
       } }, "Add to order"));
+    } else if (!off && !noPrice && storeClosed) {
+      price.append(h("button", { class: "btn sm store-closed-btn", type: "button", disabled: true }, "Closed today"));
     }
     return h("article", { class: "dish" + (off ? " off" : "") },
       h("div", { class: "dmain" },
@@ -854,8 +900,11 @@
     var body = $("sheetBody"); body.replaceChildren(h("p", { class: "tiny" }, "Loading..."));
     fetch("/web/menu").then(function (r) { return r.json(); }).then(function (m) {
       menuData = m;
+      storeStatus = m.storeStatus || null;
+      renderStoreStatus();
       if (sheetOpen !== "menu") return;
       body.replaceChildren();
+      if (isStoreClosed()) body.append(h("div", { class: "store-closed-note", role: "status" }, h("strong", {}, "Closed today. "), "We're not taking new orders today, but you can still browse every menu item and the weekly plan."));
       var panels = menuPanels(m);
       var seg = h("div", { class: "seg menu-seg", role: "tablist", "aria-label": "Menu sections" });
       var sectionLabel = h("div", { class: "menu-section-label" }, h("span", {}, "MENU SECTION"), h("b", { id: "menuSectionName" }, ""));
@@ -880,11 +929,12 @@
       if (panels.length > 1) body.append(seg);
       body.append(sectionLabel, holder);
       body.append(h("p", { class: "tiny" }, "Plan pickup " + (m.pickupDays || []).join(", ") + ". Everything is cooked fresh at " + (m.address || "our kitchen") + "."));
-      if ($("chat").hidden) body.append(h("button", { class: "btn", type: "button", onclick: function () {
+      if ($("chat").hidden && !isStoreClosed()) body.append(h("button", { class: "btn", type: "button", onclick: function () {
         closeSheet();
         if (token) openChat();
         else { show("onboard"); if ($("fName")) $("fName").focus(); }
       } }, "Start an order"));
+      else if ($("chat").hidden && isStoreClosed()) body.append(h("p", { class: "tiny" }, "Ordering is closed for today. You can come back when we're open to place the order."));
       if (panels.length) {
         var wanted = preferred ? panels.findIndex(function (p) { return p[0] === preferred; }) : -1;
         select(wanted >= 0 ? wanted : (live || panels.length === 1 ? 0 : Math.min(1, panels.length - 1)));
@@ -1048,7 +1098,7 @@
   $("btnOrders").addEventListener("click", showOrders);
   $("btnHelp").addEventListener("click", showHelp);
   $("startMenu").addEventListener("click", showMenu);
-  $("homeOrder").addEventListener("click", function () { openChat(); });
+  $("homeOrder").addEventListener("click", function () { if (isStoreClosed()) return; openChat(); });
   $("homeContinue").addEventListener("click", function () { openChat(); });
   $("homeCombos").addEventListener("click", function (e) { showMenu(e, "Combos"); });
   $("homePlans").addEventListener("click", function (e) { showMenu(e, "Weekly plans"); });
@@ -1071,7 +1121,8 @@
   $("text").addEventListener("keydown", function (e) {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send($("text").value); }
   });
-  document.addEventListener("visibilitychange", function () { if (!document.hidden) { poll(); checkVersion(); } });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) { poll(); checkVersion(); loadMenu(true); } });
+  setInterval(function () { if (!document.hidden) loadMenu(true); }, 60000);
 
   $("fName").addEventListener("blur", function () {
     setFieldValidation("fName", "fNameErr", nameValidationError($("fName").value));
@@ -1168,5 +1219,5 @@
   initHero();
   addCustomerActions();
   startVersionWatch();
-  if (token) openHome(); else show("onboard");
+  if (token) openHome(); else { show("onboard"); loadMenu(true); }
 })();
