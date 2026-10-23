@@ -97,6 +97,8 @@ export interface Settings {
   contactInstagram: string;
   /** Phone number customers can be pointed to. Empty = none. */
   contactPhone: string;
+  /** Per-date store status overrides. YYYY-MM-DD -> true=open, false=closed. Missing dates default open. */
+  dayOpen?: Record<string, boolean>;
 }
 
 export interface Msg {
