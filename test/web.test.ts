@@ -1153,3 +1153,32 @@ test("Round 14: an owner cancellation decision closes the pending cancellation a
     assert.equal(t.store.getOrder(id)!.status, "hold");
     assert.equal(t.store.listAlerts(true).some((a) => a.orderId === id && /Cancellation requested/.test(a.note)), false);
   }));
+
+
+test("owner daily open/closed status is public and blocks new orders while closed", () =>
+  withRig(async ({ t, call, start, say }) => {
+    const initial = await call("GET", "/api/state", { token: "secret" });
+    assert.equal(initial.status, 200);
+    const today = initial.json.storeStatus.today;
+    assert.equal(initial.json.storeStatus.open, true);
+
+    const closed = await call("POST", "/api/store-status", { token: "secret", body: { date: today, open: false } });
+    assert.equal(closed.status, 200);
+    assert.equal(closed.json.storeStatus.open, false);
+
+    const menu = await call("GET", "/web/menu");
+    assert.equal(menu.status, 200);
+    assert.equal(menu.json.storeStatus.today, today);
+    assert.equal(menu.json.storeStatus.open, false);
+    assert.equal(menu.json.items.length > 0, true, "menu remains browseable while closed");
+
+    const token = await start("Asha", "asha@example.com");
+    const attempt = await say(token, "I would like to order the Gongura Chicken Kheema Pulao for Sunday at 1pm");
+    assert.equal(attempt.json.orderId, null);
+    assert.ok(attempt.json.messages.some((m: any) => /closed today/i.test(m.text)));
+    assert.equal(t.store.listOrders().length, 0);
+
+    const reopened = await call("POST", "/api/store-status", { token: "secret", body: { date: today, open: true } });
+    assert.equal(reopened.status, 200);
+    assert.equal(reopened.json.storeStatus.open, true);
+  }));
