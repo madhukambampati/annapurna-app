@@ -1184,14 +1184,10 @@ test("owner daily open/closed status is public and blocks new orders while close
   }));
 
 
-test("Oct 23-25 2026 closure seed marks the requested weekend closed", () => {
-  const t = makeTestContext();
-  try {
+test("Oct 23-25 2026 closure seed marks the requested weekend closed", () =>
+  withRig(async ({ t }) => {
     const s = t.store.getSettings();
     assert.equal(s.dayOpen?.["2026-10-23"], false);
     assert.equal(s.dayOpen?.["2026-10-24"], false);
     assert.equal(s.dayOpen?.["2026-10-25"], false);
-  } finally {
-    t.store.close();
-  }
-});
+  }));
