@@ -251,14 +251,27 @@
     var closed = isStoreClosed();
     document.body.classList.toggle("store-closed", closed);
     var title = closed ? "Closed Today" : "Open Today";
+    var upcomingClosed = (storeStatus.week || []).filter(function (d) {
+      return !d.open && !d.today && (!storeStatus.today || d.date >= storeStatus.today);
+    }).slice(0, 3);
+    var closedNames = upcomingClosed.map(function (d) { return String(d.day || "").slice(0, 3) + " " + (d.label || d.date); });
     var copy = closed
-      ? "We're not taking new orders today. You can still browse the menu and weekly plan."
+      ? "We're not taking new orders today." + (closedNames.length ? " Also closed " + closedNames.join(" & ") + "." : "") + " You can still browse the menu and weekly plan."
       : "We're taking orders today. Browse the menu or start an order with Vindhu.";
     [["onboardStoreStatus","onboardStatusTitle","onboardStatusText"],["homeStoreStatus","homeStatusTitle","homeStatusText"]].forEach(function (ids) {
       var box = $(ids[0]); if (!box) return;
       box.hidden = false; box.classList.toggle("open", !closed);
       $(ids[1]).textContent = title; $(ids[2]).textContent = copy;
     });
+    var onboardDays = $("onboardStatusDays");
+    if (onboardDays) {
+      onboardDays.replaceChildren();
+      var todayLabel = closed ? "Today · Closed" : "Today · Open";
+      onboardDays.append(h("span", {}, todayLabel));
+      upcomingClosed.forEach(function (d) {
+        onboardDays.append(h("span", {}, String(d.day || "").slice(0, 3) + " " + (d.label || d.date) + " · Closed"));
+      });
+    }
     var week = $("homeWeekStatus");
     if (week) {
       week.replaceChildren();
