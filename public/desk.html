@@ -773,6 +773,19 @@ html[data-theme="dark"] body.owner-mode .owner-page-title h2{color:#edf4e9!impor
   }
 }
 </style>
+<style id="ownerDailyStoreStatusV1">
+.owner-store-status{display:grid;grid-template-columns:minmax(230px,1fr) auto;gap:14px;align-items:center;margin:14px 0 18px;padding:15px 16px;border:1px solid var(--line);border-radius:20px;background:var(--panel);box-shadow:0 8px 24px rgba(30,48,37,.06)}
+.owner-store-status.is-open{border-color:color-mix(in srgb,#1d6b4d 35%,var(--line));background:linear-gradient(110deg,color-mix(in srgb,#dfeee5 65%,var(--panel)),var(--panel))}
+.owner-store-status.is-closed{border-color:color-mix(in srgb,#c94f45 34%,var(--line));background:linear-gradient(110deg,color-mix(in srgb,#fde4df 68%,var(--panel)),var(--panel))}
+.owner-store-main{display:flex;gap:11px;align-items:center;min-width:0}.owner-store-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:14px;background:#1d6b4d;color:#fff;font-size:22px;font-weight:900}
+.is-closed .owner-store-icon{background:#c94f45}.owner-store-main small{display:block;color:var(--muted);font-size:10px;font-weight:900;letter-spacing:.1em}.owner-store-main strong{display:block;font-size:20px}.owner-store-main span{display:block;color:var(--muted);font-size:12px}
+.owner-store-actions{display:flex;gap:7px}.owner-store-actions button{min-width:105px}
+.owner-week-switches{grid-column:1/-1;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;padding-top:10px;border-top:1px solid var(--line)}
+.owner-day-switch{min-width:0;border:1px solid var(--line);border-radius:12px;background:var(--panel2);padding:7px 5px;text-align:center;color:var(--ink)}
+.owner-day-switch b,.owner-day-switch span,.owner-day-switch em{display:block}.owner-day-switch b{font-size:11px}.owner-day-switch span{font-size:10px;color:var(--muted);margin:1px 0 4px}.owner-day-switch em{font-style:normal;font-size:9.5px;font-weight:800;color:#1d6b4d}
+.owner-day-switch.closed{background:color-mix(in srgb,#fde4df 65%,var(--panel));border-color:color-mix(in srgb,#c94f45 28%,var(--line))}.owner-day-switch.closed em{color:#b83527}.owner-day-switch.today{box-shadow:inset 0 0 0 2px color-mix(in srgb,#f1a824 70%,transparent)}
+@media(max-width:720px){.owner-store-status{grid-template-columns:1fr}.owner-store-actions{width:100%}.owner-store-actions button{flex:1}.owner-week-switches{grid-template-columns:repeat(7,minmax(52px,1fr));overflow-x:auto}.owner-day-switch{min-width:52px}}
+</style>
 </head>
 <body class="owner-mode">
 <header class="owner-head">
