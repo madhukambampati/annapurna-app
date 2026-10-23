@@ -2062,6 +2062,42 @@ html[data-theme="dark"] body.customer-mode #startForm::before{color:#e8f1e8!impo
 <link rel="stylesheet" href="/heritage-v8.css?v=8">
 <link rel="stylesheet" href="/heritage-v9.css?v=9">
 <link rel="stylesheet" href="/heritage-v11.css?v=11">
+<style id="dailyStoreStatusV1">
+.daily-status-onboard,.daily-status-home{border-radius:22px;border:1px solid color-mix(in srgb,#b42318 24%,var(--line));background:linear-gradient(115deg,color-mix(in srgb,#fff0ed 88%,var(--surface)),var(--surface));box-shadow:0 10px 28px rgba(90,35,28,.06)}
+.daily-status-onboard{grid-column:1/-1;display:flex;align-items:center;gap:16px;padding:16px 20px;margin-top:2px}
+.daily-status-onboard .status-calendar,.daily-status-home .status-calendar{display:grid;place-items:center;flex:none;width:58px;height:58px;border-radius:50%;background:#fde1dd;color:#ad1f19}
+.daily-status-onboard .status-calendar .ic,.daily-status-home .status-calendar .ic{width:29px;height:29px}
+.daily-status-copy{min-width:0}.daily-status-copy small{display:block;font-size:10.5px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.daily-status-copy h3{margin:1px 0 2px;font:700 32px/1.04 var(--f-display);color:#a61d18}.daily-status-copy p{margin:0;color:var(--muted);font-size:13px}
+.daily-status-onboard.open,.daily-status-home.open{border-color:color-mix(in srgb,var(--brand) 30%,var(--line));background:linear-gradient(115deg,color-mix(in srgb,var(--brand-soft) 70%,var(--surface)),var(--surface))}
+.daily-status-onboard.open .status-calendar,.daily-status-home.open .status-calendar{background:var(--brand-soft);color:var(--brand2)}
+.daily-status-onboard.open .daily-status-copy h3,.daily-status-home.open .daily-status-copy h3{color:var(--brand2)}
+.daily-status-home{margin:16px 0 0;padding:18px;display:grid;grid-template-columns:minmax(260px,.9fr) minmax(0,1.6fr);gap:18px;align-items:center}
+.daily-status-home .status-main{display:flex;align-items:center;gap:14px;min-width:0}
+.daily-status-home .daily-status-copy h3{font-size:34px}
+.status-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.status-day{min-width:0;text-align:center;padding:8px 5px;border:1px solid var(--line);border-radius:13px;background:var(--surface);font-size:10px}
+.status-day b{display:block;font-size:11px}.status-day span{display:block;color:var(--muted);margin:1px 0 5px}
+.status-day em{display:inline-flex;padding:2px 7px;border-radius:999px;background:var(--brand-soft);color:var(--brand2);font-style:normal;font-weight:800;font-size:9.5px}
+.status-day.closed{background:color-mix(in srgb,#fff0ed 70%,var(--surface));border-color:color-mix(in srgb,#c73b32 20%,var(--line))}
+.status-day.closed em{background:#fde1dd;color:#ad1f19}.status-day.today{box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--accent) 70%,transparent)}
+.store-closed .home-primary:disabled{cursor:not-allowed;filter:grayscale(.45);opacity:.72}
+.store-closed-note{padding:11px 13px;border-radius:14px;border:1px solid color-mix(in srgb,#c73b32 24%,var(--line));background:color-mix(in srgb,#fff0ed 72%,var(--surface));color:var(--ink);font-size:13.5px}
+.store-closed-note strong{color:#a61d18}
+.btn.store-closed-btn{background:#8d918e!important;color:#fff!important;cursor:not-allowed!important;opacity:.82}
+@media(max-width:760px){
+ .daily-status-home{grid-template-columns:1fr;padding:14px;gap:12px}.status-week{grid-template-columns:repeat(7,minmax(52px,1fr));overflow-x:auto;padding-bottom:2px}
+ .daily-status-onboard{padding:13px 14px;align-items:flex-start}.daily-status-onboard .status-calendar{width:48px;height:48px}
+ .daily-status-copy h3,.daily-status-home .daily-status-copy h3{font-size:28px}.daily-status-copy p{font-size:12px}
+}
+@media(max-width:430px){
+ .daily-status-onboard{gap:11px}.daily-status-onboard .status-calendar{width:42px;height:42px}.daily-status-onboard .status-calendar .ic{width:23px;height:23px}
+ .daily-status-copy h3,.daily-status-home .daily-status-copy h3{font-size:25px}
+}
+html[data-theme="dark"] .daily-status-onboard:not(.open),html[data-theme="dark"] .daily-status-home:not(.open),html[data-theme="dark"] .store-closed-note{background:linear-gradient(115deg,#351916,var(--surface));border-color:#69312b}
+html[data-theme="dark"] .daily-status-onboard:not(.open) .status-calendar,html[data-theme="dark"] .daily-status-home:not(.open) .status-calendar{background:#4a201c;color:#ff9b8f}
+html[data-theme="dark"] .daily-status-onboard:not(.open) .daily-status-copy h3,html[data-theme="dark"] .daily-status-home:not(.open) .daily-status-copy h3,html[data-theme="dark"] .store-closed-note strong{color:#ff9b8f}
+</style>
 </head>
 <body>
 <template id="tplMascot">
@@ -2142,6 +2178,14 @@ html[data-theme="dark"] body.customer-mode #startForm::before{color:#e8f1e8!impo
       </div>
     </section>
 
+    <section class="daily-status-home" id="homeStoreStatus" hidden>
+      <div class="status-main">
+        <span class="status-calendar"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 8h16M5 5h14v15H5z"/></svg></span>
+        <div class="daily-status-copy"><small>Today's status</small><h3 id="homeStatusTitle">Open Today</h3><p id="homeStatusText">We're taking orders today.</p></div>
+      </div>
+      <div class="status-week" id="homeWeekStatus" aria-label="This week's open and closed status"></div>
+    </section>
+
     <section class="home-section">
       <div class="home-section-head"><div><span>ORDER WITH VINDHU</span><h3>What would you like to do?</h3></div><small>Combos · Weekly Plans · Orders</small></div>
       <div class="home-grid">
@@ -2205,6 +2249,10 @@ html[data-theme="dark"] body.customer-mode #startForm::before{color:#e8f1e8!impo
       <button class="btn" id="startBtn" type="submit">Start ordering with Vindhu</button>
       <button class="btn ghost" id="startMenu" type="button">See the menu first</button>
     </form>
+    <section class="daily-status-onboard" id="onboardStoreStatus" hidden>
+      <span class="status-calendar"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 8h16M5 5h14v15H5z"/></svg></span>
+      <div class="daily-status-copy"><small>Today's status</small><h3 id="onboardStatusTitle">Open Today</h3><p id="onboardStatusText">We're taking orders today.</p></div>
+    </section>
     <p class="tiny"><strong>Payment:</strong> Interac e-Transfer or cash at pickup. Your pickup time is confirmed with your order.</p>
     <p class="tiny">You can delete your chat any time from Help. Placed orders are kept so we can cook them.</p>
   </main>
