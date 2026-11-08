@@ -26,6 +26,14 @@ export class Store {
         id INTEGER PRIMARY KEY AUTOINCREMENT, wa_id TEXT NOT NULL, name TEXT NOT NULL, items TEXT NOT NULL,
         pickup TEXT, flags TEXT NOT NULL, status TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS reviews (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL UNIQUE REFERENCES orders(id),
+        rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5), comment TEXT NOT NULL,
+        display_name TEXT NOT NULL DEFAULT 'Annapurna guest',
+        status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','published','hidden','deleted')),
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS reviews_status ON reviews(status, id);
       CREATE TABLE IF NOT EXISTS alerts (
         id INTEGER PRIMARY KEY AUTOINCREMENT, wa_id TEXT NOT NULL, cust TEXT NOT NULL, note TEXT NOT NULL,
         order_id INTEGER, done INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
@@ -327,6 +335,35 @@ export class Store {
     this.db.prepare("UPDATE orders SET status = ? WHERE id = ?").run(status, id);
     if (clearFlags) this.db.prepare("UPDATE orders SET flags = '[]' WHERE id = ?").run(id);
     return this.getOrder(id);
+  }
+
+  /* Reviews deliberately contain no customer contact or session identifiers. */
+  reviewForOrder(orderId: number): { status: string } | undefined {
+    return this.db.prepare("SELECT status FROM reviews WHERE order_id = ?").get(orderId) as { status: string } | undefined;
+  }
+
+  submitReview(waId: string, orderId: number, rating: number, comment: string, displayName: string, at: number): boolean {
+    // One atomic statement checks ownership, pickup and uniqueness, including deleted reviews.
+    const r = this.db.prepare(`INSERT OR IGNORE INTO reviews (order_id, rating, comment, display_name, created_at)
+      SELECT id, ?, ?, ?, ? FROM orders WHERE id = ? AND wa_id = ? AND status = 'done'`)
+      .run(rating, comment, displayName, at, orderId, waId);
+    return Number(r.changes) === 1;
+  }
+
+  listReviews(publicOnly = false) {
+    const rows = this.db.prepare(publicOnly
+      ? "SELECT * FROM reviews WHERE status = 'published' ORDER BY id DESC LIMIT 100"
+      : "SELECT * FROM reviews WHERE status != 'deleted' ORDER BY id DESC").all() as Row[];
+    return rows.map(r => ({ id: Number(r.id), orderId: Number(r.order_id), rating: Number(r.rating),
+      comment: String(r.comment), displayName: String(r.display_name), status: String(r.status), createdAt: Number(r.created_at) }));
+  }
+
+  moderateReview(id: number, action: 'publish' | 'hide' | 'unpublish' | 'delete'): boolean {
+    const status = { publish: 'published', hide: 'hidden', unpublish: 'pending', delete: 'deleted' }[action];
+    const r = action === 'delete'
+      ? this.db.prepare("UPDATE reviews SET status = 'deleted', comment = '', display_name = 'Annapurna guest' WHERE id = ? AND status != 'deleted'").run(id)
+      : this.db.prepare("UPDATE reviews SET status = ? WHERE id = ? AND status != 'deleted'").run(status, id);
+    return Number(r.changes) === 1;
   }
 
   /* ----- alerts ----- */

@@ -1213,3 +1213,47 @@ test("daily 8 PM cutoff closes today without auto-moving orders to tomorrow", ()
     assert.ok(attempt.json.messages.some((m: any) => /won't move your order to tomorrow automatically/i.test(m.text)));
     assert.equal(t.store.listOrders().length, 0);
   }));
+
+
+test("verified reviews enforce pickup, session ownership, validation, moderation and privacy", async () => {
+  await withRig(async ({ t, call, start }) => {
+    const token = await start();
+    const stranger = await start("Ravi", "ravi@example.com");
+    const owner = t.store.listCustomers().find(c => c.name === "Asha")!;
+    const order = t.store.insertOrder({ waId: owner.waId, name: "Asha Private", items: [], pickup: FRI_6PM,
+      flags: [], status: "ready", notes: "", createdAt: NOW });
+    const path = `/web/orders/${order.id}/review`;
+    const body = { rating: 5, comment: "Loved the food!", displayName: "Asha" };
+    const submit = (b: unknown = body, tok = token) => call("POST", path, { token: tok, body: b });
+    assert.equal((await call("POST", path, { body })).status, 401);
+    assert.equal((await submit(body, stranger)).status, 404);
+    assert.equal((await submit()).status, 409);
+    t.store.setOrderStatus(order.id, "done");
+    for (const rating of [0, 6, 2.5, "5", null]) assert.equal((await submit({ ...body, rating })).status, 400);
+    for (const comment of ["", "a".repeat(501), "email me a@b.com", "Call 519-804-3658"])
+      assert.equal((await submit({ ...body, comment })).status, 400);
+    assert.equal((await submit({ ...body, displayName: "Full Name" })).status, 400);
+    assert.equal((await submit()).status, 201);
+    assert.equal((await submit()).status, 409);
+    assert.equal((await call("GET", "/web/orders", { token })).json.orders[0].reviewSubmitted, true);
+    const publicReviews = () => call("GET", "/web/reviews");
+    assert.deepEqual((await publicReviews()).json.reviews, []);
+    assert.equal((await call("GET", "/api/reviews")).status, 401);
+    const review = (await call("GET", "/api/reviews", { token: "secret" })).json.reviews[0];
+    assert.equal(review.status, "pending");
+    const moderate = (action: string) => call("POST", `/api/reviews/${review.id}/${action}`, { token: "secret" });
+    assert.equal((await call("POST", `/api/reviews/${review.id}/publish`, { token })).status, 401);
+    assert.equal((await moderate("publish")).status, 200);
+    assert.deepEqual((await publicReviews()).json.reviews, [{ rating: 5, comment: body.comment, displayName: "Asha", verified: true }]);
+    for (const action of ["hide", "unpublish"]) {
+      assert.equal((await moderate(action)).status, 200);
+      assert.deepEqual((await publicReviews()).json.reviews, []);
+      await moderate("publish");
+    }
+    assert.equal((await moderate("delete")).status, 200);
+    assert.deepEqual((await publicReviews()).json.reviews, []);
+    assert.deepEqual((await call("GET", "/api/reviews", { token: "secret" })).json.reviews, []);
+    assert.equal((await moderate("publish")).status, 404);
+    assert.equal((await submit()).status, 409);
+  }, { web: { enabled: true } });
+});

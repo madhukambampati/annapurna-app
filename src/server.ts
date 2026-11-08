@@ -391,6 +391,37 @@ export function createServer(d: ServerDeps): Server {
         if (!w.enabled) throw new HttpError(404, "Not found");
         const ip = clientIp(req);
 
+        if (m === "GET" && path === "/web/reviews") {
+          limit(`reviews:${ip}`, 60, 60_000);
+          const reviews = store.listReviews(true).map(r => ({ rating: r.rating, comment: r.comment,
+            displayName: r.displayName, verified: true }));
+          return send(req, res, 200, { reviews });
+        }
+        const reviewOrder = /^\/web\/orders\/(\d+)\/review$/.exec(path);
+        if (m === "POST" && reviewOrder) {
+          const waId = webSession(req);
+          limit(`review:${waId}`, 15, HOUR);
+          const id = Number(reviewOrder[1]);
+          const order = store.getOrder(id);
+          if (!order || order.waId !== waId) throw new HttpError(404, "No such order");
+          if (order.status !== "done") throw new HttpError(409, "You can review this order after pickup.");
+          const b = await readJson(req);
+          const rating = b.rating;
+          const comment = typeof b.comment === "string" ? b.comment.trim() : "";
+          const name = typeof b.displayName === "string" ? b.displayName.trim() : "";
+          if (typeof rating !== "number" || !Number.isInteger(rating) || rating < 1 || rating > 5)
+            throw new HttpError(400, "Choose a rating from 1 to 5.");
+          if (!comment || comment.length > 500) throw new HttpError(400, "Please write a comment of 1–500 characters.");
+          // Do not accept contact details into content that can become public.
+          if (/@|https?:|www\.|(?:\+?\d[\s().-]*){7,}/i.test(comment))
+            throw new HttpError(400, "Please remove phone numbers, email addresses and links from your review.");
+          if (name && !/^[\p{L}\p{M}]{1,30}(?:['’-][\p{L}\p{M}]+)?$/u.test(name))
+            throw new HttpError(400, "Use only your first name, or leave it blank for privacy.");
+          if (!store.submitReview(waId, id, rating, comment, name || "Annapurna guest", now()))
+            throw new HttpError(409, "A review has already been submitted for this order.");
+          return send(req, res, 201, { ok: true, status: "pending" });
+        }
+
         if (m === "GET" && path === "/web/version") {
           limit(`version:${ip}`, 120, 60_000);
           return send(req, res, 200, { version: appVersion() });
@@ -518,7 +549,7 @@ export function createServer(d: ServerDeps): Server {
           limit(`poll:${waId}`, 60, 60_000);
           const s = store.getSettings();
           const orders = store.ordersFor(waId).map((o) => ({
-            id: o.id, status: o.status, pickup: o.pickup, pickupText: formatWhen(o.pickup), items: o.items.map(itemLabel), total: total(o.items), notes: o.notes, address: s.address,
+            id: o.id, status: o.status, reviewSubmitted: !!store.reviewForOrder(o.id), pickup: o.pickup, pickupText: formatWhen(o.pickup), items: o.items.map(itemLabel), total: total(o.items), notes: o.notes, address: s.address,
           }));
           return send(req, res, 200, { orders });
         }
@@ -553,6 +584,13 @@ export function createServer(d: ServerDeps): Server {
       /* ----- owner console ----- */
       if (path.startsWith("/api/")) {
         ownerAuth(req);
+        if (m === "GET" && path === "/api/reviews") return send(req, res, 200, { reviews: store.listReviews() });
+        const reviewAction = /^\/api\/reviews\/(\d+)\/(publish|hide|unpublish|delete)$/.exec(path);
+        if (m === "POST" && reviewAction) {
+          if (!store.moderateReview(Number(reviewAction[1]), reviewAction[2] as 'publish' | 'hide' | 'unpublish' | 'delete'))
+            throw new HttpError(404, "No such review");
+          return send(req, res, 200, { ok: true });
+        }
         if (m === "GET" && path === "/api/state") {
           const ownerChatResetAfterMessageId = store.ownerChatResetAfterMessageId();
           const customers = store
@@ -565,6 +603,7 @@ export function createServer(d: ServerDeps): Server {
           const contactOf = (waId: string) => store.getCustomer(waId)?.contact ?? "";
           const settings = store.getSettings();
           return send(req, res, 200, {
+            reviews: store.listReviews(),
             orders: store.listOrders().map((o) => ({ ...o, contact: contactOf(o.waId) })),
             alerts: store.listAlerts().map((a) => ({ ...a, contact: contactOf(a.waId) })),
             menu: store.getMenu(), settings, storeStatus: businessStatus(settings, now()), ownerLaunchAt: store.ownerFreshLaunchAt(),
