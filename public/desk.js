@@ -604,8 +604,25 @@ function renderRules() {
 }
 
 /* ---------- more / settings hub ---------- */
+function renderReviews() {
+  return [h("button", { class: "owner-back", onclick: () => { tab = "more"; render(); } }, "← More"),
+    h("h2", {}, "Reviews"), h("p", { class: "sub" }, "Verified order feedback. Publish only reviews safe for public display. Delete permanently removes the comment and display name."),
+    ...(state.reviews || []).map(r => h("article", { class: "card", style: "margin:12px 0;padding:20px;overflow-wrap:anywhere" },
+      h("b", {}, "Order #" + r.orderId + " · " + r.rating + "/5 · " + r.status),
+      h("p", {}, r.comment), h("small", {}, r.displayName + " · Verified order"),
+      h("div", { class: "actions" }, ...["publish", "hide", "unpublish", "delete"].map(action =>
+        h("button", { type: "button", onclick: () => {
+          if (action === "delete" && !confirm("Permanently delete this review? This cannot be undone.")) return;
+          act("/api/reviews/" + r.id + "/" + action, {});
+        } }, action[0].toUpperCase() + action.slice(1)))))),
+    !(state.reviews || []).length ? h("p", { class: "empty" }, "No reviews yet. Feedback will appear here after customers review picked-up orders.") : null];
+}
+
 function renderMore() {
   const cards = [
+    h("button", { class: "more-card", onclick: () => { tab = "reviews"; render(); } },
+      h("span", { class: "more-icon", "aria-hidden": "true" }, "☆"),
+      h("span", {}, h("b", {}, "Reviews"), h("small", {}, "Moderate verified order feedback"))),
     h("button", { class: "more-card", onclick: () => { tab = "menu"; render(); } },
       h("span", { class: "more-icon", "aria-hidden": "true" }, "☰"),
       h("span", {}, h("b", {}, "Menu management"), h("small", {}, "Prices, availability and ingredients"))),
@@ -662,13 +679,13 @@ function renderSim() {
 function renderTabs() {
   const need = state.orders.filter((o) => o.status === "hold").length + state.alerts.filter((a) => !a.done).length;
   const tabs = [["dashboard", "Dashboard"], ["orders", "Orders"], ["cook", "Kitchen"], ["chats", "Chats"], ["more", "More"]];
-  const selected = (k) => k === tab || (k === "more" && ["menu", "rules", "sim"].includes(tab));
+  const selected = (k) => k === tab || (k === "more" && ["menu", "rules", "sim", "reviews"].includes(tab));
   $("tabs").replaceChildren(...tabs.map(([k, t]) => h("button", { role: "tab", "aria-selected": String(selected(k)), onclick: () => { tab = k; cook = null; if (k === "chats") chat = { waId: "", messages: [], customer: null }; render(); } }, t, k === "orders" && need ? h("span", { class: "badge" }, need) : null)));
 }
 function render() {
   document.body.classList.toggle("chat-open-mobile", tab === "chats" && !!chat.waId);
   renderTabs();
-  const body = tab === "dashboard" ? renderDashboard() : tab === "orders" ? renderOrders() : tab === "chats" ? renderChats() : tab === "cook" ? renderCook() : tab === "menu" ? renderMenu() : tab === "rules" ? renderRules() : tab === "more" ? renderMore() : renderSim();
+  const body = tab === "dashboard" ? renderDashboard() : tab === "orders" ? renderOrders() : tab === "chats" ? renderChats() : tab === "cook" ? renderCook() : tab === "menu" ? renderMenu() : tab === "rules" ? renderRules() : tab === "reviews" ? renderReviews() : tab === "more" ? renderMore() : renderSim();
   $("panel").replaceChildren(...[body].flat());
   const box = $("thread");
   if (box) box.scrollTop = box.scrollHeight;

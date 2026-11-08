@@ -2284,6 +2284,15 @@ html[data-theme="dark"] body.customer-mode #startForm input:-webkit-autofill{
   box-shadow:0 0 0 1000px #17231b inset!important;
 }
 </style>
+<style>
+.customer-reviews{background:#faf5e8;color:#244c38;border:1px solid #dce2cc;border-radius:24px;padding:24px;margin:24px 0}
+.review-heading span{font-size:11px;letter-spacing:1.5px;color:#775d20}.review-heading h3{font:600 25px/1.2 Georgia,serif;margin:8px 0;color:#164e38}
+.review-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:16px;max-height:580px;overflow:auto}
+.review-card{background:#fffdf6;border:1px solid #e4e6d7;border-radius:18px;padding:20px;overflow-wrap:anywhere}
+.review-card p{white-space:pre-wrap;line-height:1.6}.review-card small{display:block;color:#42634b;margin-top:6px}
+.review-stars{color:#775d20;letter-spacing:3px;font-size:21px}
+.review-form{display:grid;gap:16px}.review-form label{display:grid;gap:8px}.review-form input,.review-form textarea,.review-form select{width:100%;box-sizing:border-box;font:inherit;padding:12px;border:1px solid #a7b69e;border-radius:12px;background:#fffdf6;color:#244c38}
+</style>
 </head>
 <body>
 <template id="tplMascot">
@@ -2395,6 +2404,12 @@ html[data-theme="dark"] body.customer-mode #startForm input:-webkit-autofill{
 
     <section class="home-active" id="homeActive" hidden></section>
 
+    <section class="customer-reviews" aria-labelledby="reviewsTitle">
+      <div class="review-heading"><span>FROM OUR COMMUNITY</span><h3 id="reviewsTitle">A little love from your table</h3></div>
+      <p>Real meals. Feedback from verified orders.</p>
+      <div id="publicReviewList" class="review-grid" aria-live="polite"><p>Loading reviews…</p></div>
+    </section>
+
     <div class="heritage-signoff" aria-label="Annapurna tradition">ఇంటి రుచి · Inti Ruchi · Mana Sampradayam</div>
 
     <section class="home-promise">
@@ -2439,6 +2454,11 @@ html[data-theme="dark"] body.customer-mode #startForm input:-webkit-autofill{
       <div class="daily-status-copy"><small>Today's status</small><h3 id="onboardStatusTitle">Open Today</h3><p id="onboardStatusText">We're taking orders today.</p><div class="onboard-status-days" id="onboardStatusDays"></div></div>
     </section>
     <p class="tiny">You can delete your chat any time from Help. Placed orders are kept so we can cook them.</p>
+    <section class="customer-reviews" aria-labelledby="onboardReviewsTitle">
+      <div class="review-heading"><span>FROM OUR COMMUNITY</span><h3 id="onboardReviewsTitle">A little love from your table</h3></div>
+      <p>Real meals. Feedback from verified orders.</p>
+      <div id="onboardReviewList" class="review-grid" aria-live="polite"><p>Loading reviews…</p></div>
+    </section>
   </main>
 
   <section class="chat" id="chat" hidden>

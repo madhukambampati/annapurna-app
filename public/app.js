@@ -759,6 +759,10 @@
         h("div", {}, h("span", { class: "ord-kicker" }, "Order"), h("b", {}, "#" + o.id)),
         h("span", { class: "st " + st[1] }, st[0]));
       var actions = [];
+      if (o.status === "done") {
+        actions.push(o.reviewSubmitted ? h("span", { class: "tiny" }, "Review received · thank you") :
+          h("button", { class: "btn sm", type: "button", onclick: function () { showReviewForm(o); } }, "Review your meal"));
+      }
       if (o.status === "ready" && o.address) {
         actions.push(h("a", { class: "btn sm", href: "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(o.address), target: "_blank", rel: "noopener noreferrer" }, icon("pin"), "Directions"));
       }
@@ -783,6 +787,45 @@
       ));
     });
   }
+
+  function showReviewForm(o) {
+    openSheet("review", "Review order #" + o.id);
+    var stars = h("select", { required: true, "aria-label": "Star rating" },
+      h("option", { value: "" }, "Choose your rating"), [1,2,3,4,5].map(function (n) {
+        return h("option", { value: n }, "★".repeat(n) + " · " + n + " of 5");
+      }));
+    var comment = h("textarea", { required: true, maxlength: 500, rows: 4, "aria-label": "Your review", placeholder: "How was your meal? (up to 500 characters)" });
+    var name = h("input", { maxlength: 30, autocomplete: "off", "aria-label": "Public first name (optional)", placeholder: "First name (optional)" });
+    var submit = h("button", { class: "btn", type: "submit" }, "Send review");
+    var error = h("p", { role: "alert" });
+    var form = h("form", { class: "review-form", onsubmit: function (e) {
+      e.preventDefault(); submit.disabled = true; error.textContent = "";
+      api("POST", "/web/orders/" + o.id + "/review", { rating: Number(stars.value), comment: comment.value, displayName: name.value })
+        .then(function () { o.reviewSubmitted = true; showOrders(); toast("Thank you! Your review is awaiting owner approval."); })
+        .catch(function (e) { error.textContent = errText(e); submit.disabled = false; });
+    } }, h("p", {}, "One review per picked-up order. Reviews appear publicly only after owner approval."),
+      h("label", {}, "Your rating", stars), h("label", {}, "Short comment", comment),
+      h("label", {}, "Public first name (optional)", name),
+      h("p", { class: "tiny" }, "Leave your name blank to appear as Annapurna guest. Please keep phone numbers, email addresses and other personal details out of your review."), error, submit);
+    $("sheetBody").replaceChildren(form); stars.focus();
+  }
+
+  function loadPublicReviews() {
+    fetch("/web/reviews").then(function (r) { if (!r.ok) throw new Error("reviews unavailable"); return r.json(); }).then(function (j) {
+      ["publicReviewList", "onboardReviewList"].forEach(function (id) {
+      var list = $(id); if (!list) return;
+      list.replaceChildren();
+      if (!j.reviews.length) { list.append(h("p", {}, "Your table, your stories. Reviews from picked-up orders will appear here once published.")); return; }
+      j.reviews.forEach(function (r) {
+        list.append(h("article", { class: "review-card" },
+          h("span", { class: "review-stars", "aria-label": r.rating + " out of 5 stars" }, "★".repeat(r.rating) + "☆".repeat(5-r.rating)),
+          h("p", {}, r.comment), h("b", {}, r.displayName), h("small", {}, "✓ Verified order")));
+      });
+      });
+    }).catch(function () { ["publicReviewList", "onboardReviewList"].forEach(function (id) { var list = $(id); if (list) list.textContent = "Reviews are temporarily unavailable."; }); });
+  }
+  loadPublicReviews();
+  setInterval(loadPublicReviews, 60000);
 
   function requestCancellation(o) {
     var ok = window.confirm("Send a cancellation request for order #" + o.id + " to Annapurna Home Foods? The order stays active until the team confirms the cancellation.");
