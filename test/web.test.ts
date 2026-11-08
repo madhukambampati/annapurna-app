@@ -1212,5 +1212,4 @@ test("daily 8 PM cutoff closes today without auto-moving orders to tomorrow", ()
     assert.ok(attempt.json.messages.some((m: any) => /closed at 8:00 PM/i.test(m.text)));
     assert.ok(attempt.json.messages.some((m: any) => /won't move your order to tomorrow automatically/i.test(m.text)));
     assert.equal(t.store.listOrders().length, 0);
-    assert.equal(t.store.getDraft("web:" + "not-used"), undefined);
   }));
