@@ -158,18 +158,25 @@ function renderDashboard() {
       return sum + (t == null ? 0 : t);
     }, 0);
 
-  const ss = state.storeStatus || { today, open: true, week: [] };
+  const ss = state.storeStatus || { today, open: true, manualOpen: true, week: [] };
+  const cutoff = ss.closedReason === "cutoff";
+  const manualOpen = ss.manualOpen !== false;
   const setDay = (date, open) => act("/api/store-status", { date, open });
   const storeCard = h("section", { class: "owner-store-status " + (ss.open ? "is-open" : "is-closed") },
     h("div", { class: "owner-store-main" },
       h("span", { class: "owner-store-icon", "aria-hidden": "true" }, ss.open ? "✓" : "×"),
-      h("div", {}, h("small", {}, "TODAY'S STORE STATUS"), h("strong", {}, ss.open ? "Open today" : "Closed today"), h("span", {}, ss.open ? "Customers can place new orders." : "Customers can browse, but new orders are blocked."))),
+      h("div", {},
+        h("small", {}, "TODAY'S STORE STATUS"),
+        h("strong", {}, cutoff ? "Closed for today" : ss.open ? "Open today" : "Closed today"),
+        h("span", {}, cutoff ? "Automatic 8:00 PM cutoff. Future-day orders can still be placed." : ss.open ? "Customers can place new orders." : "Customers can browse, but new orders are blocked."))),
     h("div", { class: "owner-store-actions" },
-      h("button", { class: ss.open ? "pri" : "ghost", disabled: !!ss.open, onclick: () => setDay(ss.today, true) }, "Open today"),
-      h("button", { class: ss.open ? "ghost danger" : "pri danger", disabled: !ss.open, onclick: () => setDay(ss.today, false) }, "Close today")),
-    h("div", { class: "owner-week-switches" }, (ss.week || []).map((d) =>
-      h("button", { class: "owner-day-switch " + (d.open ? "open" : "closed") + (d.today ? " today" : ""), onclick: () => setDay(d.date, !d.open), title: "Click to mark " + d.day + " " + (d.open ? "closed" : "open") },
-        h("b", {}, String(d.day || "").slice(0,3)), h("span", {}, d.label || d.date), h("em", {}, d.open ? "Open" : "Closed")))));
+      h("button", { class: manualOpen ? "pri" : "ghost", disabled: manualOpen, onclick: () => setDay(ss.today, true) }, "Open today"),
+      h("button", { class: manualOpen ? "ghost danger" : "pri danger", disabled: !manualOpen, onclick: () => setDay(ss.today, false) }, "Close full day")),
+    h("div", { class: "owner-week-switches" }, (ss.week || []).map((d) => {
+      const dayManualOpen = d.manualOpen !== false;
+      return h("button", { class: "owner-day-switch " + (d.open ? "open" : "closed") + (d.today ? " today" : ""), onclick: () => setDay(d.date, !dayManualOpen), title: "Click to mark " + d.day + " " + (dayManualOpen ? "closed" : "open") },
+        h("b", {}, String(d.day || "").slice(0,3)), h("span", {}, d.label || d.date), h("em", {}, d.closedReason === "cutoff" ? "8 PM cutoff" : d.open ? "Open" : "Closed"));
+    })));
 
   const kpis = h("section", { class: "owner-kpis", "aria-label": "Kitchen overview" },
     h("div", { class: "owner-kpi kpi-cook", style: "--tone:#1d6b4d", "data-icon": "♨" }, h("small", {}, "To cook"), h("strong", {}, cooking), h("span", {}, "Confirmed orders")),
