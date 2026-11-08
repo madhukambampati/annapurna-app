@@ -6,7 +6,7 @@ import type { Config } from "./config.js";
 import { customTermsKey } from "./custom.js";
 import { cookSummary } from "./cook.js";
 import { RateLimiter } from "./limiter.js";
-import { dayRange, itemDays, itemLabel, money, storeOpenOn, total } from "./menu.js";
+import { DAILY_ORDER_CUTOFF_HOUR, afterDailyOrderCutoff, dayRange, itemDays, itemLabel, money, storeOpenOn, total } from "./menu.js";
 import { friendlyName } from "./guards.js";
 import type { Store } from "./store.js";
 import { DAYN, dayLabel, formatWhen, nextDateForDow, pad, zonedParts } from "./time.js";
@@ -27,20 +27,35 @@ function validDateKey(value: string): boolean {
 function businessStatus(s: Settings, epoch: number) {
   const p = zonedParts(epoch, s.tz);
   const today = `${p.y}-${pad(p.m)}-${pad(p.d)}`;
+  const manualOpen = storeOpenOn(s, today);
+  const cutoffReached = manualOpen && afterDailyOrderCutoff(s, epoch);
   const sinceMonday = (p.dow + 6) % 7;
   const monday = new Date(Date.UTC(p.y, p.m - 1, p.d - sinceMonday));
   const week = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday.getTime() + i * DAY);
     const date = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+    const dayManualOpen = storeOpenOn(s, date);
+    const isToday = date === today;
     return {
       date,
       day: DAYN[d.getUTCDay()],
       label: d.toLocaleDateString("en-CA", { timeZone: "UTC", month: "short", day: "numeric" }),
-      open: storeOpenOn(s, date),
-      today: date === today,
+      open: dayManualOpen && !(isToday && cutoffReached),
+      manualOpen: dayManualOpen,
+      today: isToday,
+      closedReason: !dayManualOpen ? "manual" : isToday && cutoffReached ? "cutoff" : null,
     };
   });
-  return { today, open: storeOpenOn(s, today), week };
+  return {
+    today,
+    open: manualOpen && !cutoffReached,
+    manualOpen,
+    closedReason: !manualOpen ? "manual" : cutoffReached ? "cutoff" : null,
+    futureOrdersAllowed: cutoffReached,
+    cutoffHour: DAILY_ORDER_CUTOFF_HOUR,
+    cutoffLabel: "8:00 PM",
+    week,
+  };
 }
 
 const ALLOWED: Record<OrderStatus, OrderStatus[]> = {
