@@ -216,7 +216,7 @@ function renderDashboard() {
 
   if (activeAlerts + held) {
     out.push(h("div", { class: "owner-callout" },
-      h("div", {}, h("strong", {}, (activeAlerts + held) + " item" + (activeAlerts + held === 1 ? "" : "s") + " need you"), h("span", {}, " · Review held orders or customer requests before cooking.")),
+      h("div", {}, h("strong", {}, (activeAlerts + held) + " item" + (activeAlerts + held === 1 ? " needs" : "s need") + " you"), h("span", {}, " · Review held orders or customer requests before cooking.")),
       h("button", { class: "pri", onclick: () => { tab = "orders"; render(); } }, "Review now")));
   }
 
@@ -369,7 +369,10 @@ function renderOrders() {
   }
 
   if (!orderPool.length && !open.length) {
-    out.push(h("div", { class: "empty owner-empty-large" }, h("b", {}, "No orders yet"), h("span", {}, "Customer orders will appear here as soon as they are submitted.")));
+    const searching = !!orderQuery;
+    out.push(h("div", { class: "empty owner-empty-large" },
+      h("b", {}, searching ? "No orders match your search" : "No orders yet"),
+      h("span", {}, searching ? "Try another search or clear the filter." : "Customer orders will appear here as soon as they are submitted.")));
     return out;
   }
 
