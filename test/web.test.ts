@@ -1191,3 +1191,26 @@ test("Oct 23-25 2026 closure seed marks the requested weekend closed", () =>
     assert.equal(s.dayOpen?.["2026-10-24"], false);
     assert.equal(s.dayOpen?.["2026-10-25"], false);
   }));
+
+
+test("daily 8 PM cutoff closes today without auto-moving orders to tomorrow", () =>
+  withRig(async ({ t, call, start, say, advance }) => {
+    const toCutoff = 8 * 60 * 60 * 1000; // test clock starts at noon
+    advance(toCutoff);
+    t.setNow(NOW + toCutoff);
+
+    const menu = await call("GET", "/web/menu");
+    assert.equal(menu.status, 200);
+    assert.equal(menu.json.storeStatus.open, false);
+    assert.equal(menu.json.storeStatus.closedReason, "cutoff");
+    assert.equal(menu.json.storeStatus.futureOrdersAllowed, true);
+    assert.equal(menu.json.storeStatus.cutoffLabel, "8:00 PM");
+
+    const token = await start("Asha", "asha@example.com");
+    const attempt = await say(token, "I want the Bagara Rice and Chicken Fry combo");
+    assert.equal(attempt.json.orderId, null);
+    assert.ok(attempt.json.messages.some((m: any) => /closed at 8:00 PM/i.test(m.text)));
+    assert.ok(attempt.json.messages.some((m: any) => /won't move your order to tomorrow automatically/i.test(m.text)));
+    assert.equal(t.store.listOrders().length, 0);
+    assert.equal(t.store.getDraft("web:" + "not-used"), undefined);
+  }));
