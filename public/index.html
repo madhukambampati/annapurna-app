@@ -2100,6 +2100,49 @@ html[data-theme="dark"] .daily-status-onboard:not(.open),html[data-theme="dark"]
 html[data-theme="dark"] .daily-status-onboard:not(.open) .status-calendar,html[data-theme="dark"] .daily-status-home:not(.open) .status-calendar{background:#4a201c;color:#ff9b8f}
 html[data-theme="dark"] .daily-status-onboard:not(.open) .daily-status-copy h3,html[data-theme="dark"] .daily-status-home:not(.open) .daily-status-copy h3,html[data-theme="dark"] .store-closed-note strong{color:#ff9b8f}
 </style>
+<style id="themeInputContrastFix">
+/* Keep typed customer text readable even when older visual layers force light paper fields. */
+html[data-theme="light"] body.customer-mode #startForm input[type="text"],
+html[data-theme="light"] body.customer-mode #startForm input[type="tel"],
+html[data-theme="light"] body.customer-mode #startForm input[type="email"],
+html[data-theme="light"] body.customer-mode .composer textarea{
+  background:#fffaf0!important;
+  color:#1b2a21!important;
+  -webkit-text-fill-color:#1b2a21!important;
+  caret-color:#1d6b4d!important;
+}
+html[data-theme="light"] body.customer-mode #startForm input::placeholder,
+html[data-theme="light"] body.customer-mode .composer textarea::placeholder{
+  color:#7c897f!important;
+  -webkit-text-fill-color:#7c897f!important;
+  opacity:1!important;
+}
+html[data-theme="dark"] body.customer-mode #startForm input[type="text"],
+html[data-theme="dark"] body.customer-mode #startForm input[type="tel"],
+html[data-theme="dark"] body.customer-mode #startForm input[type="email"],
+html[data-theme="dark"] body.customer-mode .composer textarea{
+  background:#17231b!important;
+  color:#eaf1e6!important;
+  -webkit-text-fill-color:#eaf1e6!important;
+  caret-color:#5cc79a!important;
+  border-color:#465a4c!important;
+}
+html[data-theme="dark"] body.customer-mode #startForm input::placeholder,
+html[data-theme="dark"] body.customer-mode .composer textarea::placeholder{
+  color:#91a397!important;
+  -webkit-text-fill-color:#91a397!important;
+  opacity:1!important;
+}
+/* Chrome/Safari autofill can otherwise reintroduce pale text on a pale field. */
+html[data-theme="light"] body.customer-mode #startForm input:-webkit-autofill{
+  -webkit-text-fill-color:#1b2a21!important;
+  box-shadow:0 0 0 1000px #fffaf0 inset!important;
+}
+html[data-theme="dark"] body.customer-mode #startForm input:-webkit-autofill{
+  -webkit-text-fill-color:#eaf1e6!important;
+  box-shadow:0 0 0 1000px #17231b inset!important;
+}
+</style>
 </head>
 <body>
 <template id="tplMascot">
