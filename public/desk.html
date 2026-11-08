@@ -786,6 +786,59 @@ html[data-theme="dark"] body.owner-mode .owner-page-title h2{color:#edf4e9!impor
 .owner-day-switch.closed{background:color-mix(in srgb,#fde4df 65%,var(--panel));border-color:color-mix(in srgb,#c94f45 28%,var(--line))}.owner-day-switch.closed em{color:#b83527}.owner-day-switch.today{box-shadow:inset 0 0 0 2px color-mix(in srgb,#f1a824 70%,transparent)}
 @media(max-width:720px){.owner-store-status{grid-template-columns:1fr}.owner-store-actions{width:100%}.owner-store-actions button{flex:1}.owner-week-switches{grid-template-columns:repeat(7,minmax(52px,1fr));overflow-x:auto}.owner-day-switch{min-width:52px}}
 </style>
+<style id="ownerDarkContrastFixV1">
+/* U3/U6: WCAG-oriented contrast repairs for Owner Desk dark mode. */
+html[data-theme="dark"] body.owner-mode{
+  --muted:#c3d0c6;
+  --line:#3a5140;
+  --line2:#4b6351;
+}
+html[data-theme="dark"] body.owner-mode .tabs button{
+  color:#c9d6cc!important;
+}
+html[data-theme="dark"] body.owner-mode .tabs button[aria-selected="true"]{
+  color:#06210f!important;
+}
+html[data-theme="dark"] body.owner-mode .sub,
+html[data-theme="dark"] body.owner-mode .owner-kpi small,
+html[data-theme="dark"] body.owner-mode .owner-kpi span,
+html[data-theme="dark"] body.owner-mode .owner-store-main small,
+html[data-theme="dark"] body.owner-mode .owner-store-main span,
+html[data-theme="dark"] body.owner-mode .lane-count,
+html[data-theme="dark"] body.owner-mode .history>summary,
+html[data-theme="dark"] body.owner-mode .owner-note,
+html[data-theme="dark"] body.owner-mode .more-card small{
+  color:#c3d0c6!important;
+  opacity:1!important;
+}
+html[data-theme="dark"] body.owner-mode .owner-brand .sub{
+  color:#f3d787!important;
+  opacity:1!important;
+}
+html[data-theme="dark"] body.owner-mode .owner-kpi strong,
+html[data-theme="dark"] body.owner-mode .owner-page-title h2,
+html[data-theme="dark"] body.owner-mode h2,
+html[data-theme="dark"] body.owner-mode h3{
+  color:#eef5ef!important;
+}
+html[data-theme="dark"] body.owner-mode .owner-day-switch.closed{
+  background:#3a211e!important;
+  border-color:#8f5049!important;
+  color:#f2e9e6!important;
+}
+html[data-theme="dark"] body.owner-mode .owner-day-switch.closed b{
+  color:#f2e9e6!important;
+}
+html[data-theme="dark"] body.owner-mode .owner-day-switch.closed span{
+  color:#d8c1bd!important;
+}
+html[data-theme="dark"] body.owner-mode .owner-day-switch.closed em{
+  background:#7b3029!important;
+  color:#fff2ef!important;
+  border-radius:999px;
+  padding:2px 6px;
+}
+</style>
 </head>
 <body class="owner-mode">
 <header class="owner-head">
