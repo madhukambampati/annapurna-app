@@ -411,7 +411,7 @@ export function createServer(d: ServerDeps): Server {
           const name = typeof b.displayName === "string" ? b.displayName.trim() : "";
           if (typeof rating !== "number" || !Number.isInteger(rating) || rating < 1 || rating > 5)
             throw new HttpError(400, "Choose a rating from 1 to 5.");
-          if (!comment || comment.length > 500) throw new HttpError(400, "Please write a comment of 1–500 characters.");
+          if (comment.length > 500) throw new HttpError(400, "Please keep your optional comment within 500 characters.");
           // Do not accept contact details into content that can become public.
           if (/@|https?:|www\.|(?:\+?\d[\s().-]*){7,}/i.test(comment))
             throw new HttpError(400, "Please remove phone numbers, email addresses and links from your review.");

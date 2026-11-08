@@ -4,7 +4,7 @@ Reviews use the app's existing SQLite database (`DB_PATH`). Startup adds only th
 
 Customers use **Orders → picked-up order → Review your meal** in the same browser session used for the order. Ready, cancelled, held and cooking orders cannot be reviewed. Possession of an order number or matching contact details grants no access. There is no review access recovery or invitation link for phone/WhatsApp orders in this release.
 
-A review needs an integer rating of 1–5 and a trimmed comment of 1–500 characters. A first name is optional and never copied from the order/customer record; blank names display as **Annapurna guest**. Direct email addresses, phone numbers and links are rejected in comments. Owners must still check for other personal details before publishing. Content is rendered as text, never HTML.
+A review needs an integer rating of 1–5 and an optional comment of up to 500 characters. Only the star rating is required. A first name is optional and never copied from the order/customer record; blank names display as **Annapurna guest**. Direct email addresses, phone numbers and links are rejected in comments. Owners must still check for other personal details before publishing. Content is rendered as text, never HTML.
 
 Reviews start **pending**. **More → Reviews** preserves the existing main navigation and supports:
 

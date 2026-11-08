@@ -794,7 +794,7 @@
       h("option", { value: "" }, "Choose your rating"), [1,2,3,4,5].map(function (n) {
         return h("option", { value: n }, "★".repeat(n) + " · " + n + " of 5");
       }));
-    var comment = h("textarea", { required: true, maxlength: 500, rows: 4, "aria-label": "Your review", placeholder: "How was your meal? (up to 500 characters)" });
+    var comment = h("textarea", { maxlength: 500, rows: 4, "aria-label": "Your review", placeholder: "How was your meal? (optional, up to 500 characters)" });
     var name = h("input", { maxlength: 30, autocomplete: "off", "aria-label": "Public first name (optional)", placeholder: "First name (optional)" });
     var submit = h("button", { class: "btn", type: "submit" }, "Send review");
     var error = h("p", { role: "alert" });
@@ -804,7 +804,7 @@
         .then(function () { o.reviewSubmitted = true; showOrders(); toast("Thank you! Your review is awaiting owner approval."); })
         .catch(function (e) { error.textContent = errText(e); submit.disabled = false; });
     } }, h("p", {}, "One review per picked-up order. Reviews appear publicly only after owner approval."),
-      h("label", {}, "Your rating", stars), h("label", {}, "Short comment", comment),
+      h("label", {}, "Your rating", stars), h("label", {}, "Short comment (optional)", comment),
       h("label", {}, "Public first name (optional)", name),
       h("p", { class: "tiny" }, "Leave your name blank to appear as Annapurna guest. Please keep phone numbers, email addresses and other personal details out of your review."), error, submit);
     $("sheetBody").replaceChildren(form); stars.focus();
@@ -819,7 +819,7 @@
       j.reviews.forEach(function (r) {
         list.append(h("article", { class: "review-card" },
           h("span", { class: "review-stars", "aria-label": r.rating + " out of 5 stars" }, "★".repeat(r.rating) + "☆".repeat(5-r.rating)),
-          h("p", {}, r.comment), h("b", {}, r.displayName), h("small", {}, "✓ Verified order")));
+          r.comment ? h("p", {}, r.comment) : null, h("b", {}, r.displayName), h("small", {}, "✓ Verified order")));
       });
       });
     }).catch(function () { ["publicReviewList", "onboardReviewList"].forEach(function (id) { var list = $(id); if (list) list.textContent = "Reviews are temporarily unavailable."; }); });

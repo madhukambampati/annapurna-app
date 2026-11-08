@@ -1230,7 +1230,7 @@ test("verified reviews enforce pickup, session ownership, validation, moderation
     assert.equal((await submit()).status, 409);
     t.store.setOrderStatus(order.id, "done");
     for (const rating of [0, 6, 2.5, "5", null]) assert.equal((await submit({ ...body, rating })).status, 400);
-    for (const comment of ["", "a".repeat(501), "email me a@b.com", "Call 519-804-3658"])
+    for (const comment of ["a".repeat(501), "email me a@b.com", "Call 519-804-3658"])
       assert.equal((await submit({ ...body, comment })).status, 400);
     assert.equal((await submit({ ...body, displayName: "Full Name" })).status, 400);
     assert.equal((await submit()).status, 201);
@@ -1255,5 +1255,29 @@ test("verified reviews enforce pickup, session ownership, validation, moderation
     assert.deepEqual((await call("GET", "/api/reviews", { token: "secret" })).json.reviews, []);
     assert.equal((await moderate("publish")).status, 404);
     assert.equal((await submit()).status, 409);
+  }, { web: { enabled: true } });
+});
+
+
+test("star-only reviews accept omitted, empty and whitespace comments and stay moderated", async () => {
+  await withRig(async ({ t, call, start }) => {
+    const token = await start();
+    const customer = t.store.listCustomers().find(c => c.name === "Asha")!;
+    for (const comment of [undefined, "", "   "]) {
+      const order = t.store.insertOrder({ waId: customer.waId, name: customer.name, items: [], pickup: null,
+        flags: [], status: "done", notes: "", createdAt: NOW });
+      const path = `/web/orders/${order.id}/review`;
+      assert.equal((await call("POST", path, { token, body: { comment } })).status, 400);
+      assert.equal((await call("POST", path, { token, body: { rating: 4, comment } })).status, 201);
+      const review = t.store.listReviews().find(r => r.orderId === order.id)!;
+      assert.equal(review.comment, "");
+      assert.equal(review.displayName, "Annapurna guest");
+      assert.equal(review.status, "pending");
+      assert.deepEqual((await call("GET", "/web/reviews")).json.reviews, []);
+    }
+    const review = t.store.listReviews()[0]!;
+    await call("POST", `/api/reviews/${review.id}/publish`, { token: "secret" });
+    assert.deepEqual((await call("GET", "/web/reviews")).json.reviews,
+      [{ rating: 4, comment: "", displayName: "Annapurna guest", verified: true }]);
   }, { web: { enabled: true } });
 });

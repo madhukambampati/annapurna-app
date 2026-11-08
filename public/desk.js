@@ -609,13 +609,13 @@ function renderReviews() {
     h("h2", {}, "Reviews"), h("p", { class: "sub" }, "Verified order feedback. Publish only reviews safe for public display. Delete permanently removes the comment and display name."),
     ...(state.reviews || []).map(r => h("article", { class: "card", style: "margin:12px 0;padding:20px;overflow-wrap:anywhere" },
       h("b", {}, "Order #" + r.orderId + " · " + r.rating + "/5 · " + r.status),
-      h("p", {}, r.comment), h("small", {}, r.displayName + " · Verified order"),
-      h("div", { class: "actions" }, ...["publish", "hide", "unpublish", "delete"].map(action =>
+      r.comment ? h("p", {}, r.comment) : h("p", { class: "sub" }, "Star rating only · no comment"), h("small", {}, r.displayName + " · Verified order"),
+      h("div", { class: "review-actions" }, ...["publish", "hide", "unpublish", "delete"].map(action =>
         h("button", { type: "button", onclick: () => {
           if (action === "delete" && !confirm("Permanently delete this review? This cannot be undone.")) return;
           act("/api/reviews/" + r.id + "/" + action, {});
         } }, action[0].toUpperCase() + action.slice(1)))))),
-    !(state.reviews || []).length ? h("p", { class: "empty" }, "No reviews yet. Feedback will appear here after customers review picked-up orders.") : null];
+    ...(!(state.reviews || []).length ? [h("p", { class: "empty" }, "No reviews yet. Feedback will appear here after customers review picked-up orders.")] : [])];
 }
 
 function renderMore() {
