@@ -2100,6 +2100,29 @@ body.customer-mode{
 }
 .theme-toggle{display:none!important}
 </style>
+<style id="uiTestRoundFixesV1">
+/* U2: give the pre-login status card its own desktop grid row so it never collides with the form. */
+@media(min-width:760px){
+  body.customer-mode .onboard{
+    grid-template-areas:
+      "hero form"
+      "steps form"
+      "trust form"
+      "status form"
+      "tiny form"!important;
+  }
+  body.customer-mode .onboard>#onboardStoreStatus{grid-area:status!important;align-self:start!important;margin:0!important}
+  body.customer-mode .onboard>#startForm{align-self:start!important}
+}
+/* U7: remove the leftover floating decorative label from the first promise tile. */
+body.customer-mode .home-promise>div:nth-child(1)::after{
+  content:none!important;
+  display:none!important;
+}
+/* Keep promise/footer copy high-contrast on the single supported customer light theme. */
+body.customer-mode .home-promise b{color:#173d2e!important}
+body.customer-mode .home-promise small{color:#56645a!important}
+</style>
 <style id="customerLightReadabilityFix">
 /* Final light-theme contrast guard for home/footer/status text. */
 body.customer-mode .home-promise>div{
@@ -2334,7 +2357,6 @@ html[data-theme="dark"] body.customer-mode #startForm input:-webkit-autofill{
       <span class="status-calendar"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 8h16M5 5h14v15H5z"/></svg></span>
       <div class="daily-status-copy"><small>Today's status</small><h3 id="onboardStatusTitle">Open Today</h3><p id="onboardStatusText">We're taking orders today.</p><div class="onboard-status-days" id="onboardStatusDays"></div></div>
     </section>
-    <p class="tiny"><strong>Payment:</strong> Interac e-Transfer or cash at pickup. Your pickup time is confirmed with your order.</p>
     <p class="tiny">You can delete your chat any time from Help. Placed orders are kept so we can cook them.</p>
   </main>
 
