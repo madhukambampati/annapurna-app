@@ -845,7 +845,7 @@
       price.append(h("div", { class: "price-row" }, h("span", { class: "lab" }, x.kind === "combo" ? "Single" : x.kind === "addon" ? "Each" : "Price"), h("span", { class: "amt" }, money(x.single))));
       if (x.kind === "combo" && x.bogo != null) price.append(h("div", { class: "price-row" }, h("span", { class: "lab" }, "Buy 1 Get 1"), h("span", { class: "amt alt" }, money(x.bogo))));
     }
-    if (!off && !noPrice && !storeClosed) {
+    if (!off && !noPrice && !storeClosed && !cutoffOnly) {
       price.append(h("button", { class: "btn sm", type: "button", onclick: function () {
         var choice = "I'd like to order the " + x.name + " ";
         closeSheet();
