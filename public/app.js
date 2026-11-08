@@ -219,19 +219,26 @@
 
   /* ---------- customer home ---------- */
   function isStoreClosed() { return !!storeStatus && storeStatus.open === false; }
+  function isCutoffClosed() { return !!storeStatus && storeStatus.closedReason === "cutoff"; }
+  function blocksAllNewOrders() { return isStoreClosed() && !storeStatus.futureOrdersAllowed; }
 
   function renderStoreStatus() {
     if (!storeStatus) return;
     var closed = isStoreClosed();
+    var cutoff = isCutoffClosed();
+    var blockedAll = blocksAllNewOrders();
     document.body.classList.toggle("store-closed", closed);
-    var title = closed ? "Closed Today" : "Open Today";
+    document.body.classList.toggle("store-cutoff", cutoff);
+    var title = cutoff ? "Orders Closed for Today" : closed ? "Closed Today" : "Open Today";
     var upcomingClosed = (storeStatus.week || []).filter(function (d) {
       return !d.open && !d.today && (!storeStatus.today || d.date >= storeStatus.today);
     }).slice(0, 3);
     var closedNames = upcomingClosed.map(function (d) { return String(d.day || "").slice(0, 3) + " " + (d.label || d.date); });
-    var copy = closed
-      ? "We're not taking new orders today." + (closedNames.length ? " Also closed " + closedNames.join(" & ") + "." : "") + " You can still browse the menu and weekly plan."
-      : "We're taking orders today. Browse the menu or start an order with Vindhu.";
+    var copy = cutoff
+      ? "Today's ordering closed at " + (storeStatus.cutoffLabel || "8:00 PM") + ". You can still browse the menu and place an order for a future day."
+      : closed
+        ? "We're not taking new orders today." + (closedNames.length ? " Also closed " + closedNames.join(" & ") + "." : "") + " You can still browse the menu and weekly plan."
+        : "We're taking orders today. Browse the menu or start an order with Vindhu.";
     [["onboardStoreStatus","onboardStatusTitle","onboardStatusText"],["homeStoreStatus","homeStatusTitle","homeStatusText"]].forEach(function (ids) {
       var box = $(ids[0]); if (!box) return;
       box.hidden = false; box.classList.toggle("open", !closed);
@@ -258,15 +265,15 @@
     }
     var start = $("homeOrder");
     if (start) {
-      start.disabled = closed;
+      start.disabled = blockedAll;
       var b = start.querySelector("b"), sm = start.querySelector("small");
-      if (b) b.textContent = closed ? "Closed today" : "Start an order";
-      if (sm) sm.textContent = closed ? "Browse menu or plan ahead" : "Chat with Vindhu";
+      if (b) b.textContent = cutoff ? "Plan a future order" : blockedAll ? "Closed today" : "Start an order";
+      if (sm) sm.textContent = cutoff ? "Today closed after 8 PM" : blockedAll ? "Browse menu or plan ahead" : "Chat with Vindhu";
     }
     var startBtn = $("startBtn");
-    if (startBtn && !startBtn.disabled) startBtn.textContent = closed ? "Continue with Vindhu" : "Start ordering with Vindhu";
+    if (startBtn && !startBtn.disabled) startBtn.textContent = cutoff ? "Plan a future order with Vindhu" : closed ? "Continue with Vindhu" : "Start ordering with Vindhu";
     var text = $("text");
-    if (text) text.placeholder = closed ? "Ask about the menu, weekly plan or a future pickup" : "Type your order or a question";
+    if (text) text.placeholder = cutoff ? "Tell Vindhu a future pickup day and time" : closed ? "Ask about the menu or weekly plan" : "Type your order or a question";
   }
 
   function initHome() {
@@ -333,7 +340,7 @@
       rows.map(function (r) { return h("div", { class: "row" + (r[0] === "Total" ? " total" : "") }, h("span", {}, r[0]), h("span", {}, r[1])); }),
       warn ? h("div", { class: "warnrow" }, warn) : null,
       h("div", { class: "acts" },
-        h("button", { class: "btn" + (isStoreClosed() ? " store-closed-btn" : ""), type: "button", disabled: isStoreClosed(), onclick: function () { if (!isStoreClosed()) send("Yes, confirm", m.id ? "confirm:" + m.id : undefined); } }, icon("check"), isStoreClosed() ? "Closed today" : "Yes, place order"),
+        h("button", { class: "btn" + (blocksAllNewOrders() ? " store-closed-btn" : ""), type: "button", disabled: blocksAllNewOrders(), onclick: function () { if (!blocksAllNewOrders()) send("Yes, confirm", m.id ? "confirm:" + m.id : undefined); } }, icon("check"), blocksAllNewOrders() ? "Closed today" : "Yes, place order"),
         h("button", { class: "btn ghost", type: "button", onclick: function () { $("text").value = "I'd like to change "; resizeBox(); $("text").focus(); } }, "Change something")),
       h("time", {}, m.ts ? clock(m.ts) : ""));
     return card;
@@ -829,7 +836,8 @@
   /* ---------- menu ---------- */
   function dish(x) {
     var off = !x.live;
-    var storeClosed = isStoreClosed();
+    var storeClosed = blocksAllNewOrders();
+    var cutoffOnly = isCutoffClosed();
     var noPrice = x.kind === "combo" && x.single == null && x.bogo == null;
     var price = h("div", { class: "dprice" });
     if (x.kind === "plan") price.append(h("div", { class: "price-row" }, h("span", { class: "lab" }, "Per person, per week"), h("span", { class: "amt" }, money(x.plan))));
@@ -847,6 +855,16 @@
         $("startErr").textContent = "Enter your details to continue with the item you selected.";
         $("fName").focus();
       } }, "Add to order"));
+    } else if (!off && !noPrice && cutoffOnly) {
+      price.append(h("button", { class: "btn sm", type: "button", onclick: function () {
+        var choice = "I'd like to order the " + x.name + " for a future pickup. Please ask me for the day and time.";
+        closeSheet();
+        if (token) { openChat(choice); return; }
+        pendingOrderText = choice;
+        show("onboard");
+        $("startErr").textContent = "Enter your details to plan a future pickup.";
+        $("fName").focus();
+      } }, "Plan future order"));
     } else if (!off && !noPrice && storeClosed) {
       price.append(h("button", { class: "btn sm store-closed-btn", type: "button", disabled: true }, "Closed today"));
     }
@@ -891,7 +909,11 @@
       renderStoreStatus();
       if (sheetOpen !== "menu") return;
       body.replaceChildren();
-      if (isStoreClosed()) body.append(h("div", { class: "store-closed-note", role: "status" }, h("strong", {}, "Closed today. "), "We're not taking new orders today, but you can still browse every menu item and the weekly plan."));
+      if (isStoreClosed()) body.append(h("div", { class: "store-closed-note", role: "status" },
+        h("strong", {}, isCutoffClosed() ? "Orders closed for today. " : "Closed today. "),
+        isCutoffClosed()
+          ? "Today's 8:00 PM cutoff has passed. You can still browse and plan a future-day order."
+          : "We're not taking new orders today, but you can still browse every menu item and the weekly plan."));
       var panels = menuPanels(m);
       var seg = h("div", { class: "seg menu-seg", role: "tablist", "aria-label": "Menu sections" });
       var sectionLabel = h("div", { class: "menu-section-label" }, h("span", {}, "MENU SECTION"), h("b", { id: "menuSectionName" }, ""));
@@ -916,12 +938,12 @@
       if (panels.length > 1) body.append(seg);
       body.append(sectionLabel, holder);
       body.append(h("p", { class: "tiny" }, "Plan pickup " + (m.pickupDays || []).join(", ") + ". Everything is cooked fresh at " + (m.address || "our kitchen") + "."));
-      if ($("chat").hidden && !isStoreClosed()) body.append(h("button", { class: "btn", type: "button", onclick: function () {
+      if ($("chat").hidden && !blocksAllNewOrders()) body.append(h("button", { class: "btn", type: "button", onclick: function () {
         closeSheet();
         if (token) openChat();
         else { show("onboard"); if ($("fName")) $("fName").focus(); }
-      } }, "Start an order"));
-      else if ($("chat").hidden && isStoreClosed()) body.append(h("p", { class: "tiny" }, "Ordering is closed for today. You can come back when we're open to place the order."));
+      } }, isCutoffClosed() ? "Plan a future order" : "Start an order"));
+      else if ($("chat").hidden && blocksAllNewOrders()) body.append(h("p", { class: "tiny" }, "Ordering is closed for today. You can come back when we're open to place the order."));
       if (panels.length) {
         var wanted = preferred ? panels.findIndex(function (p) { return p[0] === preferred; }) : -1;
         select(wanted >= 0 ? wanted : (live || panels.length === 1 ? 0 : Math.min(1, panels.length - 1)));
@@ -1085,7 +1107,7 @@
   $("btnOrders").addEventListener("click", showOrders);
   $("btnHelp").addEventListener("click", showHelp);
   $("startMenu").addEventListener("click", showMenu);
-  $("homeOrder").addEventListener("click", function () { if (isStoreClosed()) return; openChat(); });
+  $("homeOrder").addEventListener("click", function () { if (blocksAllNewOrders()) return; openChat(); });
   $("homeContinue").addEventListener("click", function () { openChat(); });
   $("homeCombos").addEventListener("click", function (e) { showMenu(e, "Combos"); });
   $("homePlans").addEventListener("click", function (e) { showMenu(e, "Weekly plans"); });
