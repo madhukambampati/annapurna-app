@@ -839,6 +839,61 @@ html[data-theme="dark"] body.owner-mode .owner-day-switch.closed em{
   padding:2px 6px;
 }
 </style>
+<style id="ownerAccessibilityP1V1">
+/* P1 accessibility: header contrast, calendar legibility, functional text sizing. */
+body.owner-mode .owner-brand .sub{
+  color:#f3d787!important;
+  font-size:12px!important;
+  line-height:1.3!important;
+}
+body.owner-mode .owner-store-main small{
+  font-size:11.5px!important;
+  line-height:1.25!important;
+}
+body.owner-mode .owner-day-switch b{
+  font-size:12px!important;
+  line-height:1.2!important;
+}
+body.owner-mode .owner-day-switch span{
+  font-size:11.5px!important;
+  line-height:1.2!important;
+  color:#46534a!important;
+}
+body.owner-mode .owner-day-switch em{
+  font-size:11.5px!important;
+  line-height:1.2!important;
+}
+body.owner-mode .owner-kpi small{
+  font-size:11.5px!important;
+  line-height:1.25!important;
+}
+body.owner-mode .owner-kpi span{
+  font-size:12px!important;
+  line-height:1.3!important;
+}
+html[data-theme="dark"] body.owner-mode .owner-day-switch span{
+  color:#c8d3ca!important;
+}
+html[data-theme="dark"] body.owner-mode .owner-brand .sub{
+  color:#f3d787!important;
+}
+
+/* Reduce decorative motion in Owner Desk when requested by the OS/browser. */
+@media (prefers-reduced-motion: reduce){
+  body.owner-mode *,
+  body.owner-mode *::before,
+  body.owner-mode *::after{
+    animation-duration:0.01ms!important;
+    animation-iteration-count:1!important;
+    transition-duration:0.01ms!important;
+    scroll-behavior:auto!important;
+  }
+  body.owner-mode .badge,
+  body.owner-mode .owner-kitchen-mark{
+    animation:none!important;
+  }
+}
+</style>
 </head>
 <body class="owner-mode">
 <header class="owner-head">
