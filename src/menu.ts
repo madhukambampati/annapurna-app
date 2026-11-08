@@ -151,8 +151,28 @@ export function storeOpenOn(s: Settings, dateIso: string): boolean {
   return s.dayOpen?.[dateIso] !== false;
 }
 
-export function storeOpenNow(s: Settings, now: number): boolean {
+/** New same-day orders close automatically at 8:00 PM in the kitchen timezone. */
+export const DAILY_ORDER_CUTOFF_HOUR = 20;
+
+export function storeManualOpenNow(s: Settings, now: number): boolean {
   return storeOpenOn(s, epochToLocal(now, s.tz).slice(0, 10));
+}
+
+export function afterDailyOrderCutoff(s: Settings, now: number): boolean {
+  const local = epochToLocal(now, s.tz);
+  return Number(local.slice(11, 13)) >= DAILY_ORDER_CUTOFF_HOUR;
+}
+
+/** Effective "open today" state shown to customers: manual closure wins, then the 8 PM cutoff. */
+export function storeOpenNow(s: Settings, now: number): boolean {
+  return storeManualOpenNow(s, now) && !afterDailyOrderCutoff(s, now);
+}
+
+/** True only when the pickup is on a later calendar day in the kitchen timezone. */
+export function pickupIsFutureDay(pickupLocal: string | null | undefined, s: Settings, now: number): boolean {
+  if (!pickupLocal || !/^\d{4}-\d{2}-\d{2}T/.test(pickupLocal)) return false;
+  const today = epochToLocal(now, s.tz).slice(0, 10);
+  return pickupLocal.slice(0, 10) > today;
 }
 
 /** Pickup days that apply to one menu item. An item's own days win, then the combo days, then the plan days. */
