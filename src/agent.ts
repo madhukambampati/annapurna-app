@@ -3,7 +3,7 @@ import { clearCustomQuote, customQuoteIsCurrent, customTermsKey } from "./custom
 import { checkFlags, checkWeekday, draftHash, extrasOnly, friendlyName, mainOrderFor, sanitizeItems, tokens, type Issue } from "./guards.js";
 import { HeuristicJudge, type Judge, type Judgment } from "./judge.js";
 import { LlmError, type Llm } from "./llm.js";
-import { findItem, itemLabel, lineAmt, money, total, optionPicks, storeOpenNow } from "./menu.js";
+import { afterDailyOrderCutoff, findItem, itemLabel, lineAmt, money, optionPicks, pickupIsFutureDay, storeManualOpenNow, total } from "./menu.js";
 import type { Notifier } from "./notify.js";
 import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
 import { route as decideRoute, type Route } from "./router.js";
@@ -283,6 +283,16 @@ function simpleCustomPickup(text: string, now: number, tz: string): string | nul
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(clock.h)}:${pad(clock.mi)}`;
 }
 
+function explicitFuturePickupIntent(text: string, now: number, tz: string): boolean {
+  if (/\b(?:tomorrow|future\s+(?:day|pickup)|next\s+(?:week|sun(?:day)?|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?))\b/i.test(text)) return true;
+  if (/\b\d{4}-\d{2}-\d{2}\b/.test(text) || /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|sept|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}\b/i.test(text)) return true;
+  const wk = /\b(sun(?:day)?|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?)\b/i.exec(text);
+  if (!wk) return false;
+  const days: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+  const want = days[wk[1]!.slice(0, 3).toLowerCase()]!;
+  return nextDateForDow(now, tz, want) > `${zonedParts(now, tz).y}-${pad(zonedParts(now, tz).m)}-${pad(zonedParts(now, tz).d)}`;
+}
+
 export const HANDOFF_NOTE = "Wants to talk to a person";
 
 /** Identity of an order for duplicate checks: what is ordered and when it is picked up. */
@@ -370,16 +380,26 @@ export class Agent {
       text = remainder;
     }
 
-    const storeClosedToday = !storeOpenNow(settings, now);
+    const manuallyClosedToday = !storeManualOpenNow(settings, now);
+    const cutoffReached = !manuallyClosedToday && afterDailyOrderCutoff(settings, now);
     const orderingWhileClosed =
       clearlyNormalMenuOrder(text, menu) ||
       CUSTOM_WORDS.test(text) ||
       CUSTOM_RECIPE_WORDS.test(text) ||
       CUSTOM_HEADCOUNT.test(text) ||
       (!!draft && (BARE_OK.test(text) || CONFIRM_BUTTON.test(text) || CUSTOM_CONFIRM.test(text)));
-    if (storeClosedToday && orderingWhileClosed) {
+    const futurePickupExplicit =
+      explicitFuturePickupIntent(text, now, settings.tz) ||
+      (!!draft?.pickup_local && pickupIsFutureDay(draft.pickup_local, settings, now));
+    if (manuallyClosedToday && orderingWhileClosed) {
       out.route = "store_closed";
       out.replies.push("We're closed today and aren't taking new orders. You can still browse the menu and weekly plan, then place your order when we're open.");
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
+    }
+    if (cutoffReached && orderingWhileClosed && !futurePickupExplicit) {
+      out.route = "daily_cutoff";
+      out.replies.push("Today's ordering closed at 8:00 PM. I won't move your order to tomorrow automatically. You can still order for a future day — please tell me the pickup day and time, for example “tomorrow at 6 PM”.");
       for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
       return out;
     }
@@ -875,9 +895,14 @@ export class Agent {
   private async placeCustomOrder(waId: string, draft: Draft, s: Settings, out: Outcome): Promise<void> {
     const { store } = this.d;
     const now = this.now();
-    if (!storeOpenNow(s, now)) {
+    if (!storeManualOpenNow(s, now)) {
       out.route = "confirm_custom_order+store_closed";
       out.replies.push("We're closed today and aren't taking new orders. Your details are still here; please confirm again when we're open.");
+      return;
+    }
+    if (afterDailyOrderCutoff(s, now) && !pickupIsFutureDay(draft.pickup_local, s, now)) {
+      out.route = "confirm_custom_order+daily_cutoff";
+      out.replies.push("Today's ordering closed at 8:00 PM, so I can't place this for today. I won't move it to tomorrow automatically. Please choose a future pickup day and time.");
       return;
     }
     const custom = draft.custom;
@@ -954,9 +979,14 @@ export class Agent {
   private async placeOrder(waId: string, draft: Draft, s: Settings, out: Outcome): Promise<void> {
     const { store } = this.d;
     const now = this.now();
-    if (!storeOpenNow(s, now)) {
+    if (!storeManualOpenNow(s, now)) {
       out.route = "confirm_order+store_closed";
       out.replies.push("We're closed today and aren't taking new orders. Your order hasn't been placed. You can still browse the menu and weekly plan.");
+      return;
+    }
+    if (afterDailyOrderCutoff(s, now) && !pickupIsFutureDay(draft.pickup_local, s, now)) {
+      out.route = "confirm_order+daily_cutoff";
+      out.replies.push("Today's ordering closed at 8:00 PM, so I can't place this for today. I won't move it to tomorrow automatically. Please choose a future pickup day and time.");
       return;
     }
     const menu = store.getMenu();
