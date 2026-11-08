@@ -2160,6 +2160,87 @@ body.customer-mode .daily-status-copy p{
 body.customer-mode .status-day b{color:#1b2a21!important}
 body.customer-mode .status-day span{color:#667067!important}
 </style>
+<style id="customerAccessibilityP1V1">
+/* P1 accessibility: stronger contrast and readable functional microcopy. */
+body.customer-mode .sum .cfhead h3{
+  color:#fff!important;
+  opacity:1!important;
+}
+body.customer-mode .home-section-head>div>span{
+  font-size:12px!important;
+  line-height:1.25!important;
+  color:#7a5310!important;
+}
+body.customer-mode .home-section-head>small{
+  font-size:12px!important;
+  line-height:1.3!important;
+}
+body.customer-mode .daily-status-copy small{
+  font-size:11.5px!important;
+  line-height:1.25!important;
+  color:#4d5a51!important;
+}
+body.customer-mode .status-day b{
+  font-size:12px!important;
+}
+body.customer-mode .status-day span{
+  font-size:11.5px!important;
+  line-height:1.2!important;
+  color:#46534a!important;
+}
+body.customer-mode .status-day em{
+  font-size:11.5px!important;
+  line-height:1.2!important;
+}
+body.customer-mode .onboard-status-days span{
+  font-size:11.5px!important;
+}
+body.customer-mode .home-promise b{
+  font-size:12.5px!important;
+}
+body.customer-mode .home-promise small{
+  font-size:12px!important;
+  line-height:1.35!important;
+}
+body.customer-mode .ord-meta span{
+  font-size:11.5px!important;
+  line-height:1.25!important;
+}
+body.customer-mode .dchip small{
+  font-size:11.5px!important;
+  line-height:1.15!important;
+}
+body.customer-mode .dishes .hint,
+body.customer-mode .tile-copy small{
+  font-size:12px!important;
+}
+
+/* Respect OS/browser reduced-motion preference across decorative/infinite animation layers. */
+@media (prefers-reduced-motion: reduce){
+  html{scroll-behavior:auto!important}
+  body.customer-mode *,
+  body.customer-mode *::before,
+  body.customer-mode *::after{
+    animation-duration:0.01ms!important;
+    animation-iteration-count:1!important;
+    transition-duration:0.01ms!important;
+    scroll-behavior:auto!important;
+  }
+  body.customer-mode .ppill.bogo::after,
+  body.customer-mode .confetti,
+  body.customer-mode .home-orbit,
+  body.customer-mode .home-spark{
+    display:none!important;
+  }
+  body.customer-mode .ord .steps4 li.current-step::after{
+    animation:none!important;
+  }
+  body.customer-mode .typing i{
+    animation:none!important;
+    opacity:.65!important;
+  }
+}
+</style>
 <style id="themeInputContrastFix">
 /* Keep typed customer text readable even when older visual layers force light paper fields. */
 html[data-theme="light"] body.customer-mode #startForm input[type="text"],
