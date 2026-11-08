@@ -2100,6 +2100,43 @@ body.customer-mode{
 }
 .theme-toggle{display:none!important}
 </style>
+<style id="customerLightReadabilityFix">
+/* Final light-theme contrast guard for home/footer/status text. */
+body.customer-mode .home-promise>div{
+  background:#fffaf0!important;
+  border-color:#e1c995!important;
+}
+body.customer-mode .home-promise b{
+  color:#173d2e!important;
+  opacity:1!important;
+}
+body.customer-mode .home-promise small{
+  color:#56645a!important;
+  opacity:1!important;
+}
+body.customer-mode .promise-icon{
+  background:#e6f0e8!important;
+  color:#155239!important;
+}
+body.customer-mode .heritage-signoff{
+  color:#f9dda0!important;
+}
+body.customer-mode .onboard>.tiny,
+body.customer-mode .onboard>.tiny strong{
+  color:#4f5d54!important;
+  opacity:1!important;
+}
+body.customer-mode .daily-status-copy small{
+  color:#5e6a61!important;
+  opacity:1!important;
+}
+body.customer-mode .daily-status-copy p{
+  color:#4f5d54!important;
+  opacity:1!important;
+}
+body.customer-mode .status-day b{color:#1b2a21!important}
+body.customer-mode .status-day span{color:#667067!important}
+</style>
 <style id="themeInputContrastFix">
 /* Keep typed customer text readable even when older visual layers force light paper fields. */
 html[data-theme="light"] body.customer-mode #startForm input[type="text"],
