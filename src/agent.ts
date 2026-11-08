@@ -284,7 +284,7 @@ function simpleCustomPickup(text: string, now: number, tz: string): string | nul
 }
 
 function explicitFuturePickupIntent(text: string, now: number, tz: string): boolean {
-  if (/\b(?:tomorrow|future\s+(?:day|pickup)|next\s+(?:week|sun(?:day)?|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?))\b/i.test(text)) return true;
+  if (/\b(?:tomorrow|next\s+(?:week|sun(?:day)?|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?))\b/i.test(text)) return true;
   if (/\b\d{4}-\d{2}-\d{2}\b/.test(text) || /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|sept|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}\b/i.test(text)) return true;
   const wk = /\b(sun(?:day)?|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?)\b/i.exec(text);
   if (!wk) return false;
@@ -399,7 +399,7 @@ export class Agent {
     }
     if (cutoffReached && orderingWhileClosed && !futurePickupExplicit) {
       out.route = "daily_cutoff";
-      out.replies.push("Today's ordering closed at 8:00 PM. I won't move your order to tomorrow automatically. You can still order for a future day — please tell me the pickup day and time, for example “tomorrow at 6 PM”.");
+      out.replies.push("Today's ordering closed at 8:00 PM. I won't move your order to tomorrow automatically. You can still order for a future day — please send the item with the pickup day and time, for example “Bagara Rice and Chicken Fry tomorrow at 6 PM”.");
       for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
       return out;
     }
