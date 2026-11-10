@@ -818,8 +818,11 @@
       if (!j.reviews.length) { list.append(h("p", {}, "Your table, your stories. Reviews from picked-up orders will appear here once published.")); return; }
       j.reviews.forEach(function (r) {
         list.append(h("article", { class: "review-card" },
-          h("span", { class: "review-stars", "aria-label": r.rating + " out of 5 stars" }, "★".repeat(r.rating) + "☆".repeat(5-r.rating)),
-          r.comment ? h("p", {}, r.comment) : null, h("b", {}, r.displayName), h("small", {}, "✓ Verified order"),
+          r.comment ? h("p", {}, r.comment) : null,
+          h("div", { class: "review-person" },
+            h("b", {}, r.displayName),
+            h("span", { class: "review-rating-badge", "aria-label": r.rating + " out of 5 stars" }, r.rating + "/5")),
+          h("small", {}, "✓ Verified order"),
           r.ownerReply ? h("div", { class: "review-owner-reply" },
             h("b", {}, "Annapurna Home Foods"),
             h("p", {}, r.ownerReply)) : null));
