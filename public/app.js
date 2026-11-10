@@ -819,7 +819,10 @@
       j.reviews.forEach(function (r) {
         list.append(h("article", { class: "review-card" },
           h("span", { class: "review-stars", "aria-label": r.rating + " out of 5 stars" }, "★".repeat(r.rating) + "☆".repeat(5-r.rating)),
-          r.comment ? h("p", {}, r.comment) : null, h("b", {}, r.displayName), h("small", {}, "✓ Verified order")));
+          r.comment ? h("p", {}, r.comment) : null, h("b", {}, r.displayName), h("small", {}, "✓ Verified order"),
+          r.ownerReply ? h("div", { class: "review-owner-reply" },
+            h("b", {}, "Annapurna Home Foods"),
+            h("p", {}, r.ownerReply)) : null));
       });
       });
     }).catch(function () { ["publicReviewList", "onboardReviewList"].forEach(function (id) { var list = $(id); if (list) list.textContent = "Reviews are temporarily unavailable."; }); });
