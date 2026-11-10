@@ -606,15 +606,39 @@ function renderRules() {
 /* ---------- more / settings hub ---------- */
 function renderReviews() {
   return [h("button", { class: "owner-back", onclick: () => { tab = "more"; render(); } }, "← More"),
-    h("h2", {}, "Reviews"), h("p", { class: "sub" }, "Verified order feedback. Publish only reviews safe for public display. Delete permanently removes the comment and display name."),
-    ...(state.reviews || []).map(r => h("article", { class: "card", style: "margin:12px 0;padding:20px;overflow-wrap:anywhere" },
-      h("b", {}, "Order #" + r.orderId + " · " + r.rating + "/5 · " + r.status),
-      r.comment ? h("p", {}, r.comment) : h("p", { class: "sub" }, "Star rating only · no comment"), h("small", {}, r.displayName + " · Verified order"),
-      h("div", { class: "review-actions" }, ...(r.status === "published" ? ["unpublish", "hide", "delete"] : r.status === "hidden" ? ["publish", "delete"] : ["publish", "hide", "delete"]).map(action =>
-        h("button", { type: "button", onclick: () => {
-          if (action === "delete" && !confirm("Permanently delete this review? This cannot be undone.")) return;
-          act("/api/reviews/" + r.id + "/" + action, {});
-        } }, action[0].toUpperCase() + action.slice(1)))))),
+    h("h2", {}, "Reviews"), h("p", { class: "sub" }, "Verified order feedback. Publish only reviews safe for public display. Owner replies appear publicly under published reviews."),
+    ...(state.reviews || []).map(r => {
+      const replyBox = h("textarea", { class: "owner-review-reply-input", rows: 3, maxlength: 600,
+        placeholder: "Write a warm, helpful reply from Annapurna Home Foods",
+        "aria-label": "Public reply to review for order #" + r.orderId }, r.ownerReply || "");
+      const saveReply = async () => {
+        const text = replyBox.value.trim();
+        if (!text) { showErr(new Error("Write a reply first, or use Remove reply to clear the existing response.")); return; }
+        await act("/api/reviews/" + r.id + "/reply", { text });
+      };
+      const replyActions = [
+        h("button", { class: "pri", type: "button", onclick: saveReply }, r.ownerReply ? "Update reply" : "Save reply"),
+        r.ownerReply ? h("button", { class: "ghost", type: "button", onclick: async () => {
+          if (!confirm("Remove Annapurna's public reply from this review?")) return;
+          await act("/api/reviews/" + r.id + "/reply", {}, "DELETE");
+        } }, "Remove reply") : null
+      ];
+      return h("article", { class: "card", style: "margin:12px 0;padding:20px;overflow-wrap:anywhere" },
+        h("b", {}, "Order #" + r.orderId + " · " + r.rating + "/5 · " + r.status),
+        r.comment ? h("p", {}, r.comment) : h("p", { class: "sub" }, "Star rating only · no comment"),
+        h("small", {}, r.displayName + " · Verified order"),
+        r.ownerReply ? h("div", { class: "owner-review-reply-preview" },
+          h("b", {}, "Current Annapurna reply"), h("p", {}, r.ownerReply)) : null,
+        h("div", { class: "owner-review-reply-editor" },
+          h("label", {}, "Reply publicly as Annapurna Home Foods", replyBox),
+          h("small", { class: "sub" }, r.status === "published" ? "Customers can see this reply on the website." : "This reply will appear publicly when you publish the review."),
+          h("div", { class: "owner-review-reply-actions" }, ...replyActions)),
+        h("div", { class: "review-actions" }, ...(r.status === "published" ? ["unpublish", "hide", "delete"] : r.status === "hidden" ? ["publish", "delete"] : ["publish", "hide", "delete"]).map(action =>
+          h("button", { type: "button", onclick: () => {
+            if (action === "delete" && !confirm("Permanently delete this review? This cannot be undone.")) return;
+            act("/api/reviews/" + r.id + "/" + action, {});
+          } }, action[0].toUpperCase() + action.slice(1))));
+    }),
     ...(!(state.reviews || []).length ? [h("p", { class: "empty" }, "No reviews yet. Feedback will appear here after customers review picked-up orders.")] : [])];
 }
 
