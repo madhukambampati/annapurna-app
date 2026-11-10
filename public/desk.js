@@ -637,7 +637,7 @@ function renderReviews() {
           h("button", { type: "button", onclick: () => {
             if (action === "delete" && !confirm("Permanently delete this review? This cannot be undone.")) return;
             act("/api/reviews/" + r.id + "/" + action, {});
-          } }, action[0].toUpperCase() + action.slice(1))));
+          } }, action[0].toUpperCase() + action.slice(1)))));
     }),
     ...(!(state.reviews || []).length ? [h("p", { class: "empty" }, "No reviews yet. Feedback will appear here after customers review picked-up orders.")] : [])];
 }
