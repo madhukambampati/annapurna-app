@@ -673,8 +673,8 @@ function renderReviews() {
           h("div", { class: "owner-review-reply-actions" }, ...replyActions)),
         h("div", { class: "review-actions" }, ...(r.status === "published" ? ["unpublish", "hide", "delete"] : r.status === "hidden" ? ["publish", "delete"] : ["publish", "hide", "delete"]).map(action =>
           h("button", { type: "button", onclick: () => {
-            if (action === "delete" && !confirm("Permanently delete this review? This cannot be undone.");
-            else act("/api/reviews/" + r.id + "/" + action, {});
+            if (action === "delete" && !confirm("Permanently delete this review? This cannot be undone.")) return;
+            act("/api/reviews/" + r.id + "/" + action, {});
           } }, action[0].toUpperCase() + action.slice(1)))));
     }),
     ...(!(state.reviews || []).length ? [h("p", { class: "empty" }, "No reviews yet. Feedback will appear here after customers review picked-up orders.")] : [])];
