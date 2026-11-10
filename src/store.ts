@@ -31,7 +31,7 @@ export class Store {
         rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5), comment TEXT NOT NULL,
         display_name TEXT NOT NULL DEFAULT 'Annapurna guest',
         status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','published','hidden','deleted')),
-        created_at INTEGER NOT NULL
+        created_at INTEGER NOT NULL, owner_reply TEXT NOT NULL DEFAULT '', owner_reply_at INTEGER
       );
       CREATE INDEX IF NOT EXISTS reviews_status ON reviews(status, id);
       CREATE TABLE IF NOT EXISTS alerts (
@@ -48,6 +48,16 @@ export class Store {
       this.db.exec("ALTER TABLE customers ADD COLUMN contact TEXT NOT NULL DEFAULT ''");
     } catch {
       /* column already there */
+    }
+    try {
+      this.db.exec("ALTER TABLE reviews ADD COLUMN owner_reply TEXT NOT NULL DEFAULT ''");
+    } catch {
+      /* owner reply column already exists */
+    }
+    try {
+      this.db.exec("ALTER TABLE reviews ADD COLUMN owner_reply_at INTEGER");
+    } catch {
+      /* owner reply timestamp column already exists */
     }
     this.migrateMenu();
     this.seedOct2026WeekendClosure();
@@ -355,13 +365,20 @@ export class Store {
       ? "SELECT * FROM reviews WHERE status = 'published' ORDER BY id DESC LIMIT 100"
       : "SELECT * FROM reviews WHERE status != 'deleted' ORDER BY id DESC").all() as Row[];
     return rows.map(r => ({ id: Number(r.id), orderId: Number(r.order_id), rating: Number(r.rating),
-      comment: String(r.comment), displayName: String(r.display_name), status: String(r.status), createdAt: Number(r.created_at) }));
+      comment: String(r.comment), displayName: String(r.display_name), status: String(r.status), createdAt: Number(r.created_at),
+      ownerReply: String(r.owner_reply ?? ""), ownerReplyAt: r.owner_reply_at == null ? null : Number(r.owner_reply_at) }));
+  }
+
+  setReviewReply(id: number, reply: string, at: number | null): boolean {
+    const r = this.db.prepare("UPDATE reviews SET owner_reply = ?, owner_reply_at = ? WHERE id = ? AND status != 'deleted'")
+      .run(reply, reply ? at : null, id);
+    return Number(r.changes) === 1;
   }
 
   moderateReview(id: number, action: 'publish' | 'hide' | 'unpublish' | 'delete'): boolean {
     const status = { publish: 'published', hide: 'hidden', unpublish: 'pending', delete: 'deleted' }[action];
     const r = action === 'delete'
-      ? this.db.prepare("UPDATE reviews SET status = 'deleted', comment = '', display_name = 'Annapurna guest' WHERE id = ? AND status != 'deleted'").run(id)
+      ? this.db.prepare("UPDATE reviews SET status = 'deleted', comment = '', display_name = 'Annapurna guest', owner_reply = '', owner_reply_at = NULL WHERE id = ? AND status != 'deleted'").run(id)
       : this.db.prepare("UPDATE reviews SET status = ? WHERE id = ? AND status != 'deleted'").run(status, id);
     return Number(r.changes) === 1;
   }
