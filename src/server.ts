@@ -394,7 +394,7 @@ export function createServer(d: ServerDeps): Server {
         if (m === "GET" && path === "/web/reviews") {
           limit(`reviews:${ip}`, 60, 60_000);
           const reviews = store.listReviews(true).map(r => ({ rating: r.rating, comment: r.comment,
-            displayName: r.displayName, verified: true }));
+            displayName: r.displayName, verified: true, ...(r.ownerReply ? { ownerReply: r.ownerReply } : {}) }));
           return send(req, res, 200, { reviews });
         }
         const reviewOrder = /^\/web\/orders\/(\d+)\/review$/.exec(path);
@@ -585,6 +585,24 @@ export function createServer(d: ServerDeps): Server {
       if (path.startsWith("/api/")) {
         ownerAuth(req);
         if (m === "GET" && path === "/api/reviews") return send(req, res, 200, { reviews: store.listReviews() });
+        const reviewReply = /^\/api\/reviews\/(\d+)\/reply$/.exec(path);
+        if (reviewReply && m === "POST") {
+          const b = await readJson(req);
+          const raw = typeof b.text === "string" ? b.text.trim() : "";
+          if (!raw) throw new HttpError(400, "Write a reply before saving.");
+          if (raw.length > 600) throw new HttpError(400, "Please keep your reply within 600 characters.");
+          if (/@|https?:|www\.|(?:\+?\d[\s().-]*){7,}/i.test(raw))
+            throw new HttpError(400, "Please don't include phone numbers, email addresses or links in a public reply.");
+          const reply = cleanText(raw, 600);
+          if (!store.setReviewReply(Number(reviewReply[1]), reply, now()))
+            throw new HttpError(404, "No such review");
+          return send(req, res, 200, { ok: true, ownerReply: reply });
+        }
+        if (reviewReply && m === "DELETE") {
+          if (!store.setReviewReply(Number(reviewReply[1]), "", null))
+            throw new HttpError(404, "No such review");
+          return send(req, res, 200, { ok: true });
+        }
         const reviewAction = /^\/api\/reviews\/(\d+)\/(publish|hide|unpublish|delete)$/.exec(path);
         if (m === "POST" && reviewAction) {
           if (!store.moderateReview(Number(reviewAction[1]), reviewAction[2] as 'publish' | 'hide' | 'unpublish' | 'delete'))
