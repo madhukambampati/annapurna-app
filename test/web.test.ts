@@ -1281,3 +1281,44 @@ test("star-only reviews accept omitted, empty and whitespace comments and stay m
       [{ rating: 4, comment: "", displayName: "Annapurna guest", verified: true }]);
   }, { web: { enabled: true } });
 });
+
+
+test("owner replies can be created, edited and removed, and are public only with published reviews", async () => {
+  await withRig(async ({ t, call, start }) => {
+    const token = await start("Asha", "asha@example.com");
+    const customer = t.store.listCustomers().find(c => c.name === "Asha")!;
+    const order = t.store.insertOrder({ waId: customer.waId, name: customer.name, items: [], pickup: null,
+      flags: [], status: "done", notes: "", createdAt: NOW });
+    const submitted = await call("POST", `/web/orders/${order.id}/review`, {
+      token, body: { rating: 5, comment: "Wonderful homemade food.", displayName: "Asha" }
+    });
+    assert.equal(submitted.status, 201);
+    const review = t.store.listReviews().find(r => r.orderId === order.id)!;
+    const replyPath = `/api/reviews/${review.id}/reply`;
+
+    assert.equal((await call("POST", replyPath, { body: { text: "Thank you!" } })).status, 401);
+    assert.equal((await call("POST", replyPath, { token: "secret", body: { text: " " } })).status, 400);
+    assert.equal((await call("POST", replyPath, { token: "secret", body: { text: "Email us at hello@example.com" } })).status, 400);
+    assert.equal((await call("POST", replyPath, { token: "secret", body: { text: "x".repeat(601) } })).status, 400);
+
+    const firstReply = "Thank you, Asha! We're so glad you enjoyed your meal.";
+    assert.equal((await call("POST", replyPath, { token: "secret", body: { text: firstReply } })).status, 200);
+    assert.equal(t.store.listReviews().find(r => r.id === review.id)!.ownerReply, firstReply);
+    assert.deepEqual((await call("GET", "/web/reviews")).json.reviews, []);
+
+    assert.equal((await call("POST", `/api/reviews/${review.id}/publish`, { token: "secret" })).status, 200);
+    assert.deepEqual((await call("GET", "/web/reviews")).json.reviews, [{
+      rating: 5, comment: "Wonderful homemade food.", displayName: "Asha", verified: true, ownerReply: firstReply
+    }]);
+
+    const editedReply = "Thank you, Asha! We look forward to cooking for you again.";
+    assert.equal((await call("POST", replyPath, { token: "secret", body: { text: editedReply } })).status, 200);
+    assert.equal((await call("GET", "/web/reviews")).json.reviews[0].ownerReply, editedReply);
+
+    assert.equal((await call("DELETE", replyPath, { token: "secret" })).status, 200);
+    assert.deepEqual((await call("GET", "/web/reviews")).json.reviews, [{
+      rating: 5, comment: "Wonderful homemade food.", displayName: "Asha", verified: true
+    }]);
+    assert.equal((await call("DELETE", replyPath, { token: "secret" })).status, 404);
+  }, { web: { enabled: true } });
+});
