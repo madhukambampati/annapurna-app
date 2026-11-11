@@ -167,6 +167,16 @@ function cancelOrder(o, after) {
 }
 
 /* ---------- dashboard ---------- */
+function greeting(tz) {
+  let hr = new Date().getHours();
+  try { hr = Number(new Intl.DateTimeFormat("en-CA", { timeZone: tz, hour: "numeric", hourCycle: "h23" }).format(new Date())); } catch { /* keep the device hour */ }
+  return hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening";
+}
+// "Nov 11" is split so narrow phones can show just the date number under the weekday.
+function dayLabel(d) {
+  const m = /^(\D+?)\s*(\d+)$/.exec(String(d.label || ""));
+  return m ? h("span", {}, h("i", {}, m[1] + " "), m[2]) : h("span", {}, d.label || d.date);
+}
 function renderDashboard() {
   const activeAlerts = state.alerts.filter((a) => !a.done).length;
   const held = state.orders.filter((o) => o.status === "hold").length;
@@ -197,18 +207,18 @@ function renderDashboard() {
   const setDay = (date, open) => act("/api/store-status", { date, open });
   const storeCard = h("section", { class: "owner-store-status " + (ss.open ? "is-open" : "is-closed") },
     h("div", { class: "owner-store-main" },
-      h("span", { class: "owner-store-icon", "aria-hidden": "true" }, ss.open ? "✓" : "×"),
+      h("span", { class: "owner-store-icon", "aria-hidden": "true" }, ico(ss.open ? "check" : "cross")),
       h("div", {},
         h("small", {}, "Today's store status"),
         h("strong", {}, cutoff ? "Closed for today" : ss.open ? "Open today" : "Closed today"),
         h("span", {}, cutoff ? "Automatic 8:00 PM cutoff. Future-day orders can still be placed." : ss.open ? "Customers can place new orders." : "Customers can browse, but new orders are blocked."))),
-    h("div", { class: "owner-store-actions" },
+    h("div", { class: "owner-store-actions", role: "group", "aria-label": "Open or close today" },
       h("button", { class: manualOpen ? "pri" : "ghost", disabled: manualOpen, onclick: () => setDay(ss.today, true) }, "Open today"),
       h("button", { class: manualOpen ? "ghost danger" : "pri danger", disabled: !manualOpen, onclick: () => setDay(ss.today, false) }, "Close full day")),
     h("div", { class: "owner-week-switches" }, (ss.week || []).map((d) => {
       const dayManualOpen = d.manualOpen !== false;
       return h("button", { class: "owner-day-switch " + (d.open ? "open" : "closed") + (d.today ? " today" : ""), onclick: () => setDay(d.date, !dayManualOpen), title: "Click to mark " + d.day + " " + (dayManualOpen ? "closed" : "open") },
-        h("b", {}, String(d.day || "").slice(0,3)), h("span", {}, d.label || d.date), h("em", {}, d.closedReason === "cutoff" ? "8 PM cutoff" : d.open ? "Open" : "Closed"));
+        h("b", {}, String(d.day || "").slice(0,3)), dayLabel(d), h("em", {}, d.closedReason === "cutoff" ? "8 PM cutoff" : d.open ? "Open" : "Closed"));
     })));
 
   const kpis = h("section", { class: "owner-kpis", "aria-label": "Kitchen overview" },
@@ -220,7 +230,12 @@ function renderDashboard() {
   );
 
   const out = [
-    h("div", { class: "owner-page-title" }, h("div", {}, h("h2", {}, "Today"), h("p", { class: "sub" }, new Date().toLocaleDateString("en-CA", { timeZone: tz, weekday: "long", month: "long", day: "numeric" })))),
+    h("section", { class: "owner-hero" },
+      h("div", { class: "owner-hero-text" },
+        h("p", { class: "owner-hero-eyebrow" }, greeting(tz)),
+        h("h2", {}, "Today"),
+        h("p", { class: "sub" }, new Date().toLocaleDateString("en-CA", { timeZone: tz, weekday: "long", month: "long", day: "numeric" }))),
+      h("img", { class: "owner-hero-art", src: "/assets/annapurna-art.webp", alt: "", width: 760, height: 434, decoding: "async" })),
     storeCard,
     kpis
   ];

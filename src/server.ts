@@ -91,6 +91,9 @@ const ASSETS: Record<string, { file: string; type: string }> = {
   "/assets/icon_weekly.png": { file: "assets/icon_weekly.png", type: "image/png" },
   "/assets/lamp_left.png": { file: "assets/lamp_left.png", type: "image/png" },
   "/assets/lamp_right.png": { file: "assets/lamp_right.png", type: "image/png" },
+  "/assets/annapurna-logo.webp": { file: "assets/annapurna-logo.webp", type: "image/webp" },
+  "/assets/annapurna-emblem.webp": { file: "assets/annapurna-emblem.webp", type: "image/webp" },
+  "/assets/annapurna-art.webp": { file: "assets/annapurna-art.webp", type: "image/webp" },
   "/assets/heritage-hero-v5.svg": { file: "assets/heritage-hero-v5.svg", type: "image/svg+xml" },
   "/assets/combos-v5.svg": { file: "assets/combos-v5.svg", type: "image/svg+xml" },
   "/assets/weekly-plans-v5.svg": { file: "assets/weekly-plans-v5.svg", type: "image/svg+xml" },
@@ -382,7 +385,7 @@ export function createServer(d: ServerDeps): Server {
         if (path === "/" && !w.enabled) throw new HttpError(404, "Not found");
         const body = asset(a.file);
         if (body === undefined) throw new HttpError(404, "Not found");
-        res.writeHead(200, { ...baseHeaders(req), "content-type": a.type, "cache-control": path.endsWith(".png") || path.endsWith(".svg") ? "public, max-age=86400" : "no-cache" });
+        res.writeHead(200, { ...baseHeaders(req), "content-type": a.type, "cache-control": path.endsWith(".png") || path.endsWith(".svg") || path.endsWith(".webp") ? "public, max-age=86400" : "no-cache" });
         return void res.end(body);
       }
 
