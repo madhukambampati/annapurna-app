@@ -15,7 +15,7 @@ function initOwnerTheme() {
   document.documentElement.setAttribute("data-theme", "light");
   try { localStorage.removeItem("annapurna-theme"); } catch { /* storage blocked */ }
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", "#1d6b4d");
+  if (meta) meta.setAttribute("content", "#0e3b2c");
 }
 
 try { token = localStorage.getItem("annapurna-owner") || ""; } catch { /* storage blocked */ }
@@ -38,19 +38,49 @@ function saveToken(t) {
   try { localStorage.setItem("annapurna-owner", t); } catch { /* ignore */ }
 }
 
-async function api(path, opts = {}, retried = false) {
+async function api(path, opts = {}) {
   const r = await fetch(path, { ...opts, headers: { "content-type": "application/json", ...(token ? { authorization: "Bearer " + token } : {}) } });
-  if (r.status === 401 && !retried) {
-    const t = prompt("Owner token (the OWNER_TOKEN you set on the server)") || "";
-    if (t) {
-      saveToken(t);
-      return api(path, opts, true);
-    }
+  if (r.status === 401) {
+    showSignIn(token ? "That token was not accepted. Check it and try again." : "");
+    throw new Error("Enter the owner token to open the desk.");
   }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || "Request failed (" + r.status + ")");
   return j;
 }
+
+/* ---------- sign in ---------- */
+// The desk asks for the owner token on its own screen. While that screen is up nothing polls the
+// server, so a missing or wrong token cannot run up the failed-attempt limit by itself.
+let signedOut = false;
+function showSignIn(message) {
+  signedOut = true;
+  $("signin").hidden = false;
+  $("signinMsg").textContent = message || "";
+  const field = $("signinToken");
+  if (document.activeElement !== field) field.focus();
+}
+$("signin").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const t = $("signinToken").value.trim();
+  if (!t) return;
+  $("signinMsg").textContent = "";
+  try {
+    const r = await fetch("/api/state", { headers: { authorization: "Bearer " + t } });
+    if (r.status === 401) return showSignIn("That token was not accepted. Check it and try again.");
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      return showSignIn(j.error || "The desk could not be opened (" + r.status + ").");
+    }
+  } catch {
+    return showSignIn("Could not reach the server. Check your connection and try again.");
+  }
+  saveToken(t);
+  signedOut = false;
+  $("signin").hidden = true;
+  $("signinToken").value = "";
+  refresh();
+});
 
 function showErr(e) {
   const el = $("err");
@@ -58,6 +88,7 @@ function showErr(e) {
   el.textContent = e ? e.message || String(e) : "";
 }
 
+const ico = (name) => h("span", { class: "ico ico-" + name, "aria-hidden": "true" });
 const money = (n) => (n == null ? "Price TBC" : "$" + Math.round(n * 100) / 100);
 const label = (it) => it.pack === "bogo" ? `${it.qty} x ${it.name} (Buy 1 Get 1)` : it.pack === "plan" ? `${it.qty} x ${it.name} (${it.qty} ${it.qty > 1 ? "people" : "person"})` : `${it.qty} x ${it.name}`;
 const totalOf = (items) => items.some((i) => i.amt == null) ? null : items.reduce((a, i) => a + i.amt, 0);
@@ -79,11 +110,13 @@ const isWeb = (id) => String(id).startsWith("web:");
 
 /* ---------- data ---------- */
 async function refresh() {
+  if (signedOut) return;
+  if (!token) return showSignIn("");
   try {
     state = await api("/api/state");
     showErr(null);
   } catch (e) {
-    showErr(e);
+    if (!signedOut) showErr(e);
     return;
   }
   const a = document.activeElement;
@@ -166,7 +199,7 @@ function renderDashboard() {
     h("div", { class: "owner-store-main" },
       h("span", { class: "owner-store-icon", "aria-hidden": "true" }, ss.open ? "✓" : "×"),
       h("div", {},
-        h("small", {}, "TODAY'S STORE STATUS"),
+        h("small", {}, "Today's store status"),
         h("strong", {}, cutoff ? "Closed for today" : ss.open ? "Open today" : "Closed today"),
         h("span", {}, cutoff ? "Automatic 8:00 PM cutoff. Future-day orders can still be placed." : ss.open ? "Customers can place new orders." : "Customers can browse, but new orders are blocked."))),
     h("div", { class: "owner-store-actions" },
@@ -179,15 +212,15 @@ function renderDashboard() {
     })));
 
   const kpis = h("section", { class: "owner-kpis", "aria-label": "Kitchen overview" },
-    h("div", { class: "owner-kpi kpi-cook", style: "--tone:#1d6b4d", "data-icon": "♨" }, h("small", {}, "To cook"), h("strong", {}, cooking), h("span", {}, "Confirmed orders")),
-    h("div", { class: "owner-kpi kpi-ready", style: "--tone:#2f8fb0", "data-icon": "✓" }, h("small", {}, "Ready"), h("strong", {}, ready), h("span", {}, "Waiting for pickup")),
-    h("div", { class: "owner-kpi kpi-attn", style: "--tone:#e7882b", "data-icon": "!" }, h("small", {}, "Needs attention"), h("strong", {}, activeAlerts + held), h("span", {}, "Alerts + held orders")),
-    h("div", { class: "owner-kpi kpi-sales", style: "--tone:#8b5a2b", "data-icon": "$" }, h("small", {}, "Today's sales"), h("strong", {}, money(sales)), h("span", {}, "Fresh orders today")),
-    h("div", { class: "owner-kpi kpi-total-sales", style: "--tone:#476b52", "data-icon": "$" }, h("small", {}, "Total sales"), h("strong", {}, money(totalSales)), h("span", {}, "All non-cancelled orders"))
+    h("div", { class: "owner-kpi kpi-cook" }, h("small", {}, "To cook"), h("strong", {}, cooking), h("span", {}, "Confirmed orders")),
+    h("div", { class: "owner-kpi kpi-ready" }, h("small", {}, "Ready"), h("strong", {}, ready), h("span", {}, "Waiting for pickup")),
+    h("div", { class: "owner-kpi kpi-attn" + (activeAlerts + held ? " has-items" : "") }, h("small", {}, "Needs attention"), h("strong", {}, activeAlerts + held), h("span", {}, "Alerts + held orders")),
+    h("div", { class: "owner-kpi kpi-sales" }, h("small", {}, "Today's sales"), h("strong", {}, money(sales)), h("span", {}, "Fresh orders today")),
+    h("div", { class: "owner-kpi kpi-total-sales" }, h("small", {}, "Total sales"), h("strong", {}, money(totalSales)), h("span", {}, "All non-cancelled orders"))
   );
 
   const out = [
-    h("div", {}, h("h2", {}, "Kitchen overview"), h("p", { class: "sub" }, "What needs your attention right now.")),
+    h("div", { class: "owner-page-title" }, h("div", {}, h("h2", {}, "Today"), h("p", { class: "sub" }, new Date().toLocaleDateString("en-CA", { timeZone: tz, weekday: "long", month: "long", day: "numeric" })))),
     storeCard,
     kpis
   ];
@@ -207,10 +240,10 @@ function renderDashboard() {
 
   out.push(h("h2", {}, "Quick actions"),
     h("div", { class: "card owner-quick-actions" },
-      h("button", { class: "quick quick-orders", onclick: () => { tab = "orders"; render(); } }, "Manage orders"),
-      h("button", { class: "quick quick-kitchen", onclick: () => { tab = "cook"; cook = null; render(); } }, "Open kitchen list"),
-      h("button", { class: "quick quick-chats", onclick: () => { tab = "chats"; render(); } }, "Customer chats"),
-      h("button", { class: "quick quick-menu", onclick: () => { tab = "menu"; render(); } }, "Update menu")));
+      h("button", { class: "quick quick-orders", onclick: () => { tab = "orders"; render(); } }, "Manage orders", ico("chevron")),
+      h("button", { class: "quick quick-kitchen", onclick: () => { tab = "cook"; cook = null; render(); } }, "Open kitchen list", ico("chevron")),
+      h("button", { class: "quick quick-chats", onclick: () => { tab = "chats"; render(); } }, "Customer chats", ico("chevron")),
+      h("button", { class: "quick quick-menu", onclick: () => { tab = "menu"; render(); } }, "Update menu", ico("chevron"))));
   return out;
 }
 
@@ -247,19 +280,20 @@ function ticket(o) {
     }
     return act(`/api/orders/${o.id}/status`, { status: to });
   } }, txt);
-  const tones = { hold: "#e7882b", cook: "#1d6b4d", ready: "#2f8fb0", done: "#6f7c73", cancelled: "#c94f45" };
   const isCustom = o.items.some((i) => String(i.id || "").startsWith("custom:"));
-  return h("article", { class: "ticket" + (isCustom ? " custom-ticket" : ""), style: "--ticket-tone:" + (tones[o.status] || "#1d6b4d") },
-    h("div", { class: "ticket-title" }, h("b", {}, o.name), " #" + o.id, isCustom ? h("span", { class: "flag custom-flag" }, "Custom") : null),
-    o.contact ? h("div", { class: "contact" }, o.contact) : null,
+  const statusLabel = { hold: "Needs approval", cook: "To cook", ready: "Ready for pickup", done: "Picked up", cancelled: "Cancelled" }[o.status] || o.status;
+  return h("article", { class: "ticket" + (isCustom ? " custom-ticket" : ""), "data-status": o.status },
+    h("div", { class: "ticket-band" }, h("span", { class: "ticket-status" }, statusLabel), h("span", { class: "ticket-no" }, "#" + o.id)),
     h("div", { class: "when" }, when(o.pickup)),
-    h("ul", {}, o.items.map((i) => h("li", {}, label(i))), o.notes ? h("li", {}, "Note: " + o.notes) : null),
-    h("div", { class: "row" }, h("b", {}, money(totalOf(o.items))), o.flags.map((f) => h("span", { class: "flag" }, f))),
-    h("div", { class: "row" },
+    h("div", { class: "ticket-title" }, h("b", {}, o.name), isCustom ? h("span", { class: "flag custom-flag" }, "Custom") : null,
+      isWeb(o.waId) ? h("button", { class: "ghost ticket-chat", onclick: () => openChat(o.waId), "aria-label": "Open chat with " + o.name }, "Chat") : null),
+    o.contact ? h("div", { class: "contact" }, o.contact) : null,
+    h("ul", {}, o.items.map((i) => h("li", {}, label(i))), o.notes ? h("li", { class: "ticket-note" }, "Note: " + o.notes) : null),
+    h("div", { class: "row ticket-total" }, h("b", {}, money(totalOf(o.items))), o.flags.map((f) => h("span", { class: "flag" }, f))),
+    h("div", { class: "row ticket-actions" },
       o.status === "hold" ? [b("cook", "Accept"), b("cancelled", "Decline", true)] : null,
       o.status === "cook" ? [b("ready", "Mark ready"), b("cancelled", "Cancel", true)] : null,
-      o.status === "ready" ? [b("done", "Picked up"), b("cook", "Back", true)] : null,
-      isWeb(o.waId) ? h("button", { class: "ghost", onclick: () => openChat(o.waId) }, "Chat") : null));
+      o.status === "ready" ? [b("done", "Picked up"), b("cook", "Back", true)] : null));
 }
 
 function renderOrders() {
@@ -605,8 +639,9 @@ function renderRules() {
 
 /* ---------- more / settings hub ---------- */
 function renderReviews() {
-  return [h("button", { class: "owner-back", onclick: () => { tab = "more"; render(); } }, "← More"),
-    h("h2", {}, "Reviews"), h("p", { class: "sub" }, "Verified order feedback. Publish only reviews safe for public display. Owner replies appear publicly under published reviews."),
+  return [h("div", { class: "owner-page-title" },
+      h("div", {}, h("button", { class: "owner-back", onclick: () => { tab = "more"; render(); } }, "← More"),
+        h("h2", {}, "Reviews"), h("p", { class: "sub" }, "Verified order feedback. Publish only reviews safe for public display. Owner replies appear publicly under published reviews."))),
     ...(state.reviews || []).map(r => {
       const feedback = h("small", { class: "owner-review-feedback", role: "status", "aria-live": "polite" });
       const replyBox = h("textarea", { class: "owner-review-reply-input", rows: 3, maxlength: 600,
@@ -661,7 +696,7 @@ function renderReviews() {
           }
         } }, r.ownerReply ? "Update reply" : "Save reply");
       const replyActions = [saveButton, removeButton];
-      return h("article", { class: "card", style: "margin:12px 0;padding:20px;overflow-wrap:anywhere" },
+      return h("article", { class: "card", style: "margin:12px 0;padding:20px;overflow-wrap:anywhere;max-width:760px" },
         h("b", {}, "Order #" + r.orderId + " · " + r.rating + "/5 · " + r.status),
         r.comment ? h("p", {}, r.comment) : h("p", { class: "sub" }, "Star rating only · no comment"),
         h("small", {}, r.displayName + " · Verified order"),
@@ -683,18 +718,18 @@ function renderReviews() {
 function renderMore() {
   const cards = [
     h("button", { class: "more-card", onclick: () => { tab = "reviews"; render(); } },
-      h("span", { class: "more-icon", "aria-hidden": "true" }, "☆"),
+      h("span", { class: "more-icon" }, ico("reviews")),
       h("span", {}, h("b", {}, "Reviews"), h("small", {}, "Moderate verified order feedback"))),
     h("button", { class: "more-card", onclick: () => { tab = "menu"; render(); } },
-      h("span", { class: "more-icon", "aria-hidden": "true" }, "☰"),
+      h("span", { class: "more-icon" }, ico("menu")),
       h("span", {}, h("b", {}, "Menu management"), h("small", {}, "Prices, availability and ingredients"))),
     h("button", { class: "more-card", onclick: () => { tab = "rules"; render(); } },
-      h("span", { class: "more-icon", "aria-hidden": "true" }, "⚙"),
+      h("span", { class: "more-icon" }, ico("rules")),
       h("span", {}, h("b", {}, "Business rules"), h("small", {}, "Pickup days, notice, address and contact")))
   ];
   if (state.features && state.features.simulator) {
     cards.push(h("button", { class: "more-card", onclick: () => { tab = "sim"; render(); } },
-      h("span", { class: "more-icon", "aria-hidden": "true" }, "◉"),
+      h("span", { class: "more-icon" }, ico("sim")),
       h("span", {}, h("b", {}, "Test chat"), h("small", {}, "Run simulator messages without a customer"))));
   }
   return [
@@ -742,7 +777,7 @@ function renderTabs() {
   const need = state.orders.filter((o) => o.status === "hold").length + state.alerts.filter((a) => !a.done).length;
   const tabs = [["dashboard", "Dashboard"], ["orders", "Orders"], ["cook", "Kitchen"], ["chats", "Chats"], ["more", "More"]];
   const selected = (k) => k === tab || (k === "more" && ["menu", "rules", "sim", "reviews"].includes(tab));
-  $("tabs").replaceChildren(...tabs.map(([k, t]) => h("button", { role: "tab", "aria-selected": String(selected(k)), onclick: () => { tab = k; cook = null; if (k === "chats") chat = { waId: "", messages: [], customer: null }; render(); } }, t, k === "orders" && need ? h("span", { class: "badge" }, need) : null)));
+  $("tabs").replaceChildren(...tabs.map(([k, t]) => h("button", { role: "tab", "aria-selected": String(selected(k)), onclick: () => { tab = k; cook = null; if (k === "chats") chat = { waId: "", messages: [], customer: null }; render(); } }, ico(k), h("span", { class: "tab-label" }, t), k === "orders" && need ? h("span", { class: "badge", "aria-label": need + " need you" }, need) : null)));
 }
 function render() {
   document.body.classList.toggle("chat-open-mobile", tab === "chats" && !!chat.waId);
