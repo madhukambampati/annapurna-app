@@ -78,6 +78,7 @@ const ASSETS: Record<string, { file: string; type: string }> = {
   "/heritage-v8.css": { file: "heritage-v8.css", type: "text/css; charset=utf-8" },
   "/heritage-v9.css": { file: "heritage-v9.css", type: "text/css; charset=utf-8" },
   "/heritage-v11.css": { file: "heritage-v11.css", type: "text/css; charset=utf-8" },
+  "/premium-v12.css": { file: "premium-v12.css", type: "text/css; charset=utf-8" },
   "/assets/home-reference-v11.svg": { file: "assets/home-reference-v11.svg", type: "image/webp" },
   "/assets/combos-reference-v11.svg": { file: "assets/combos-reference-v11.svg", type: "image/webp" },
   "/assets/weekly-reference-v11.svg": { file: "assets/weekly-reference-v11.svg", type: "image/webp" },

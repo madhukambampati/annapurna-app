@@ -2298,6 +2298,7 @@ html[data-theme="dark"] body.customer-mode #startForm input:-webkit-autofill{
 .review-owner-reply p{margin:6px 0 0;color:#385747;font-size:14px;line-height:1.55}
 .review-form{display:grid;gap:16px}.review-form label{display:grid;gap:8px}.review-form input,.review-form textarea,.review-form select{width:100%;box-sizing:border-box;font:inherit;padding:12px;border:1px solid #a7b69e;border-radius:12px;background:#fffdf6;color:#244c38}
 </style>
+<link rel="stylesheet" href="/premium-v12.css?v=12">
 </head>
 <body>
 <template id="tplMascot">
@@ -2336,7 +2337,7 @@ html[data-theme="dark"] body.customer-mode #startForm input:-webkit-autofill{
 <div class="app" id="app">
   <header class="top">
     <button class="brand-home" id="brandHome" type="button" aria-label="Go to Annapurna Home">
-      <img class="seal" src="/icon.svg" alt="" width="40" height="40">
+      <img class="seal" src="/assets/annapurna-emblem.webp" alt="" width="50" height="50">
       <span class="brand"><h1>Annapurna</h1><small>Home Foods</small></span>
     </button>
     <nav class="tabs" aria-label="Sections">
@@ -2445,7 +2446,8 @@ html[data-theme="dark"] body.customer-mode #startForm input:-webkit-autofill{
         <input type="text" id="fName" name="name" autocomplete="name" autocapitalize="words" maxlength="60" aria-describedby="fNameErr" required>
         <span class="field-error" id="fNameErr" aria-live="polite"></span>
       </label>
-      <label class="f">Phone or email (so Annapurna Home Foods can reach you)
+      <label class="f">Phone or email
+        <span class="f-hint">So Annapurna Home Foods can reach you about your order.</span>
         <input type="text" id="fContact" name="contact" autocomplete="tel" inputmode="text" maxlength="80" aria-describedby="fContactErr" required>
         <span class="field-error" id="fContactErr" aria-live="polite"></span>
       </label>

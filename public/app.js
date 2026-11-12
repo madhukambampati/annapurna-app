@@ -815,6 +815,9 @@
       ["publicReviewList", "onboardReviewList"].forEach(function (id) {
       var list = $(id); if (!list) return;
       list.replaceChildren();
+      // With nothing published yet the whole section stays out of the way (premium-v12.css).
+      var section = list.closest(".customer-reviews");
+      if (section) section.classList.toggle("no-reviews", !j.reviews.length);
       if (!j.reviews.length) { list.append(h("p", {}, "Your table, your stories. Reviews from picked-up orders will appear here once published.")); return; }
       j.reviews.forEach(function (r) {
         list.append(h("article", { class: "review-card" },
