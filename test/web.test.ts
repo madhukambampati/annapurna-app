@@ -1171,11 +1171,14 @@ test("owner daily open/closed status is public and blocks new orders while close
     assert.equal(menu.json.storeStatus.today, today);
     assert.equal(menu.json.storeStatus.open, false);
     assert.equal(menu.json.items.length > 0, true, "menu remains browseable while closed");
+    assert.equal(menu.json.storeStatus.closedReason, "manual");
+    assert.equal(menu.json.storeStatus.futureOrdersAllowed, true, "closing today never blocks a later open day");
 
     const token = await start("Asha", "asha@example.com");
-    const attempt = await say(token, "I would like to order the Gongura Chicken Kheema Pulao for Sunday at 1pm");
+    const attempt = await say(token, "I would like to order the Gongura Chicken Kheema Pulao");
     assert.equal(attempt.json.orderId, null);
     assert.ok(attempt.json.messages.some((m: any) => /closed today/i.test(m.text)));
+    assert.ok(attempt.json.messages.some((m: any) => /order for a future day/i.test(m.text)));
     assert.equal(t.store.listOrders().length, 0);
 
     const reopened = await call("POST", "/api/store-status", { token: "secret", body: { date: today, open: true } });

@@ -726,3 +726,54 @@ test("Round 14: a clear fresh menu order after an existing order is not mistaken
   assert.equal(t.store.listAlerts(true).some((a) => /cancel or change order/i.test(a.note)), false);
   assert.equal(r.judgment?.cancelPlaced, 0.05);
 });
+
+
+/* ---------- full-day closure: today only, never a later open day ---------- */
+function closeDay(t: ReturnType<typeof setup>, date: string) {
+  const s = t.store.getSettings();
+  s.dayOpen = { ...(s.dayOpen ?? {}), [date]: false };
+  t.store.putSettings(s);
+}
+
+test("closed for the full day: an order with no future day is refused and nothing reaches the model", async () => {
+  const t = setup({ judge: yesJudge });
+  closeDay(t, "2026-09-23"); // today in the test clock
+  const r = await t.say("I want the Bagara Rice and Chicken Fry combo");
+  assert.equal(r.route, "store_closed");
+  assert.match(r.replies[0]!, /closed today/i);
+  assert.match(r.replies[0]!, /order for a future day/i);
+  assert.equal(t.llm.prompts.length, 0);
+  assert.equal(t.store.listOrders().length, 0);
+});
+
+test("closed for the full day: an order for a later open day is read back and placed", async () => {
+  const t = setup({ judge: yesJudge });
+  closeDay(t, "2026-09-23");
+  const r1 = await orderAndReadBack(t);
+  assert.match(r1.replies[0]!, /Please check your order/);
+  const r2 = await t.say("yes");
+  assert.equal(r2.route, "confirm_order");
+  const orders = t.store.listOrders();
+  assert.equal(orders.length, 1);
+  assert.equal(orders[0]!.pickup, FRI_6PM);
+});
+
+test("closed for the full day: a read-back for today cannot be confirmed", async () => {
+  const t = setup({ judge: yesJudge });
+  await orderAndReadBack(t, [KHEEMA_BOGO], "2026-09-23T18:00", "2 chicken kheema fry combos buy 1 get 1, today 6pm");
+  closeDay(t, "2026-09-23"); // the owner closes after the read-back
+  const r = await t.say("yes");
+  assert.equal(r.route, "store_closed", "the closed-today check stops the yes before it reaches order placement");
+  assert.match(r.replies[0]!, /closed today/i);
+  assert.equal(t.store.listOrders().length, 0);
+});
+
+test("a pickup on a day the owner closed is refused at confirmation, even when today is open", async () => {
+  const t = setup({ judge: yesJudge });
+  closeDay(t, "2026-09-25"); // Friday, the pickup day
+  await orderAndReadBack(t);
+  const r = await t.say("yes");
+  assert.equal(r.route, "confirm_order+pickup_day_closed");
+  assert.match(r.replies[0]!, /closed on the pickup day you chose \(Fri, Sep 25/);
+  assert.equal(t.store.listOrders().length, 0);
+});

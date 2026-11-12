@@ -175,6 +175,12 @@ export function pickupIsFutureDay(pickupLocal: string | null | undefined, s: Set
   return pickupLocal.slice(0, 10) > today;
 }
 
+/** True when the owner has marked the pickup's own calendar day closed. */
+export function pickupDayClosed(pickupLocal: string | null | undefined, s: Settings): boolean {
+  if (!pickupLocal || !/^\d{4}-\d{2}-\d{2}T/.test(pickupLocal)) return false;
+  return !storeOpenOn(s, pickupLocal.slice(0, 10));
+}
+
 /** Pickup days that apply to one menu item. An item's own days win, then the combo days, then the plan days. */
 export function itemDays(m: MenuItem | undefined, s: Settings): number[] {
   if (m?.days?.length) return m.days;

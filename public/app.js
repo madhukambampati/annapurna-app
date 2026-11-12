@@ -221,6 +221,8 @@
   function isStoreClosed() { return !!storeStatus && storeStatus.open === false; }
   function isCutoffClosed() { return !!storeStatus && storeStatus.closedReason === "cutoff"; }
   function blocksAllNewOrders() { return isStoreClosed() && !storeStatus.futureOrdersAllowed; }
+  /* Closed for today (by the owner or the 8 PM cutoff) but later days can still be ordered. */
+  function futureOrdersOnly() { return isStoreClosed() && !!storeStatus.futureOrdersAllowed; }
 
   function renderStoreStatus() {
     if (!storeStatus) return;
@@ -237,7 +239,7 @@
     var copy = cutoff
       ? "Today's ordering closed at " + (storeStatus.cutoffLabel || "8:00 PM") + ". You can still browse the menu and place an order for a future day."
       : closed
-        ? "We're not taking new orders today." + (closedNames.length ? " Also closed " + closedNames.join(" & ") + "." : "") + " You can still browse the menu and weekly plan."
+        ? "We're not taking orders for today." + (closedNames.length ? " Also closed " + closedNames.join(" & ") + "." : "") + (futureOrdersOnly() ? " You can still browse the menu and place an order for a future day." : " You can still browse the menu and weekly plan.")
         : "We're taking orders today. Browse the menu or start an order with Vindhu.";
     [["onboardStoreStatus","onboardStatusTitle","onboardStatusText"],["homeStoreStatus","homeStatusTitle","homeStatusText"]].forEach(function (ids) {
       var box = $(ids[0]); if (!box) return;
@@ -267,13 +269,13 @@
     if (start) {
       start.disabled = blockedAll;
       var b = start.querySelector("b"), sm = start.querySelector("small");
-      if (b) b.textContent = cutoff ? "Plan a future order" : blockedAll ? "Closed today" : "Start an order";
-      if (sm) sm.textContent = cutoff ? "Today closed after 8 PM" : blockedAll ? "Browse menu or plan ahead" : "Chat with Vindhu";
+      if (b) b.textContent = futureOrdersOnly() ? "Plan a future order" : blockedAll ? "Closed today" : "Start an order";
+      if (sm) sm.textContent = cutoff ? "Today closed after 8 PM" : closed ? (blockedAll ? "Browse menu or plan ahead" : "Closed today") : "Chat with Vindhu";
     }
     var startBtn = $("startBtn");
-    if (startBtn && !startBtn.disabled) startBtn.textContent = cutoff ? "Plan a future order with Vindhu" : closed ? "Continue with Vindhu" : "Start ordering with Vindhu";
+    if (startBtn && !startBtn.disabled) startBtn.textContent = futureOrdersOnly() ? "Plan a future order with Vindhu" : closed ? "Continue with Vindhu" : "Start ordering with Vindhu";
     var text = $("text");
-    if (text) text.placeholder = cutoff ? "Tell Vindhu a future pickup day and time" : closed ? "Ask about the menu or weekly plan" : "Type your order or a question";
+    if (text) text.placeholder = futureOrdersOnly() ? "Tell Vindhu a future pickup day and time" : closed ? "Ask about the menu or weekly plan" : "Type your order or a question";
   }
 
   function initHome() {
@@ -340,7 +342,7 @@
       rows.map(function (r) { return h("div", { class: "row" + (r[0] === "Total" ? " total" : "") }, h("span", {}, r[0]), h("span", {}, r[1])); }),
       warn ? h("div", { class: "warnrow" }, warn) : null,
       h("div", { class: "acts" },
-        h("button", { class: "btn" + (blocksAllNewOrders() ? " store-closed-btn" : ""), type: "button", disabled: blocksAllNewOrders(), onclick: function () { if (!blocksAllNewOrders()) send("Yes, confirm", m.id ? "confirm:" + m.id : undefined); } }, icon("check"), blocksAllNewOrders() ? "Closed today" : "Yes, place order"),
+        h("button", { class: "btn" + (blocksAllNewOrders() ? " store-closed-btn" : ""), type: "button", disabled: blocksAllNewOrders(), onclick: function () { if (!blocksAllNewOrders()) send("Yes, confirm", m.id ? "confirm:" + m.id : undefined); } }, blocksAllNewOrders() ? null : icon("check"), blocksAllNewOrders() ? "Closed today" : "Yes, place order"),
         h("button", { class: "btn ghost", type: "button", onclick: function () { $("text").value = "I'd like to change "; resizeBox(); $("text").focus(); } }, "Change something")),
       h("time", {}, m.ts ? clock(m.ts) : ""));
     return card;
@@ -889,7 +891,7 @@
   function dish(x) {
     var off = !x.live;
     var storeClosed = blocksAllNewOrders();
-    var cutoffOnly = isCutoffClosed();
+    var cutoffOnly = futureOrdersOnly();
     var noPrice = x.kind === "combo" && x.single == null && x.bogo == null;
     var price = h("div", { class: "dprice" });
     if (x.kind === "plan") price.append(h("div", { class: "price-row" }, h("span", { class: "lab" }, "Per person, per week"), h("span", { class: "amt" }, money(x.plan))));
@@ -965,7 +967,9 @@
         h("strong", {}, isCutoffClosed() ? "Orders closed for today. " : "Closed today. "),
         isCutoffClosed()
           ? "Today's 8:00 PM cutoff has passed. You can still browse and plan a future-day order."
-          : "We're not taking new orders today, but you can still browse every menu item and the weekly plan."));
+          : futureOrdersOnly()
+            ? "We're not taking orders for today. You can still browse and plan a future-day order."
+            : "We're not taking new orders today, but you can still browse every menu item and the weekly plan."));
       var panels = menuPanels(m);
       var seg = h("div", { class: "seg menu-seg", role: "tablist", "aria-label": "Menu sections" });
       var sectionLabel = h("div", { class: "menu-section-label" }, h("span", {}, "MENU SECTION"), h("b", { id: "menuSectionName" }, ""));
@@ -994,7 +998,7 @@
         closeSheet();
         if (token) openChat();
         else { show("onboard"); if ($("fName")) $("fName").focus(); }
-      } }, isCutoffClosed() ? "Plan a future order" : "Start an order"));
+      } }, futureOrdersOnly() ? "Plan a future order" : "Start an order"));
       else if ($("chat").hidden && blocksAllNewOrders()) body.append(h("p", { class: "tiny" }, "Ordering is closed for today. You can come back when we're open to place the order."));
       if (panels.length) {
         var wanted = preferred ? panels.findIndex(function (p) { return p[0] === preferred; }) : -1;

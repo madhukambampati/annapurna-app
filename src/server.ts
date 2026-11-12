@@ -51,7 +51,8 @@ function businessStatus(s: Settings, epoch: number) {
     open: manualOpen && !cutoffReached,
     manualOpen,
     closedReason: !manualOpen ? "manual" : cutoffReached ? "cutoff" : null,
-    futureOrdersAllowed: cutoffReached,
+    // Closing today (by hand or by the 8 PM cutoff) never blocks orders for a later open day.
+    futureOrdersAllowed: !manualOpen || cutoffReached,
     cutoffHour: DAILY_ORDER_CUTOFF_HOUR,
     cutoffLabel: "8:00 PM",
     week,

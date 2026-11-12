@@ -3,7 +3,7 @@ import { clearCustomQuote, customQuoteIsCurrent, customTermsKey } from "./custom
 import { checkFlags, checkWeekday, draftHash, extrasOnly, friendlyName, mainOrderFor, sanitizeItems, tokens, type Issue } from "./guards.js";
 import { HeuristicJudge, type Judge, type Judgment } from "./judge.js";
 import { LlmError, type Llm } from "./llm.js";
-import { afterDailyOrderCutoff, findItem, itemLabel, lineAmt, money, optionPicks, pickupIsFutureDay, storeManualOpenNow, total } from "./menu.js";
+import { afterDailyOrderCutoff, findItem, itemLabel, lineAmt, money, optionPicks, pickupDayClosed, pickupIsFutureDay, storeManualOpenNow, total } from "./menu.js";
 import type { Notifier } from "./notify.js";
 import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
 import { route as decideRoute, type Route } from "./router.js";
@@ -391,9 +391,11 @@ export class Agent {
     const futurePickupExplicit =
       explicitFuturePickupIntent(text, now, settings.tz) ||
       (!!draft?.pickup_local && pickupIsFutureDay(draft.pickup_local, settings, now));
-    if (manuallyClosedToday && orderingWhileClosed) {
+    // A full-day closure only stops orders for today. An order that clearly names a later day goes ahead,
+    // exactly as it does after the 8 PM cutoff; the pickup day itself is checked when the order is placed.
+    if (manuallyClosedToday && orderingWhileClosed && !futurePickupExplicit) {
       out.route = "store_closed";
-      out.replies.push("We're closed today and aren't taking new orders. You can still browse the menu and weekly plan, then place your order when we're open.");
+      out.replies.push("We're closed today, so I can't take an order for today. You can still order for a future day — please send the item with the pickup day and time, for example “Bagara Rice and Chicken Fry tomorrow at 6 PM”.");
       for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
       return out;
     }
@@ -895,9 +897,14 @@ export class Agent {
   private async placeCustomOrder(waId: string, draft: Draft, s: Settings, out: Outcome): Promise<void> {
     const { store } = this.d;
     const now = this.now();
-    if (!storeManualOpenNow(s, now)) {
+    if (!storeManualOpenNow(s, now) && !pickupIsFutureDay(draft.pickup_local, s, now)) {
       out.route = "confirm_custom_order+store_closed";
-      out.replies.push("We're closed today and aren't taking new orders. Your details are still here; please confirm again when we're open.");
+      out.replies.push("We're closed today, so I can't place this for today. Your details are still here; please choose a future pickup day and time.");
+      return;
+    }
+    if (pickupDayClosed(draft.pickup_local, s)) {
+      out.route = "confirm_custom_order+pickup_day_closed";
+      out.replies.push(`We're closed on the pickup day you chose (${formatWhen(draft.pickup_local!)}), so I haven't placed this. Your details are still here; please choose another pickup day.`);
       return;
     }
     if (afterDailyOrderCutoff(s, now) && !pickupIsFutureDay(draft.pickup_local, s, now)) {
@@ -979,9 +986,14 @@ export class Agent {
   private async placeOrder(waId: string, draft: Draft, s: Settings, out: Outcome): Promise<void> {
     const { store } = this.d;
     const now = this.now();
-    if (!storeManualOpenNow(s, now)) {
+    if (!storeManualOpenNow(s, now) && !pickupIsFutureDay(draft.pickup_local, s, now)) {
       out.route = "confirm_order+store_closed";
-      out.replies.push("We're closed today and aren't taking new orders. Your order hasn't been placed. You can still browse the menu and weekly plan.");
+      out.replies.push("We're closed today, so I can't place this for today. Your order hasn't been placed. Please choose a future pickup day and time.");
+      return;
+    }
+    if (pickupDayClosed(draft.pickup_local, s)) {
+      out.route = "confirm_order+pickup_day_closed";
+      out.replies.push(`We're closed on the pickup day you chose (${formatWhen(draft.pickup_local!)}), so your order hasn't been placed. Please choose another pickup day.`);
       return;
     }
     if (afterDailyOrderCutoff(s, now) && !pickupIsFutureDay(draft.pickup_local, s, now)) {
