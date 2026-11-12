@@ -127,7 +127,7 @@ html body.customer-mode .onboard>.tiny{margin:0!important;color:var(--p-muted)!i
 @media(min-width:760px){
   html body.customer-mode .onboard{
     grid-template-columns:minmax(0,1.1fr) minmax(380px,.9fr)!important;
-    grid-template-areas:"hero form" "status form" "steps form" "trust form" "tiny form" "reviews reviews"!important;
+    grid-template-areas:"hero form" "status form" "steps form" "trust form" "tiny form" "reviews form"!important;
     gap:14px 18px!important;padding:18px 20px 24px!important;align-items:start!important;
   }
   html body.customer-mode .onboard .hero{grid-area:hero!important;min-height:470px!important;padding:270px 32px 30px!important}
