@@ -114,7 +114,9 @@ html body.customer-mode .daily-status-onboard{
   background:var(--p-leaf-tint)!important;border:1px solid #cfe1d3!important;box-shadow:none!important;
 }
 html body.customer-mode .daily-status-onboard .status-calendar{flex:none!important;width:38px!important;height:38px!important;border-radius:50%!important;background:#fff!important;color:var(--p-leaf)!important;display:grid!important;place-items:center!important}
-html body.customer-mode .daily-status-onboard .daily-status-copy small{display:none!important}
+html body.customer-mode .daily-status-copy small{display:block!important;font-size:11.5px!important;font-weight:700!important;letter-spacing:.12em!important;text-transform:uppercase!important;color:var(--p-gold-ink)!important;margin:0 0 2px!important}
+html body.customer-mode #homeWeekStatus{display:none!important}
+html body.customer-mode .daily-status-home{display:flex!important;align-items:center!important}
 html body.customer-mode .daily-status-onboard .daily-status-copy h3{margin:0!important;font:700 16.5px/1.25 var(--p-display)!important;color:var(--p-leaf)!important}
 html body.customer-mode .daily-status-onboard .daily-status-copy p{margin:2px 0 0!important;font-size:13px!important;line-height:1.4!important;color:#3d5246!important}
 html body.customer-mode .daily-status-onboard .onboard-status-days{display:none!important}

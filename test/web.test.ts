@@ -1198,7 +1198,7 @@ test("Oct 23-25 2026 closure seed marks the requested weekend closed", () =>
   }));
 
 
-test("daily 8 PM cutoff closes today without auto-moving orders to tomorrow", () =>
+test("7 PM cutoff closes today without auto-moving orders to tomorrow", () =>
   withRig(async ({ t, call, start, say, advance }) => {
     const toCutoff = 8 * 60 * 60 * 1000; // test clock starts at noon
     advance(toCutoff);
@@ -1209,13 +1209,15 @@ test("daily 8 PM cutoff closes today without auto-moving orders to tomorrow", ()
     assert.equal(menu.json.storeStatus.open, false);
     assert.equal(menu.json.storeStatus.closedReason, "cutoff");
     assert.equal(menu.json.storeStatus.futureOrdersAllowed, true);
-    assert.equal(menu.json.storeStatus.cutoffLabel, "8:00 PM");
+    assert.equal(menu.json.storeStatus.cutoffLabel, "7:00 PM");
+    assert.equal(menu.json.storeStatus.openLabel, "8:00 AM");
 
     const token = await start("Asha", "asha@example.com");
     const attempt = await say(token, "I want the Bagara Rice and Chicken Fry combo");
     assert.equal(attempt.json.orderId, null);
-    assert.ok(attempt.json.messages.some((m: any) => /closed at 8:00 PM/i.test(m.text)));
-    assert.ok(attempt.json.messages.some((m: any) => /won't move your order to tomorrow automatically/i.test(m.text)));
+    assert.ok(attempt.json.messages.some((m: any) => /closed at 7:00 PM/i.test(m.text)));
+    assert.ok(attempt.json.messages.some((m: any) => /open again tomorrow at 8:00 AM/i.test(m.text)));
+    assert.ok(attempt.json.messages.some((m: any) => /won't move your order to another day automatically/i.test(m.text)));
     assert.equal(t.store.listOrders().length, 0);
   }));
 
@@ -1450,3 +1452,35 @@ test("group review links: many people review through one link, and a full link c
     assert.equal((await call("POST", `/api/review-links/${link.id}/limit`, { token: "secret", body: { maxUses: 50 } })).status, 409, "a stopped link stays stopped");
   }, { web: { enabled: true } });
 });
+
+
+test("ordering hours: open 8:00 AM to 7:00 PM, today's date shown, future-day orders allowed outside hours", () =>
+  withRig(async ({ t, call, start, say, advance }) => {
+    const HOUR = 3_600_000, MIN = 60_000;
+    const status = async () => (await call("GET", "/web/menu")).json.storeStatus;
+
+    // noon Wednesday: open, and the customer sees today's date
+    let st = await status();
+    assert.deepEqual([st.open, st.closedReason, st.todayLabel], [true, null, "Wednesday, Sep 23"]);
+
+    advance(7 * HOUR - MIN); t.setNow(NOW + 7 * HOUR - MIN); // 6:59 PM
+    assert.equal((await status()).open, true);
+    advance(MIN); t.setNow(NOW + 7 * HOUR); // 7:00 PM
+    st = await status();
+    assert.deepEqual([st.open, st.closedReason, st.futureOrdersAllowed], [false, "cutoff", true]);
+
+    // 7:59 AM Thursday: a new day, not open yet; today's orders wait, future-day orders are fine
+    const early = 19 * HOUR + 59 * MIN;
+    advance(early - 7 * HOUR); t.setNow(NOW + early);
+    st = await status();
+    assert.deepEqual([st.open, st.closedReason, st.futureOrdersAllowed, st.todayLabel], [false, "before_open", true, "Thursday, Sep 24"]);
+    const token = await start("Asha", "asha@example.com");
+    const attempt = await say(token, "I want the Bagara Rice and Chicken Fry combo");
+    assert.equal(attempt.json.orderId, null);
+    assert.ok(attempt.json.messages.some((m: any) => /start taking today's orders at 8:00 AM/i.test(m.text)));
+    assert.equal(t.store.listOrders().length, 0);
+
+    advance(MIN); t.setNow(NOW + early + MIN); // 8:00 AM Thursday
+    st = await status();
+    assert.deepEqual([st.open, st.closedReason, st.todayLabel], [true, null, "Thursday, Sep 24"]);
+  }));
