@@ -741,82 +741,92 @@ function renderReviewLinks() {
 }
 
 /* ---------- more / settings hub ---------- */
+/* ---------- reviews: one card per review, clearly split into what the customer wrote and your reply ---------- */
+const replyOpen = new Set(); // review ids whose reply editor is open, kept across the desk's refreshes
+const STATUS_TEXT = { pending: "Waiting for you", published: "On the website", hidden: "Hidden" };
+
+function reviewCard(r) {
+  const who = r.displayName && r.displayName !== "Annapurna guest" ? r.displayName : "This customer";
+  const source = r.source === "invite" ? "Review link" + (r.inviteNote ? " · " + r.inviteNote : "") : "Website order #" + r.orderId;
+  const feedback = h("small", { class: "rv-feedback", role: "status", "aria-live": "polite" });
+
+  let reply;
+  if (replyOpen.has(r.id)) {
+    const box = h("textarea", { rows: 3, maxlength: 600, id: "reply-" + r.id,
+      placeholder: "e.g. Thank you so much, " + who + "! We're glad you enjoyed the food." }, r.ownerReply || "");
+    const save = h("button", { class: "pri", type: "button", onclick: async () => {
+      const text = box.value.trim();
+      if (!text) { feedback.textContent = "Write your reply first."; box.focus(); return; }
+      save.disabled = true;
+      try {
+        await api("/api/reviews/" + r.id + "/reply", { method: "POST", body: JSON.stringify({ text }) });
+        r.ownerReply = text;
+        replyOpen.delete(r.id);
+        showErr(null);
+        render();
+      } catch (e) { showErr(e); save.disabled = false; }
+    } }, "Save reply");
+    reply = h("div", { class: "rv-reply-edit" },
+      h("label", { for: "reply-" + r.id }, "Your reply to " + who),
+      box,
+      h("small", { class: "sub" }, "Shown on the website under " + who + "'s review, once the review is published. It is not sent to their phone."),
+      h("div", { class: "rv-row" }, save,
+        h("button", { class: "ghost", type: "button", onclick: () => { replyOpen.delete(r.id); render(); } }, "Cancel")));
+  } else if (r.ownerReply) {
+    reply = h("div", { class: "rv-reply" },
+      h("small", { class: "rv-label" }, "Your reply · Annapurna Home Foods"),
+      h("p", {}, r.ownerReply),
+      h("div", { class: "rv-row" },
+        h("button", { class: "ghost", type: "button", onclick: () => { replyOpen.add(r.id); render(); } }, "Edit reply"),
+        h("button", { class: "ghost", type: "button", onclick: async () => {
+          if (!confirm("Remove your reply from this review?")) return;
+          try { await api("/api/reviews/" + r.id + "/reply", { method: "DELETE" }); r.ownerReply = ""; showErr(null); render(); }
+          catch (e) { showErr(e); }
+        } }, "Remove reply")));
+  } else {
+    reply = h("button", { class: "ghost rv-reply-start", type: "button", onclick: () => {
+      replyOpen.add(r.id); render();
+      const box = document.getElementById("reply-" + r.id); if (box) box.focus();
+    } }, "↩ Reply to " + who);
+  }
+
+  const moderation = { pending: [["publish", "Publish to website", "pri"], ["hide", "Hide"], ["delete", "Delete", "bad"]],
+    published: [["unpublish", "Take off website"], ["hide", "Hide"], ["delete", "Delete", "bad"]],
+    hidden: [["publish", "Publish to website", "pri"], ["delete", "Delete", "bad"]] }[r.status] || [];
+
+  return h("article", { class: "rv-card", "data-status": r.status },
+    h("header", { class: "rv-head" },
+      h("span", { class: "rv-avatar", "aria-hidden": "true" }, (who === "This customer" ? "?" : who[0]).toUpperCase()),
+      h("span", { class: "rv-who" }, h("b", {}, r.displayName), h("small", {}, source + " · " + shortDate(r.createdAt))),
+      h("span", { class: "rv-pill is-" + r.status }, STATUS_TEXT[r.status] || r.status)),
+    h("div", { class: "rv-said" },
+      h("small", { class: "rv-label" }, who === "This customer" ? "The customer wrote" : who + " wrote"),
+      h("div", { class: "rv-stars", role: "img", "aria-label": r.rating + " out of 5 stars" },
+        h("span", { class: "on" }, "★".repeat(r.rating)), h("span", {}, "★".repeat(5 - r.rating))),
+      r.comment ? h("p", {}, r.comment) : h("p", { class: "sub" }, "Stars only, no comment.")),
+    reply, feedback,
+    h("footer", { class: "rv-actions" }, moderation.map(([action, text, cls]) =>
+      h("button", { class: cls || "ghost", type: "button", onclick: () => {
+        if (action === "delete" && !confirm("Permanently delete " + who + "'s review? This cannot be undone.")) return;
+        act("/api/reviews/" + r.id + "/" + action, {});
+      } }, text))));
+}
+
 function renderReviews() {
+  const reviews = state.reviews || [];
+  const waiting = reviews.filter((r) => r.status === "pending").length;
+  const live = reviews.filter((r) => r.status === "published").length;
   return [h("div", { class: "owner-page-title" },
       h("div", {}, h("button", { class: "owner-back", onclick: () => { tab = "more"; render(); } }, "← More"),
-        h("h2", {}, "Reviews"), h("p", { class: "sub" }, "Reviews from picked-up orders and from review links you send. Publish only reviews safe for public display. Owner replies appear publicly under published reviews."))),
+        h("h2", {}, "Reviews"),
+        h("p", { class: "sub" }, "What customers wrote about your food. Nothing appears on the website until you publish it.")),
+      reviews.length ? h("div", { class: "owner-mini-counts" },
+        h("span", { class: waiting ? "hot" : "" }, waiting + " waiting for you"),
+        h("span", {}, live + " on the website")) : null),
     renderReviewLinks(),
-    ...(state.reviews || []).map(r => {
-      const feedback = h("small", { class: "owner-review-feedback", role: "status", "aria-live": "polite" });
-      const replyBox = h("textarea", { class: "owner-review-reply-input", rows: 3, maxlength: 600,
-        placeholder: "Write a warm, helpful reply from Annapurna Home Foods",
-        "aria-label": "Public reply to review " + (r.orderId ? "for order #" + r.orderId : "from " + (r.inviteNote || "a review link")),
-        oninput: () => { saveButton.disabled = replyBox.value.trim() === String(r.ownerReply || "").trim(); } }, r.ownerReply || "");
-      const replyPreview = h("div", { class: "owner-review-reply-preview", hidden: !r.ownerReply },
-        h("b", {}, "Current Annapurna reply"), h("p", {}, r.ownerReply || ""));
-      const removeButton = h("button", { class: "ghost", type: "button", hidden: !r.ownerReply, onclick: async () => {
-        if (!confirm("Remove Annapurna's public reply from this review?")) return;
-        removeButton.disabled = true;
-        try {
-          await api("/api/reviews/" + r.id + "/reply", { method: "DELETE" });
-          r.ownerReply = "";
-          r.ownerReplyAt = null;
-          replyPreview.hidden = true;
-          replyPreview.querySelector("p").textContent = "";
-          replyBox.value = "";
-          saveButton.textContent = "Save reply";
-          saveButton.disabled = true;
-          removeButton.hidden = true;
-          feedback.textContent = "Reply removed successfully.";
-          showErr(null);
-        } catch (e) {
-          showErr(e);
-        } finally {
-          removeButton.disabled = false;
-        }
-      } }, "Remove reply");
-      const saveButton = h("button", { class: "pri", type: "button",
-        disabled: !String(r.ownerReply || "").trim(), onclick: async () => {
-          const text = replyBox.value.trim();
-          if (!text) { feedback.textContent = "Write a reply before saving."; replyBox.focus(); return; }
-          if (text === String(r.ownerReply || "").trim()) {
-            feedback.textContent = "No changes to save. Edit the reply first.";
-            return;
-          }
-          saveButton.disabled = true;
-          try {
-            await api("/api/reviews/" + r.id + "/reply", { method: "POST", body: JSON.stringify({ text }) });
-            r.ownerReply = text;
-            r.ownerReplyAt = Date.now();
-            replyPreview.hidden = false;
-            replyPreview.querySelector("p").textContent = text;
-            saveButton.textContent = "Update reply";
-            removeButton.hidden = false;
-            feedback.textContent = "Reply updated successfully.";
-            showErr(null);
-          } catch (e) {
-            showErr(e);
-            saveButton.disabled = false;
-          }
-        } }, r.ownerReply ? "Update reply" : "Save reply");
-      const replyActions = [saveButton, removeButton];
-      return h("article", { class: "card", style: "margin:12px 0;padding:20px;overflow-wrap:anywhere;max-width:760px" },
-        h("b", {}, (r.source === "invite" ? "Review link" + (r.inviteNote ? " · " + r.inviteNote : "") : "Order #" + r.orderId) + " · " + r.rating + "/5 · " + r.status),
-        r.comment ? h("p", {}, r.comment) : h("p", { class: "sub" }, "Star rating only · no comment"),
-        h("small", {}, r.displayName + (r.source === "invite" ? " · Annapurna customer (from your review link)" : " · Verified order")),
-        replyPreview,
-        h("div", { class: "owner-review-reply-editor" },
-          h("label", {}, "Reply publicly as Annapurna Home Foods", replyBox),
-          h("small", { class: "sub" }, r.status === "published" ? "Customers can see this reply on the website." : "This reply will appear publicly when you publish the review."),
-          feedback,
-          h("div", { class: "owner-review-reply-actions" }, ...replyActions)),
-        h("div", { class: "review-actions" }, ...(r.status === "published" ? ["unpublish", "hide", "delete"] : r.status === "hidden" ? ["publish", "delete"] : ["publish", "hide", "delete"]).map(action =>
-          h("button", { type: "button", onclick: () => {
-            if (action === "delete" && !confirm("Permanently delete this review? This cannot be undone.")) return;
-            act("/api/reviews/" + r.id + "/" + action, {});
-          } }, action[0].toUpperCase() + action.slice(1)))));
-    }),
-    ...(!(state.reviews || []).length ? [h("p", { class: "empty" }, "No reviews yet. Feedback appears here after customers review picked-up orders or use a review link you sent.")] : [])];
+    reviews.length ? h("h3", { class: "rv-list-title" }, "Customer reviews") : null,
+    ...reviews.map(reviewCard),
+    ...(!reviews.length ? [h("p", { class: "empty" }, "No reviews yet. Feedback appears here after customers review picked-up orders or use a review link you sent.")] : [])];
 }
 
 function renderMore() {
