@@ -3,7 +3,7 @@ import { clearCustomQuote, customQuoteIsCurrent, customTermsKey } from "./custom
 import { checkFlags, checkWeekday, draftHash, extrasOnly, friendlyName, mainOrderFor, sanitizeItems, tokens, type Issue } from "./guards.js";
 import { HeuristicJudge, type Judge, type Judgment } from "./judge.js";
 import { LlmError, type Llm } from "./llm.js";
-import { afterDailyOrderCutoff, findItem, itemLabel, lineAmt, money, optionPicks, pickupDayClosed, pickupIsFutureDay, storeManualOpenNow, total } from "./menu.js";
+import { DAILY_ORDER_CUTOFF_LABEL, DAILY_ORDER_OPEN_LABEL, beforeDailyOpening, findItem, outsideOrderingHours, itemLabel, lineAmt, money, optionPicks, pickupDayClosed, pickupIsFutureDay, storeManualOpenNow, total } from "./menu.js";
 import type { Notifier } from "./notify.js";
 import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
 import { route as decideRoute, type Route } from "./router.js";
@@ -295,6 +295,17 @@ function explicitFuturePickupIntent(text: string, now: number, tz: string): bool
 
 export const HANDOFF_NOTE = "Wants to talk to a person";
 
+const FUTURE_EXAMPLE = "for example “Bagara Rice and Chicken Fry tomorrow at 6 PM”";
+/** What to say when someone tries to order for today outside 8:00 AM–7:00 PM. */
+function outsideHoursReply(s: Settings, now: number, atConfirm: boolean): string {
+  const lead = beforeDailyOpening(s, now)
+    ? `We start taking today's orders at ${DAILY_ORDER_OPEN_LABEL}.`
+    : `Today's ordering closed at ${DAILY_ORDER_CUTOFF_LABEL}, and we open again tomorrow at ${DAILY_ORDER_OPEN_LABEL}.`;
+  return atConfirm
+    ? `${lead} I can't place this for today, and I won't move it to another day automatically. Please choose a future pickup day and time.`
+    : `${lead} I won't move your order to another day automatically. You can still order for a future day — please send the item with the pickup day and time, ${FUTURE_EXAMPLE}.`;
+}
+
 /** Identity of an order for duplicate checks: what is ordered and when it is picked up. */
 function orderKey(items: Array<{ id: string; qty: number; pack: string }>, pickup: string | null): string {
   return JSON.stringify(items.map((i) => `${i.id}:${i.pack}:${i.qty}`).sort()) + "|" + (pickup ?? "");
@@ -381,7 +392,7 @@ export class Agent {
     }
 
     const manuallyClosedToday = !storeManualOpenNow(settings, now);
-    const cutoffReached = !manuallyClosedToday && afterDailyOrderCutoff(settings, now);
+    const cutoffReached = !manuallyClosedToday && outsideOrderingHours(settings, now);
     const orderingWhileClosed =
       clearlyNormalMenuOrder(text, menu) ||
       CUSTOM_WORDS.test(text) ||
@@ -392,7 +403,7 @@ export class Agent {
       explicitFuturePickupIntent(text, now, settings.tz) ||
       (!!draft?.pickup_local && pickupIsFutureDay(draft.pickup_local, settings, now));
     // A full-day closure only stops orders for today. An order that clearly names a later day goes ahead,
-    // exactly as it does after the 8 PM cutoff; the pickup day itself is checked when the order is placed.
+    // exactly as it does outside ordering hours; the pickup day itself is checked when the order is placed.
     if (manuallyClosedToday && orderingWhileClosed && !futurePickupExplicit) {
       out.route = "store_closed";
       out.replies.push("We're closed today, so I can't take an order for today. You can still order for a future day — please send the item with the pickup day and time, for example “Bagara Rice and Chicken Fry tomorrow at 6 PM”.");
@@ -401,7 +412,7 @@ export class Agent {
     }
     if (cutoffReached && orderingWhileClosed && !futurePickupExplicit) {
       out.route = "daily_cutoff";
-      out.replies.push("Today's ordering closed at 8:00 PM. I won't move your order to tomorrow automatically. You can still order for a future day — please send the item with the pickup day and time, for example “Bagara Rice and Chicken Fry tomorrow at 6 PM”.");
+      out.replies.push(outsideHoursReply(settings, now, false));
       for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
       return out;
     }
@@ -907,9 +918,9 @@ export class Agent {
       out.replies.push(`We're closed on the pickup day you chose (${formatWhen(draft.pickup_local!)}), so I haven't placed this. Your details are still here; please choose another pickup day.`);
       return;
     }
-    if (afterDailyOrderCutoff(s, now) && !pickupIsFutureDay(draft.pickup_local, s, now)) {
+    if (outsideOrderingHours(s, now) && !pickupIsFutureDay(draft.pickup_local, s, now)) {
       out.route = "confirm_custom_order+daily_cutoff";
-      out.replies.push("Today's ordering closed at 8:00 PM, so I can't place this for today. I won't move it to tomorrow automatically. Please choose a future pickup day and time.");
+      out.replies.push(outsideHoursReply(s, now, true));
       return;
     }
     const custom = draft.custom;
@@ -996,9 +1007,9 @@ export class Agent {
       out.replies.push(`We're closed on the pickup day you chose (${formatWhen(draft.pickup_local!)}), so your order hasn't been placed. Please choose another pickup day.`);
       return;
     }
-    if (afterDailyOrderCutoff(s, now) && !pickupIsFutureDay(draft.pickup_local, s, now)) {
+    if (outsideOrderingHours(s, now) && !pickupIsFutureDay(draft.pickup_local, s, now)) {
       out.route = "confirm_order+daily_cutoff";
-      out.replies.push("Today's ordering closed at 8:00 PM, so I can't place this for today. I won't move it to tomorrow automatically. Please choose a future pickup day and time.");
+      out.replies.push(outsideHoursReply(s, now, true));
       return;
     }
     const menu = store.getMenu();

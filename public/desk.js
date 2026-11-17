@@ -202,7 +202,9 @@ function renderDashboard() {
     }, 0);
 
   const ss = state.storeStatus || { today, open: true, manualOpen: true, week: [] };
-  const cutoff = ss.closedReason === "cutoff";
+  const early = ss.closedReason === "before_open";
+  const cutoff = ss.closedReason === "cutoff" || early;
+  const openAt = ss.openLabel || "8:00 AM", closeAt = ss.cutoffLabel || "7:00 PM";
   const manualOpen = ss.manualOpen !== false;
   const setDay = (date, open) => act("/api/store-status", { date, open });
   const storeCard = h("section", { class: "owner-store-status " + (ss.open ? "is-open" : "is-closed") },
@@ -210,15 +212,15 @@ function renderDashboard() {
       h("span", { class: "owner-store-icon", "aria-hidden": "true" }, ico(ss.open ? "check" : "cross")),
       h("div", {},
         h("small", {}, "Today's store status"),
-        h("strong", {}, cutoff ? "Closed for today" : ss.open ? "Open today" : "Closed today"),
-        h("span", {}, cutoff ? "Automatic 8:00 PM cutoff. Future-day orders can still be placed." : ss.open ? "Customers can place new orders." : "Customers can browse, but new orders are blocked."))),
+        h("strong", {}, early ? "Opens at " + openAt : cutoff ? "Closed for today" : ss.open ? "Open today" : "Closed today"),
+        h("span", {}, early ? "Orders for today start automatically at " + openAt + ". Future-day orders can be placed now." : cutoff ? "Closed automatically at " + closeAt + "; opens again at " + openAt + ". Future-day orders can still be placed." : ss.open ? "Customers can place new orders." : "Customers can browse, but new orders are blocked."))),
     h("div", { class: "owner-store-actions", role: "group", "aria-label": "Open or close today" },
       h("button", { class: manualOpen ? "pri" : "ghost", disabled: manualOpen, onclick: () => setDay(ss.today, true) }, "Open today"),
       h("button", { class: manualOpen ? "ghost danger" : "pri danger", disabled: !manualOpen, onclick: () => setDay(ss.today, false) }, "Close full day")),
     h("div", { class: "owner-week-switches" }, (ss.week || []).map((d) => {
       const dayManualOpen = d.manualOpen !== false;
       return h("button", { class: "owner-day-switch " + (d.open ? "open" : "closed") + (d.today ? " today" : ""), onclick: () => setDay(d.date, !dayManualOpen), title: "Click to mark " + d.day + " " + (dayManualOpen ? "closed" : "open") },
-        h("b", {}, String(d.day || "").slice(0,3)), dayLabel(d), h("em", {}, d.closedReason === "cutoff" ? "8 PM cutoff" : d.open ? "Open" : "Closed"));
+        h("b", {}, String(d.day || "").slice(0,3)), dayLabel(d), h("em", {}, d.closedReason === "cutoff" ? "Closed " + closeAt : d.closedReason === "before_open" ? "Opens " + openAt : d.open ? "Open" : "Closed"));
     })));
 
   const kpis = h("section", { class: "owner-kpis", "aria-label": "Kitchen overview" },

@@ -151,21 +151,31 @@ export function storeOpenOn(s: Settings, dateIso: string): boolean {
   return s.dayOpen?.[dateIso] !== false;
 }
 
-/** New same-day orders close automatically at 8:00 PM in the kitchen timezone. */
-export const DAILY_ORDER_CUTOFF_HOUR = 20;
+/** Orders for today are taken from 8:00 AM until 7:00 PM in the kitchen timezone. Outside those hours
+ *  customers can still order for a later day. */
+export const DAILY_ORDER_OPEN_HOUR = 8;
+export const DAILY_ORDER_CUTOFF_HOUR = 19;
+export const DAILY_ORDER_OPEN_LABEL = "8:00 AM";
+export const DAILY_ORDER_CUTOFF_LABEL = "7:00 PM";
 
 export function storeManualOpenNow(s: Settings, now: number): boolean {
   return storeOpenOn(s, epochToLocal(now, s.tz).slice(0, 10));
 }
 
-export function afterDailyOrderCutoff(s: Settings, now: number): boolean {
-  const local = epochToLocal(now, s.tz);
-  return Number(local.slice(11, 13)) >= DAILY_ORDER_CUTOFF_HOUR;
+/** Before 8:00 AM: today's ordering hasn't opened yet. */
+export function beforeDailyOpening(s: Settings, now: number): boolean {
+  return Number(epochToLocal(now, s.tz).slice(11, 13)) < DAILY_ORDER_OPEN_HOUR;
 }
 
-/** Effective "open today" state shown to customers: manual closure wins, then the 8 PM cutoff. */
+/** Outside 8:00 AM–7:00 PM: no new orders for today, orders for later days are fine. */
+export function outsideOrderingHours(s: Settings, now: number): boolean {
+  const hour = Number(epochToLocal(now, s.tz).slice(11, 13));
+  return hour < DAILY_ORDER_OPEN_HOUR || hour >= DAILY_ORDER_CUTOFF_HOUR;
+}
+
+/** Effective "open today" state shown to customers: manual closure wins, then the ordering hours. */
 export function storeOpenNow(s: Settings, now: number): boolean {
-  return storeManualOpenNow(s, now) && !afterDailyOrderCutoff(s, now);
+  return storeManualOpenNow(s, now) && !outsideOrderingHours(s, now);
 }
 
 /** True only when the pickup is on a later calendar day in the kitchen timezone. */

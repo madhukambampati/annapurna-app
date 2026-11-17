@@ -219,9 +219,13 @@
 
   /* ---------- customer home ---------- */
   function isStoreClosed() { return !!storeStatus && storeStatus.open === false; }
-  function isCutoffClosed() { return !!storeStatus && storeStatus.closedReason === "cutoff"; }
+  /* Closed only because of the time of day: before 8 AM or after 7 PM. */
+  function isCutoffClosed() { return !!storeStatus && (storeStatus.closedReason === "cutoff" || storeStatus.closedReason === "before_open"); }
+  function isBeforeOpen() { return !!storeStatus && storeStatus.closedReason === "before_open"; }
+  var openAt = function () { return (storeStatus && storeStatus.openLabel) || "8:00 AM"; };
+  var closeAt = function () { return (storeStatus && storeStatus.cutoffLabel) || "7:00 PM"; };
   function blocksAllNewOrders() { return isStoreClosed() && !storeStatus.futureOrdersAllowed; }
-  /* Closed for today (by the owner or the 8 PM cutoff) but later days can still be ordered. */
+  /* Closed for today (by the owner or outside ordering hours) but later days can still be ordered. */
   function futureOrdersOnly() { return isStoreClosed() && !!storeStatus.futureOrdersAllowed; }
 
   function renderStoreStatus() {
@@ -231,20 +235,27 @@
     var blockedAll = blocksAllNewOrders();
     document.body.classList.toggle("store-closed", closed);
     document.body.classList.toggle("store-cutoff", cutoff);
-    var title = cutoff ? "Orders Closed for Today" : closed ? "Closed Today" : "Open Today";
+    var early = isBeforeOpen();
+    var title = early ? "Opening at " + openAt() : cutoff ? "Closed for Today" : closed ? "Closed Today" : "Open Today";
     var upcomingClosed = (storeStatus.week || []).filter(function (d) {
       return !d.open && !d.today && (!storeStatus.today || d.date >= storeStatus.today);
     }).slice(0, 3);
     var closedNames = upcomingClosed.map(function (d) { return String(d.day || "").slice(0, 3) + " " + (d.label || d.date); });
-    var copy = cutoff
-      ? "Today's ordering closed at " + (storeStatus.cutoffLabel || "8:00 PM") + ". You can still browse the menu and place an order for a future day."
+    var alsoClosed = closedNames.length ? " Also closed " + closedNames.join(" & ") + "." : "";
+    var copy = early
+      ? "We start taking today's orders at " + openAt() + ". You can already place an order for a future day." + alsoClosed
+      : cutoff
+      ? "Today's ordering closed at " + closeAt() + ". We open again tomorrow at " + openAt() + ". You can still place an order for a future day." + alsoClosed
       : closed
-        ? "We're not taking orders for today." + (closedNames.length ? " Also closed " + closedNames.join(" & ") + "." : "") + (futureOrdersOnly() ? " You can still browse the menu and place an order for a future day." : " You can still browse the menu and weekly plan.")
-        : "We're taking orders today. Browse the menu or start an order with Vindhu.";
+        ? "We're not taking orders for today." + alsoClosed + (futureOrdersOnly() ? " You can still browse the menu and place an order for a future day." : " You can still browse the menu and weekly plan.")
+        : "We're taking orders today until " + closeAt() + ". Browse the menu or start an order with Vindhu." + alsoClosed;
+    var dateLine = "Today's status" + (storeStatus.todayLabel ? " · " + storeStatus.todayLabel : "");
     [["onboardStoreStatus","onboardStatusTitle","onboardStatusText"],["homeStoreStatus","homeStatusTitle","homeStatusText"]].forEach(function (ids) {
       var box = $(ids[0]); if (!box) return;
       box.hidden = false; box.classList.toggle("open", !closed);
       $(ids[1]).textContent = title; $(ids[2]).textContent = copy;
+      var label = box.querySelector(".daily-status-copy small");
+      if (label) label.textContent = dateLine;
     });
     var onboardDays = $("onboardStatusDays");
     if (onboardDays) {
@@ -255,22 +266,15 @@
         onboardDays.append(h("span", {}, String(d.day || "").slice(0, 3) + " " + (d.label || d.date) + " · Closed"));
       });
     }
+    // Customers see today only; upcoming closed days are named in the text above.
     var week = $("homeWeekStatus");
-    if (week) {
-      week.replaceChildren();
-      (storeStatus.week || []).forEach(function (d) {
-        week.append(h("div", { class: "status-day" + (d.open ? "" : " closed") + (d.today ? " today" : "") },
-          h("b", {}, String(d.day || "").slice(0,3)),
-          h("span", {}, d.label || d.date),
-          h("em", {}, d.open ? "Open" : "Closed")));
-      });
-    }
+    if (week) { week.replaceChildren(); week.hidden = true; }
     var start = $("homeOrder");
     if (start) {
       start.disabled = blockedAll;
       var b = start.querySelector("b"), sm = start.querySelector("small");
       if (b) b.textContent = futureOrdersOnly() ? "Plan a future order" : blockedAll ? "Closed today" : "Start an order";
-      if (sm) sm.textContent = cutoff ? "Today closed after 8 PM" : closed ? (blockedAll ? "Browse menu or plan ahead" : "Closed today") : "Chat with Vindhu";
+      if (sm) sm.textContent = early ? "Today opens at " + openAt() : cutoff ? "Today closed after " + closeAt() : closed ? (blockedAll ? "Browse menu or plan ahead" : "Closed today") : "Chat with Vindhu";
     }
     var startBtn = $("startBtn");
     if (startBtn && !startBtn.disabled) startBtn.textContent = futureOrdersOnly() ? "Plan a future order with Vindhu" : closed ? "Continue with Vindhu" : "Start ordering with Vindhu";
@@ -964,9 +968,9 @@
       if (sheetOpen !== "menu") return;
       body.replaceChildren();
       if (isStoreClosed()) body.append(h("div", { class: "store-closed-note", role: "status" },
-        h("strong", {}, isCutoffClosed() ? "Orders closed for today. " : "Closed today. "),
+        h("strong", {}, isBeforeOpen() ? "Not open yet. " : isCutoffClosed() ? "Orders closed for today. " : "Closed today. "),
         isCutoffClosed()
-          ? "Today's 8:00 PM cutoff has passed. You can still browse and plan a future-day order."
+          ? (isBeforeOpen() ? "We start taking today's orders at " + openAt() + "." : "Today's " + closeAt() + " cutoff has passed.") + " You can still browse and plan a future-day order."
           : futureOrdersOnly()
             ? "We're not taking orders for today. You can still browse and plan a future-day order."
             : "We're not taking new orders today, but you can still browse every menu item and the weekly plan."));

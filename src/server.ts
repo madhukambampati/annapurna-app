@@ -6,7 +6,7 @@ import type { Config } from "./config.js";
 import { customTermsKey } from "./custom.js";
 import { cookSummary } from "./cook.js";
 import { RateLimiter } from "./limiter.js";
-import { DAILY_ORDER_CUTOFF_HOUR, afterDailyOrderCutoff, dayRange, itemDays, itemLabel, money, storeOpenOn, total } from "./menu.js";
+import { DAILY_ORDER_CUTOFF_HOUR, DAILY_ORDER_CUTOFF_LABEL, DAILY_ORDER_OPEN_HOUR, DAILY_ORDER_OPEN_LABEL, beforeDailyOpening, dayRange, outsideOrderingHours, itemDays, itemLabel, money, storeOpenOn, total } from "./menu.js";
 import { friendlyName } from "./guards.js";
 import type { ReviewInvite, Store } from "./store.js";
 import { DAYN, dayLabel, formatWhen, nextDateForDow, pad, zonedParts } from "./time.js";
@@ -55,7 +55,9 @@ function businessStatus(s: Settings, epoch: number) {
   const p = zonedParts(epoch, s.tz);
   const today = `${p.y}-${pad(p.m)}-${pad(p.d)}`;
   const manualOpen = storeOpenOn(s, today);
-  const cutoffReached = manualOpen && afterDailyOrderCutoff(s, epoch);
+  const cutoffReached = manualOpen && outsideOrderingHours(s, epoch);
+  // "before_open": 00:00–7:59, today's ordering starts at 8 AM. "cutoff": 7 PM onwards, today is over.
+  const hoursReason = beforeDailyOpening(s, epoch) ? "before_open" : "cutoff";
   const sinceMonday = (p.dow + 6) % 7;
   const monday = new Date(Date.UTC(p.y, p.m - 1, p.d - sinceMonday));
   const week = Array.from({ length: 7 }, (_, i) => {
@@ -70,18 +72,22 @@ function businessStatus(s: Settings, epoch: number) {
       open: dayManualOpen && !(isToday && cutoffReached),
       manualOpen: dayManualOpen,
       today: isToday,
-      closedReason: !dayManualOpen ? "manual" : isToday && cutoffReached ? "cutoff" : null,
+      closedReason: !dayManualOpen ? "manual" : isToday && cutoffReached ? hoursReason : null,
     };
   });
   return {
     today,
     open: manualOpen && !cutoffReached,
     manualOpen,
-    closedReason: !manualOpen ? "manual" : cutoffReached ? "cutoff" : null,
-    // Closing today (by hand or by the 8 PM cutoff) never blocks orders for a later open day.
+    closedReason: !manualOpen ? "manual" : cutoffReached ? hoursReason : null,
+    // Closing today (by hand or outside ordering hours) never blocks orders for a later open day.
     futureOrdersAllowed: !manualOpen || cutoffReached,
+    openHour: DAILY_ORDER_OPEN_HOUR,
+    openLabel: DAILY_ORDER_OPEN_LABEL,
     cutoffHour: DAILY_ORDER_CUTOFF_HOUR,
-    cutoffLabel: "8:00 PM",
+    cutoffLabel: DAILY_ORDER_CUTOFF_LABEL,
+    /** e.g. "Tuesday, Nov 17", in the kitchen timezone. */
+    todayLabel: new Date(Date.UTC(p.y, p.m - 1, p.d)).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "long", month: "short", day: "numeric" }),
     week,
   };
 }
