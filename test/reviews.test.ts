@@ -78,3 +78,44 @@ test("an existing database keeps its reviews when review links are added, and a 
     assert.equal(store.getReviewInvite(inv.token)!.usedAt, 99);
   } finally { store?.close(); rmSync(dir, { recursive: true, force: true }); }
 });
+
+
+test("a database from the first review-link release upgrades to group links without losing anything", () => {
+  const dir = mkdtempSync(join(tmpdir(), "annapurna-review-group-"));
+  const path = join(dir, "v2.db");
+  let store: Store | undefined;
+  try {
+    // Exactly what production has after the first review-link deploy: a used one-time link and its review.
+    const old = new DatabaseSync(path);
+    old.exec(`
+      CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, wa_id TEXT NOT NULL, name TEXT NOT NULL, items TEXT NOT NULL,
+        pickup TEXT, flags TEXT NOT NULL, status TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL);
+      CREATE TABLE review_invites (id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT NOT NULL UNIQUE, note TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, used_at INTEGER, revoked_at INTEGER);
+      CREATE TABLE reviews (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER UNIQUE REFERENCES orders(id),
+        invite_id INTEGER UNIQUE REFERENCES review_invites(id),
+        rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5), comment TEXT NOT NULL,
+        display_name TEXT NOT NULL DEFAULT 'Annapurna guest',
+        status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','published','hidden','deleted')),
+        created_at INTEGER NOT NULL, owner_reply TEXT NOT NULL DEFAULT '', owner_reply_at INTEGER,
+        CHECK((order_id IS NULL) <> (invite_id IS NULL)));
+      INSERT INTO orders (wa_id, name, items, flags, status, created_at) VALUES ('web:p', 'Priyanka', '[]', '[]', 'done', 1);
+      INSERT INTO reviews (id, order_id, rating, comment, display_name, status, created_at) VALUES (3, 1, 5, 'Excellent!', 'Priyanka', 'published', 2);
+      INSERT INTO review_invites (id, token, note, created_at, expires_at, used_at) VALUES (1, '${"g".repeat(24)}', '', 10, 1000, 20);
+      INSERT INTO reviews (id, invite_id, rating, comment, display_name, status, created_at) VALUES (4, 1, 5, 'Tasty', 'Shashi', 'pending', 20);
+    `);
+    old.close();
+
+    store = new Store(path);
+    const link = store.getReviewInvite("g".repeat(24))!;
+    assert.deepEqual([link.maxUses, link.useCount], [1, 1], "the used link counts its one review");
+    assert.equal(store.submitInviteReview(link.token, 5, "Me too", "Surendra", 30), false, "still full until the owner opens it up");
+    assert.equal(store.setReviewInviteLimit(link.id, 26), true);
+    assert.equal(store.submitInviteReview(link.token, 5, "Me too", "Surendra", 30), true, "the same link now takes more reviews");
+    assert.deepEqual(store.listReviews().map((r) => [r.id, r.displayName]), [[5, "Surendra"], [4, "Shashi"], [3, "Priyanka"]]);
+    store.close();
+    store = new Store(path); // reopening changes nothing
+    assert.equal(store.getReviewInvite("g".repeat(24))!.useCount, 2);
+    assert.equal(store.listReviews(true)[0]!.comment, "Excellent!");
+  } finally { store?.close(); rmSync(dir, { recursive: true, force: true }); }
+});

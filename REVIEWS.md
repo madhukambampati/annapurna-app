@@ -8,10 +8,11 @@ Customers use **Orders → picked-up order → Review your meal** in the same br
 
 Customers who ordered on WhatsApp, Instagram or by phone (or from another browser) get a **review link** from the owner instead. In **More → Reviews → Ask a past customer for a review** the owner types an optional note (who it's for, kept private), creates the link and sends it with **Copy link** or **Send on WhatsApp**.
 
-- The link is `/review/<code>` with a random 24-character code. It works **once** and **expires after 30 days**. An unused link can be cancelled; a cancelled link looks the same as an unknown one.
+- The link is `/review/<code>` with a random 24-character code and **expires after 30 days**. When creating it the owner picks **One person** (works once) or **A group** (up to 25 or 50 reviews; share it with many people). A full link can be opened up again with **Allow more reviews**, so the link people already have keeps working. **Stop** ends a link that can still take reviews; reviews already received stay. A stopped link looks the same as an unknown one.
+- On a group link each browser can send one review; this is a convenience check only, so the limit and owner moderation are the real safeguards.
 - The customer gives 1–5 stars, an optional comment and an optional first name. The same rules apply as for order reviews (no phone numbers, emails or links; first name only).
 - The review arrives **pending**, like every review. Published, it shows **"✓ Annapurna customer"** rather than "✓ Verified order", because no website order backs it. The owner's note and the link code are never public.
-- Storage: a `review_invites` table, and `reviews` gains an `invite_id` column with `order_id` now optional (exactly one of the two is set). Startup rebuilds the `reviews` table once to allow this, keeping every row and id.
+- Storage: a `review_invites` table (with `max_uses` and `use_count`), and `reviews` gains an `invite_id` column with `order_id` now optional (exactly one of the two is set; one link may have several reviews). Startup rebuilds the `reviews` table once when needed, keeping every row and id.
 
 A review needs an integer rating of 1–5 and an optional comment of up to 500 characters. Only the star rating is required. A first name is optional and never copied from the order/customer record; blank names display as **Annapurna guest**. Direct email addresses, phone numbers and links are rejected in comments. Owners must still check for other personal details before publishing. Content is rendered as text, never HTML.
 

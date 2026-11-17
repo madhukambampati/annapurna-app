@@ -18,6 +18,8 @@ const MAX_TEXT = 1000;
 const HOUR = 3_600_000;
 /** A review link the owner sends works once and for this long. */
 export const REVIEW_INVITE_DAYS = 30;
+/** Most reviews one link may ever take. */
+const MAX_LINK_REVIEWS = 200;
 /** 18 random bytes = 24 URL-safe characters. */
 const INVITE_TOKEN = /^[A-Za-z0-9_-]{24}$/;
 
@@ -39,7 +41,7 @@ function readReview(b: Record<string, unknown>): { rating: number; comment: stri
 
 type InviteState = "open" | "used" | "expired" | "cancelled";
 function inviteState(i: ReviewInvite, at: number): InviteState {
-  return i.usedAt != null ? "used" : i.revokedAt != null ? "cancelled" : i.expiresAt <= at ? "expired" : "open";
+  return i.useCount >= i.maxUses ? "used" : i.revokedAt != null ? "cancelled" : i.expiresAt <= at ? "expired" : "open";
 }
 const DAY = 24 * HOUR;
 
@@ -462,11 +464,11 @@ export function createServer(d: ServerDeps): Server {
           if (m === "GET") return send(req, res, 200, { state: state === "cancelled" ? "missing" : state });
           if (m !== "POST") throw new HttpError(405, "Method not allowed");
           const review = readReview(await readJson(req));
-          if (state === "used") throw new HttpError(409, "This review link has already been used. Thank you!");
+          if (state === "used") throw new HttpError(409, "This review link has already been used. Ask Annapurna Home Foods for a new one.");
           if (state === "expired") throw new HttpError(410, "This review link has expired. Ask Annapurna Home Foods for a new one.");
           if (state !== "open") throw new HttpError(404, "This review link isn't valid. Ask Annapurna Home Foods for a new one.");
           if (!store.submitInviteReview(tok, review.rating, review.comment, review.name, now()))
-            throw new HttpError(409, "This review link has already been used. Thank you!");
+            throw new HttpError(409, "This review link has already been used. Ask Annapurna Home Foods for a new one.");
           return send(req, res, 201, { ok: true, status: "pending" });
         }
 
@@ -638,15 +640,29 @@ export function createServer(d: ServerDeps): Server {
         if (m === "POST" && path === "/api/review-links") {
           const b = await readJson(req);
           const note = cleanText(b.note, 80);
+          const maxUses = b.maxUses === undefined ? 1 : b.maxUses;
+          if (typeof maxUses !== "number" || !Number.isInteger(maxUses) || maxUses < 1 || maxUses > MAX_LINK_REVIEWS)
+            throw new HttpError(400, `A link can take 1 to ${MAX_LINK_REVIEWS} reviews.`);
           const at = now();
-          const invite = store.createReviewInvite(randomBytes(18).toString("base64url"), note, at, at + REVIEW_INVITE_DAYS * 24 * HOUR);
+          const invite = store.createReviewInvite(randomBytes(18).toString("base64url"), note, at, at + REVIEW_INVITE_DAYS * 24 * HOUR, maxUses);
           return send(req, res, 201, { link: { ...invite, state: inviteState(invite, at) } });
         }
         const cancelInvite = /^\/api\/review-links\/(\d+)\/cancel$/.exec(path);
         if (m === "POST" && cancelInvite) {
           if (!store.revokeReviewInvite(Number(cancelInvite[1]), now()))
-            throw new HttpError(409, "Only an unused link can be cancelled.");
+            throw new HttpError(409, "This link has already stopped taking reviews.");
           return send(req, res, 200, { ok: true });
+        }
+        const limitInvite = /^\/api\/review-links\/(\d+)\/limit$/.exec(path);
+        if (m === "POST" && limitInvite) {
+          const b = await readJson(req);
+          const n = b.maxUses;
+          if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || n > MAX_LINK_REVIEWS)
+            throw new HttpError(400, `A link can take 1 to ${MAX_LINK_REVIEWS} reviews.`);
+          if (!store.setReviewInviteLimit(Number(limitInvite[1]), n))
+            throw new HttpError(409, "That limit is lower than the reviews this link already has, or the link was cancelled.");
+          const updated = store.getReviewInviteById(Number(limitInvite[1]))!;
+          return send(req, res, 200, { link: { ...updated, state: inviteState(updated, now()) } });
         }
         const reviewReply = /^\/api\/reviews\/(\d+)\/reply$/.exec(path);
         if (reviewReply && m === "POST") {

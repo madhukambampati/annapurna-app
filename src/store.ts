@@ -3,7 +3,11 @@ import { defaultMenu, defaultSettings, MENU_VERSION, upgradeMenu } from "./menu.
 import type { Alert, Customer, Draft, MenuItem, Msg, Order, OrderItem, OrderStatus, Settings } from "./types.js";
 
 export interface ReviewInvite {
-  id: number; token: string; note: string; createdAt: number; expiresAt: number; usedAt: number | null; revokedAt: number | null;
+  id: number; token: string; note: string; createdAt: number; expiresAt: number;
+  /** When the most recent review came in through this link. */
+  usedAt: number | null; revokedAt: number | null;
+  /** How many reviews the link accepts (1 = one person) and how many it has taken. */
+  maxUses: number; useCount: number;
 }
 
 type Row = Record<string, unknown>;
@@ -40,7 +44,8 @@ export class Store {
       CREATE INDEX IF NOT EXISTS reviews_status ON reviews(status, id);
       CREATE TABLE IF NOT EXISTS review_invites (
         id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT NOT NULL UNIQUE, note TEXT NOT NULL DEFAULT '',
-        created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, used_at INTEGER, revoked_at INTEGER
+        created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, used_at INTEGER, revoked_at INTEGER,
+        max_uses INTEGER NOT NULL DEFAULT 1, use_count INTEGER NOT NULL DEFAULT 0
       );
       CREATE TABLE IF NOT EXISTS alerts (
         id INTEGER PRIMARY KEY AUTOINCREMENT, wa_id TEXT NOT NULL, cust TEXT NOT NULL, note TEXT NOT NULL,
@@ -68,6 +73,7 @@ export class Store {
       /* owner reply timestamp column already exists */
     }
     this.migrateReviewsForInvites();
+    this.migrateGroupReviewLinks();
     this.migrateMenu();
     this.seedOct2026WeekendClosure();
     this.initializeFreshVindhuOwnerChat();
@@ -368,7 +374,7 @@ export class Store {
       this.db.exec(`
         CREATE TABLE reviews_v2 (
           id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER UNIQUE REFERENCES orders(id),
-          invite_id INTEGER UNIQUE REFERENCES review_invites(id),
+          invite_id INTEGER REFERENCES review_invites(id),
           rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5), comment TEXT NOT NULL,
           display_name TEXT NOT NULL DEFAULT 'Annapurna guest',
           status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','published','hidden','deleted')),
@@ -388,10 +394,48 @@ export class Store {
     }
   }
 
-  /* ----- review links: one-time invitations the owner sends to past customers ----- */
-  createReviewInvite(token: string, note: string, at: number, expiresAt: number): ReviewInvite {
-    const r = this.db.prepare("INSERT INTO review_invites (token, note, created_at, expires_at) VALUES (?, ?, ?, ?)")
-      .run(token, note, at, expiresAt);
+  /**
+   * Group links: one link can take several reviews. Databases from the first review-link release
+   * have invite_id UNIQUE on reviews and no counters on review_invites; fix both once, keeping every row.
+   */
+  private migrateGroupReviewLinks(): void {
+    const inviteCols = this.db.prepare("PRAGMA table_info(review_invites)").all() as Row[];
+    if (!inviteCols.some((c) => c.name === "max_uses")) {
+      this.db.exec("ALTER TABLE review_invites ADD COLUMN max_uses INTEGER NOT NULL DEFAULT 1");
+      this.db.exec("ALTER TABLE review_invites ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0");
+      this.db.exec("UPDATE review_invites SET use_count = (SELECT COUNT(*) FROM reviews WHERE reviews.invite_id = review_invites.id)");
+    }
+    const sql = String((this.db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'reviews'").get() as Row | undefined)?.sql ?? "");
+    if (!/invite_id\s+INTEGER\s+UNIQUE/i.test(sql)) return;
+    this.db.exec("BEGIN");
+    try {
+      this.db.exec(`
+        CREATE TABLE reviews_v3 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER UNIQUE REFERENCES orders(id),
+          invite_id INTEGER REFERENCES review_invites(id),
+          rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5), comment TEXT NOT NULL,
+          display_name TEXT NOT NULL DEFAULT 'Annapurna guest',
+          status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','published','hidden','deleted')),
+          created_at INTEGER NOT NULL, owner_reply TEXT NOT NULL DEFAULT '', owner_reply_at INTEGER,
+          CHECK((order_id IS NULL) <> (invite_id IS NULL))
+        );
+        INSERT INTO reviews_v3 (id, order_id, invite_id, rating, comment, display_name, status, created_at, owner_reply, owner_reply_at)
+          SELECT id, order_id, invite_id, rating, comment, display_name, status, created_at, owner_reply, owner_reply_at FROM reviews;
+        DROP TABLE reviews;
+        ALTER TABLE reviews_v3 RENAME TO reviews;
+        CREATE INDEX IF NOT EXISTS reviews_status ON reviews(status, id);
+      `);
+      this.db.exec("COMMIT");
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
+  }
+
+  /* ----- review links: invitations the owner sends to past customers ----- */
+  createReviewInvite(token: string, note: string, at: number, expiresAt: number, maxUses = 1): ReviewInvite {
+    const r = this.db.prepare("INSERT INTO review_invites (token, note, created_at, expires_at, max_uses) VALUES (?, ?, ?, ?, ?)")
+      .run(token, note, at, expiresAt, maxUses);
     return this.getReviewInviteById(Number(r.lastInsertRowid))!;
   }
 
@@ -399,7 +443,8 @@ export class Store {
     if (!r) return undefined;
     return { id: Number(r.id), token: String(r.token), note: String(r.note), createdAt: Number(r.created_at),
       expiresAt: Number(r.expires_at), usedAt: r.used_at == null ? null : Number(r.used_at),
-      revokedAt: r.revoked_at == null ? null : Number(r.revoked_at) };
+      revokedAt: r.revoked_at == null ? null : Number(r.revoked_at),
+      maxUses: Number(r.max_uses ?? 1), useCount: Number(r.use_count ?? 0) };
   }
 
   getReviewInviteById(id: number): ReviewInvite | undefined {
@@ -414,18 +459,24 @@ export class Store {
     return (this.db.prepare("SELECT * FROM review_invites ORDER BY id DESC LIMIT ?").all(limit) as Row[]).map((r) => this.inviteRow(r)!);
   }
 
-  /** Only a link nobody has used yet can be cancelled. */
+  /** Stops a link that can still take reviews. Reviews already received stay. */
   revokeReviewInvite(id: number, at: number): boolean {
-    const r = this.db.prepare("UPDATE review_invites SET revoked_at = ? WHERE id = ? AND used_at IS NULL AND revoked_at IS NULL").run(at, id);
+    const r = this.db.prepare("UPDATE review_invites SET revoked_at = ? WHERE id = ? AND use_count < max_uses AND revoked_at IS NULL").run(at, id);
     return Number(r.changes) === 1;
   }
 
-  /** Uses the link and stores the review together: a link can never produce two reviews. */
+  /** Changes how many reviews a link accepts. Never below the reviews it already has; not for a stopped link. */
+  setReviewInviteLimit(id: number, maxUses: number): boolean {
+    const r = this.db.prepare("UPDATE review_invites SET max_uses = ? WHERE id = ? AND revoked_at IS NULL AND use_count <= ?").run(maxUses, id, maxUses);
+    return Number(r.changes) === 1;
+  }
+
+  /** Counts the use and stores the review together: a link never takes more reviews than its limit. */
   submitInviteReview(token: string, rating: number, comment: string, displayName: string, at: number): boolean {
     this.db.exec("BEGIN IMMEDIATE");
     try {
-      const used = this.db.prepare(`UPDATE review_invites SET used_at = ?
-        WHERE token = ? AND used_at IS NULL AND revoked_at IS NULL AND expires_at > ?`).run(at, token, at);
+      const used = this.db.prepare(`UPDATE review_invites SET used_at = ?, use_count = use_count + 1
+        WHERE token = ? AND use_count < max_uses AND revoked_at IS NULL AND expires_at > ?`).run(at, token, at);
       if (Number(used.changes) !== 1) { this.db.exec("ROLLBACK"); return false; }
       this.db.prepare(`INSERT INTO reviews (invite_id, rating, comment, display_name, created_at)
         SELECT id, ?, ?, ?, ? FROM review_invites WHERE token = ?`).run(rating, comment, displayName, at, token);

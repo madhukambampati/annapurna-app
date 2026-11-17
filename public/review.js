@@ -5,6 +5,10 @@
   var code = decodeURIComponent(location.pathname.split("/")[2] || "");
   var api = "/web/review-links/" + encodeURIComponent(code);
   var rating = 0;
+  // A group link is shared by many people; this browser remembers it already sent one.
+  var SENT_KEY = "annapurna-review-sent-" + code;
+  function sentHere() { try { return localStorage.getItem(SENT_KEY) === "1"; } catch (e) { return false; } }
+  function markSent() { try { localStorage.setItem(SENT_KEY, "1"); } catch (e) { /* storage blocked */ } }
   var WORDS = ["", "Not good", "Could be better", "Good", "Very good", "Loved it!"];
   var STAR = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.8l2.85 5.78 6.38.93-4.62 4.5 1.09 6.35L12 17.36 6.3 20.36l1.09-6.35-4.62-4.5 6.38-.93z"/></svg>';
 
@@ -13,7 +17,8 @@
   }
   function closed(state) {
     var copy = {
-      used: ["This link has been used", "A review has already been sent with this link. Thank you!"],
+      used: ["This link has already been used", "If you'd still like to leave a review, ask Annapurna Home Foods for a new link."],
+      mine: ["Thank you!", "You've already sent a review with this link. Annapurna will read it soon."],
       expired: ["This link has expired", "Review links work for 30 days. Ask Annapurna Home Foods for a new one."],
       missing: ["This link isn't valid", "Please check the link, or ask Annapurna Home Foods for a new one."],
       offline: ["Something went wrong", "We couldn't open this page. Check your connection and try again."]
@@ -67,7 +72,7 @@
       body: JSON.stringify({ rating: rating, comment: $("comment").value, displayName: $("name").value })
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (j) {
-        if (r.ok) { show("done"); return; }
+        if (r.ok) { markSent(); show("done"); return; }
         if (r.status === 409) return closed("used");
         if (r.status === 410) return closed("expired");
         if (r.status === 404) return closed("missing");
@@ -83,6 +88,7 @@
   });
 
   fetch(api).then(function (r) { return r.json(); }).then(function (j) {
+    if (sentHere()) { closed("mine"); return; }
     if (j.state === "open") { show("form"); return; }
     closed(j.state);
   }).catch(function () { closed("offline"); });

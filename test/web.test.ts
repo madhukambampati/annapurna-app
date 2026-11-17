@@ -1417,3 +1417,36 @@ test("review link pages are off when the customer website is off", async () => {
     assert.equal((await call("GET", `/web/review-links/${link.token}`)).status, 404);
   }, { web: { enabled: false } });
 });
+
+
+test("group review links: many people review through one link, and a full link can be opened up again", async () => {
+  await withRig(async ({ call }) => {
+    assert.equal((await call("POST", "/api/review-links", { token: "secret", body: { maxUses: 0 } })).status, 400);
+    assert.equal((await call("POST", "/api/review-links", { token: "secret", body: { maxUses: 201 } })).status, 400);
+    const link = (await call("POST", "/api/review-links", { token: "secret", body: { note: "WhatsApp group", maxUses: 3 } })).json.link;
+    assert.deepEqual([link.maxUses, link.useCount, link.state], [3, 0, "open"]);
+    const path = `/web/review-links/${link.token}`;
+    for (const name of ["Shashi", "Surendra", "Lakshmi"]) {
+      assert.equal((await call("POST", path, { body: { rating: 5, displayName: name } })).status, 201, name);
+    }
+    assert.deepEqual((await call("GET", path)).json, { state: "used" });
+    assert.equal((await call("POST", path, { body: { rating: 5, displayName: "Ravi" } })).status, 409, "a full link takes no more");
+
+    // the owner lets more people use the same link
+    assert.equal((await call("POST", `/api/review-links/${link.id}/limit`, { token: "secret", body: { maxUses: 2 } })).status, 409, "never below reviews received");
+    const grown = await call("POST", `/api/review-links/${link.id}/limit`, { token: "secret", body: { maxUses: 28 } });
+    assert.equal(grown.status, 200);
+    assert.deepEqual([grown.json.link.maxUses, grown.json.link.useCount, grown.json.link.state], [28, 3, "open"]);
+    assert.equal((await call("POST", path, { body: { rating: 4, displayName: "Ravi" } })).status, 201);
+
+    const reviews = (await call("GET", "/api/reviews", { token: "secret" })).json.reviews;
+    assert.deepEqual(reviews.map((r: any) => r.displayName), ["Ravi", "Lakshmi", "Surendra", "Shashi"]);
+    assert.ok(reviews.every((r: any) => r.source === "invite" && r.inviteNote === "WhatsApp group" && r.status === "pending"));
+
+    // stopping a group link keeps its reviews
+    assert.equal((await call("POST", `/api/review-links/${link.id}/cancel`, { token: "secret" })).status, 200);
+    assert.equal((await call("POST", path, { body: { rating: 5 } })).status, 404);
+    assert.equal((await call("GET", "/api/reviews", { token: "secret" })).json.reviews.length, 4);
+    assert.equal((await call("POST", `/api/review-links/${link.id}/limit`, { token: "secret", body: { maxUses: 50 } })).status, 409, "a stopped link stays stopped");
+  }, { web: { enabled: true } });
+});

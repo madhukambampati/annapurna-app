@@ -674,13 +674,17 @@ async function copyText(text, btn) {
 
 function renderReviewLinks() {
   const links = state.reviewLinks || [];
-  const note = h("input", { type: "text", maxlength: 80, placeholder: "Who is it for? e.g. Lakshmi – combo, Oct", "aria-label": "Who this review link is for" });
+  const note = h("input", { type: "text", maxlength: 80, placeholder: "Who is it for? e.g. Lakshmi, or WhatsApp group", "aria-label": "Who this review link is for" });
+  const uses = h("select", { "aria-label": "How many people can use this link" },
+    h("option", { value: "1" }, "One person"),
+    h("option", { value: "25", selected: true }, "A group · up to 25 reviews"),
+    h("option", { value: "50" }, "A group · up to 50 reviews"));
   const create = h("button", { class: "pri", type: "submit" }, "Create review link");
   const form = h("form", { class: "invite-form", onsubmit: async (e) => {
     e.preventDefault();
     create.disabled = true;
     try {
-      const j = await api("/api/review-links", { method: "POST", body: JSON.stringify({ note: note.value.trim() }) });
+      const j = await api("/api/review-links", { method: "POST", body: JSON.stringify({ note: note.value.trim(), maxUses: Number(uses.value) }) });
       freshLinkId = j.link.id;
       state.reviewLinks = [j.link, ...links];
       showErr(null);
@@ -690,12 +694,14 @@ function renderReviewLinks() {
       showErr(err);
       create.disabled = false;
     }
-  } }, note, create);
+  } }, note, uses, create);
 
   const fresh = links.find((l) => l.id === freshLinkId && l.state === "open");
   const ready = fresh ? h("div", { class: "invite-ready", role: "status" },
     h("b", {}, "Link ready" + (fresh.note ? " for " + fresh.note : "")),
-    h("p", { class: "sub" }, "Send it to the customer. It works once and expires on " + shortDate(fresh.expiresAt) + "."),
+    h("p", { class: "sub" }, fresh.maxUses > 1
+      ? "Share it with as many customers as you like. Each person can leave one review, up to " + fresh.maxUses + " reviews, until " + shortDate(fresh.expiresAt) + "."
+      : "Send it to the customer. It works once and expires on " + shortDate(fresh.expiresAt) + "."),
     h("input", { type: "text", readonly: true, value: reviewUrl(fresh), "aria-label": "Review link", onfocus: (e) => e.target.select() }),
     h("div", { class: "invite-actions" },
       h("button", { class: "pri", type: "button", onclick: (e) => copyText(reviewUrl(fresh), e.currentTarget) }, "Copy link"),
@@ -703,24 +709,31 @@ function renderReviewLinks() {
       h("button", { class: "ghost", type: "button", onclick: (e) => copyText(whatsappText(fresh), e.currentTarget) }, "Copy message"),
       h("button", { class: "ghost", type: "button", onclick: () => { freshLinkId = null; render(); } }, "Done"))) : null;
 
-  const label = { open: "Waiting", used: "Review received", expired: "Expired", cancelled: "Cancelled" };
+  const label = { open: "Open", used: "Full", expired: "Expired", cancelled: "Stopped" };
+  const groupish = (l) => l.maxUses > 1;
+  const counts = (l) => groupish(l) ? l.useCount + " of " + l.maxUses + " reviews" : l.useCount ? "Review received" : "No review yet";
+  // A full link that hasn't expired can be opened up again: the link people already have keeps working.
+  const canGrow = (l) => l.state === "used" || (l.state === "open" && !groupish(l));
   const rows = links.map((l) => h("li", { class: "invite-row" },
     h("span", { class: "invite-who" },
       h("b", {}, l.note || "No note"),
-      h("small", {}, l.state === "used" ? "Used " + shortDate(l.usedAt)
-        : l.state === "open" ? "Created " + shortDate(l.createdAt) + " · expires " + shortDate(l.expiresAt)
-        : "Created " + shortDate(l.createdAt))),
-    h("span", { class: "invite-state is-" + l.state }, label[l.state] || l.state),
-    l.state === "open" ? h("span", { class: "invite-row-actions" },
-      h("button", { class: "ghost", type: "button", onclick: (e) => copyText(reviewUrl(l), e.currentTarget) }, "Copy"),
-      h("button", { class: "ghost bad", type: "button", onclick: () => {
-        if (!confirm("Cancel this review link? The customer won't be able to use it.")) return;
+      h("small", {}, counts(l) + " · " + (l.state === "open" || l.state === "used"
+        ? "expires " + shortDate(l.expiresAt) : "created " + shortDate(l.createdAt)))),
+    h("span", { class: "invite-state is-" + l.state }, l.state === "used" && !groupish(l) ? "Review received" : label[l.state] || l.state),
+    l.state === "open" || canGrow(l) ? h("span", { class: "invite-row-actions" },
+      l.state === "open" ? h("button", { class: "ghost", type: "button", onclick: (e) => copyText(reviewUrl(l), e.currentTarget) }, "Copy") : null,
+      canGrow(l) ? h("button", { class: "ghost", type: "button", onclick: () => {
+        if (!confirm("Let more people use this link? Up to " + (l.useCount + 25) + " reviews in total, until " + shortDate(l.expiresAt) + ".")) return;
+        act("/api/review-links/" + l.id + "/limit", { maxUses: l.useCount + 25 });
+      } }, "Allow more reviews") : null,
+      l.state === "open" ? h("button", { class: "ghost bad", type: "button", onclick: () => {
+        if (!confirm("Stop this review link? Nobody else will be able to use it. Reviews already received stay.")) return;
         act("/api/review-links/" + l.id + "/cancel", {});
-      } }, "Cancel")) : null));
+      } }, "Stop") : null) : null));
 
   return h("section", { class: "card invite-card" },
     h("h3", {}, "Ask a past customer for a review"),
-    h("p", { class: "sub" }, "For customers who ordered on WhatsApp, Instagram or by phone. Create a link and send it to them: it works once and expires after 30 days. Their review comes here for you to publish."),
+    h("p", { class: "sub" }, "For customers who ordered on WhatsApp, Instagram or by phone. A link for one person works once; a group link can be shared with many people, and each can leave a review. Links last 30 days. Every review comes here for you to publish."),
     form, ready,
     links.length ? h("details", { class: "invite-list", open: links.some((l) => l.state === "open") },
       h("summary", {}, "Your review links (" + links.length + ")"),
