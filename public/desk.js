@@ -652,16 +652,92 @@ function renderRules() {
   ];
 }
 
+/* ---------- review links: one-time links the owner sends to past customers ---------- */
+let freshLinkId = null; // the link just created stays on screen across refreshes until "Done"
+const reviewUrl = (l) => location.origin + "/review/" + l.token;
+const shortDate = (ts) => new Date(ts).toLocaleDateString("en-CA", { month: "short", day: "numeric" });
+const whatsappText = (l) => "Thank you for ordering from Annapurna Home Foods! 🙏 We'd love to hear how you liked the food. "
+  + "Could you leave a quick review here? " + reviewUrl(l);
+
+async function copyText(text, btn) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = h("textarea", { style: "position:fixed;opacity:0" }, text);
+    document.body.append(ta); ta.select();
+    try { document.execCommand("copy"); } finally { ta.remove(); }
+  }
+  const was = btn.textContent;
+  btn.textContent = "Copied ✓";
+  setTimeout(() => { btn.textContent = was; }, 1600);
+}
+
+function renderReviewLinks() {
+  const links = state.reviewLinks || [];
+  const note = h("input", { type: "text", maxlength: 80, placeholder: "Who is it for? e.g. Lakshmi – combo, Oct", "aria-label": "Who this review link is for" });
+  const create = h("button", { class: "pri", type: "submit" }, "Create review link");
+  const form = h("form", { class: "invite-form", onsubmit: async (e) => {
+    e.preventDefault();
+    create.disabled = true;
+    try {
+      const j = await api("/api/review-links", { method: "POST", body: JSON.stringify({ note: note.value.trim() }) });
+      freshLinkId = j.link.id;
+      state.reviewLinks = [j.link, ...links];
+      showErr(null);
+      render();
+      refresh();
+    } catch (err) {
+      showErr(err);
+      create.disabled = false;
+    }
+  } }, note, create);
+
+  const fresh = links.find((l) => l.id === freshLinkId && l.state === "open");
+  const ready = fresh ? h("div", { class: "invite-ready", role: "status" },
+    h("b", {}, "Link ready" + (fresh.note ? " for " + fresh.note : "")),
+    h("p", { class: "sub" }, "Send it to the customer. It works once and expires on " + shortDate(fresh.expiresAt) + "."),
+    h("input", { type: "text", readonly: true, value: reviewUrl(fresh), "aria-label": "Review link", onfocus: (e) => e.target.select() }),
+    h("div", { class: "invite-actions" },
+      h("button", { class: "pri", type: "button", onclick: (e) => copyText(reviewUrl(fresh), e.currentTarget) }, "Copy link"),
+      h("a", { class: "invite-wa", href: "https://wa.me/?text=" + encodeURIComponent(whatsappText(fresh)), target: "_blank", rel: "noopener" }, "Send on WhatsApp"),
+      h("button", { class: "ghost", type: "button", onclick: (e) => copyText(whatsappText(fresh), e.currentTarget) }, "Copy message"),
+      h("button", { class: "ghost", type: "button", onclick: () => { freshLinkId = null; render(); } }, "Done"))) : null;
+
+  const label = { open: "Waiting", used: "Review received", expired: "Expired", cancelled: "Cancelled" };
+  const rows = links.map((l) => h("li", { class: "invite-row" },
+    h("span", { class: "invite-who" },
+      h("b", {}, l.note || "No note"),
+      h("small", {}, l.state === "used" ? "Used " + shortDate(l.usedAt)
+        : l.state === "open" ? "Created " + shortDate(l.createdAt) + " · expires " + shortDate(l.expiresAt)
+        : "Created " + shortDate(l.createdAt))),
+    h("span", { class: "invite-state is-" + l.state }, label[l.state] || l.state),
+    l.state === "open" ? h("span", { class: "invite-row-actions" },
+      h("button", { class: "ghost", type: "button", onclick: (e) => copyText(reviewUrl(l), e.currentTarget) }, "Copy"),
+      h("button", { class: "ghost bad", type: "button", onclick: () => {
+        if (!confirm("Cancel this review link? The customer won't be able to use it.")) return;
+        act("/api/review-links/" + l.id + "/cancel", {});
+      } }, "Cancel")) : null));
+
+  return h("section", { class: "card invite-card" },
+    h("h3", {}, "Ask a past customer for a review"),
+    h("p", { class: "sub" }, "For customers who ordered on WhatsApp, Instagram or by phone. Create a link and send it to them: it works once and expires after 30 days. Their review comes here for you to publish."),
+    form, ready,
+    links.length ? h("details", { class: "invite-list", open: links.some((l) => l.state === "open") },
+      h("summary", {}, "Your review links (" + links.length + ")"),
+      h("ul", {}, rows)) : null);
+}
+
 /* ---------- more / settings hub ---------- */
 function renderReviews() {
   return [h("div", { class: "owner-page-title" },
       h("div", {}, h("button", { class: "owner-back", onclick: () => { tab = "more"; render(); } }, "← More"),
-        h("h2", {}, "Reviews"), h("p", { class: "sub" }, "Verified order feedback. Publish only reviews safe for public display. Owner replies appear publicly under published reviews."))),
+        h("h2", {}, "Reviews"), h("p", { class: "sub" }, "Reviews from picked-up orders and from review links you send. Publish only reviews safe for public display. Owner replies appear publicly under published reviews."))),
+    renderReviewLinks(),
     ...(state.reviews || []).map(r => {
       const feedback = h("small", { class: "owner-review-feedback", role: "status", "aria-live": "polite" });
       const replyBox = h("textarea", { class: "owner-review-reply-input", rows: 3, maxlength: 600,
         placeholder: "Write a warm, helpful reply from Annapurna Home Foods",
-        "aria-label": "Public reply to review for order #" + r.orderId,
+        "aria-label": "Public reply to review " + (r.orderId ? "for order #" + r.orderId : "from " + (r.inviteNote || "a review link")),
         oninput: () => { saveButton.disabled = replyBox.value.trim() === String(r.ownerReply || "").trim(); } }, r.ownerReply || "");
       const replyPreview = h("div", { class: "owner-review-reply-preview", hidden: !r.ownerReply },
         h("b", {}, "Current Annapurna reply"), h("p", {}, r.ownerReply || ""));
@@ -712,9 +788,9 @@ function renderReviews() {
         } }, r.ownerReply ? "Update reply" : "Save reply");
       const replyActions = [saveButton, removeButton];
       return h("article", { class: "card", style: "margin:12px 0;padding:20px;overflow-wrap:anywhere;max-width:760px" },
-        h("b", {}, "Order #" + r.orderId + " · " + r.rating + "/5 · " + r.status),
+        h("b", {}, (r.source === "invite" ? "Review link" + (r.inviteNote ? " · " + r.inviteNote : "") : "Order #" + r.orderId) + " · " + r.rating + "/5 · " + r.status),
         r.comment ? h("p", {}, r.comment) : h("p", { class: "sub" }, "Star rating only · no comment"),
-        h("small", {}, r.displayName + " · Verified order"),
+        h("small", {}, r.displayName + (r.source === "invite" ? " · Annapurna customer (from your review link)" : " · Verified order")),
         replyPreview,
         h("div", { class: "owner-review-reply-editor" },
           h("label", {}, "Reply publicly as Annapurna Home Foods", replyBox),
@@ -727,14 +803,14 @@ function renderReviews() {
             act("/api/reviews/" + r.id + "/" + action, {});
           } }, action[0].toUpperCase() + action.slice(1)))));
     }),
-    ...(!(state.reviews || []).length ? [h("p", { class: "empty" }, "No reviews yet. Feedback will appear here after customers review picked-up orders.")] : [])];
+    ...(!(state.reviews || []).length ? [h("p", { class: "empty" }, "No reviews yet. Feedback appears here after customers review picked-up orders or use a review link you sent.")] : [])];
 }
 
 function renderMore() {
   const cards = [
     h("button", { class: "more-card", onclick: () => { tab = "reviews"; render(); } },
       h("span", { class: "more-icon" }, ico("reviews")),
-      h("span", {}, h("b", {}, "Reviews"), h("small", {}, "Moderate verified order feedback"))),
+      h("span", {}, h("b", {}, "Reviews"), h("small", {}, "Publish reviews and send review links"))),
     h("button", { class: "more-card", onclick: () => { tab = "menu"; render(); } },
       h("span", { class: "more-icon" }, ico("menu")),
       h("span", {}, h("b", {}, "Menu management"), h("small", {}, "Prices, availability and ingredients"))),

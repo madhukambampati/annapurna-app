@@ -334,6 +334,32 @@ td input[type=number]{width:84px}
 .owner-review-feedback{display:block;min-height:20px;color:var(--leaf-2);font-weight:600}
 .owner-review-feedback:empty{display:none}
 
+/* ---------- review links ---------- */
+.invite-card{margin:4px 0 22px;max-width:760px}
+.invite-card h3{margin:0 0 4px;font-size:17px}
+.invite-card>.sub{margin-bottom:14px}
+.invite-form{display:flex;flex-wrap:wrap;gap:8px}
+.invite-form input{flex:1 1 260px}
+.invite-ready{margin-top:14px;padding:14px 16px;border-radius:12px;background:var(--leaf-tint);border:1px solid #b9d6c4}
+.invite-ready b{display:block;font-size:15.5px}
+.invite-ready .sub{margin:2px 0 10px}
+.invite-ready input{width:100%;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;background:#fff}
+.invite-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.invite-wa{display:inline-flex;align-items:center;min-height:40px;padding:8px 14px;border-radius:10px;background:#1f8f4e;color:#fff;font-weight:600;text-decoration:none}
+.invite-wa:hover{background:#18763f}
+.invite-list{margin-top:16px}
+.invite-list>summary{font-size:14.5px;font-weight:600;color:var(--ink)}
+.invite-list ul{list-style:none;margin:8px 0 0;padding:0}
+.invite-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:10px 0;border-top:1px solid var(--line)}
+.invite-who{flex:1 1 220px;min-width:0}
+.invite-who b{display:block;overflow-wrap:anywhere}
+.invite-who small{display:block;color:var(--muted);font-size:13px}
+.invite-state{flex:none;border-radius:999px;padding:2px 10px;font-size:12.5px;font-weight:700;background:var(--steel-2);color:var(--muted)}
+.invite-state.is-open{background:var(--turmeric-tint);color:var(--turmeric-ink)}
+.invite-state.is-used{background:var(--leaf-tint);color:var(--leaf)}
+.invite-row-actions{display:flex;gap:6px}
+.invite-row-actions button{min-height:34px;padding:5px 11px;font-size:13.5px}
+
 /* ---------- cancel dialog ---------- */
 dialog.cancel{border:0;border-radius:12px;padding:22px;width:min(480px,calc(100vw - 32px));background:var(--paper);color:var(--ink);box-shadow:0 24px 70px rgba(10,24,17,.4)}
 dialog.cancel::backdrop{background:rgba(10,24,17,.55)}

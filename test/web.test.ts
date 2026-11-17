@@ -12,6 +12,8 @@ const ASSETS = {
   "desk.html": "<html>desk</html>",
   "app.js": "//app",
   "desk.js": "//desk",
+  "review.html": "<html>review page</html>",
+  "review.js": "//review",
   "robots.txt": "User-agent: *\nSitemap: https://annapurnahomefoods.shop/sitemap.xml\n",
   "sitemap.xml": "<?xml version=\"1.0\"?><urlset><url><loc>https://annapurnahomefoods.shop/</loc></url></urlset>",
 };
@@ -1247,7 +1249,7 @@ test("verified reviews enforce pickup, session ownership, validation, moderation
     const moderate = (action: string) => call("POST", `/api/reviews/${review.id}/${action}`, { token: "secret" });
     assert.equal((await call("POST", `/api/reviews/${review.id}/publish`, { token })).status, 401);
     assert.equal((await moderate("publish")).status, 200);
-    assert.deepEqual((await publicReviews()).json.reviews, [{ rating: 5, comment: body.comment, displayName: "Asha", verified: true }]);
+    assert.deepEqual((await publicReviews()).json.reviews, [{ rating: 5, comment: body.comment, displayName: "Asha", verified: true, source: "order" }]);
     for (const action of ["hide", "unpublish"]) {
       assert.equal((await moderate(action)).status, 200);
       assert.deepEqual((await publicReviews()).json.reviews, []);
@@ -1281,7 +1283,7 @@ test("star-only reviews accept omitted, empty and whitespace comments and stay m
     const review = t.store.listReviews()[0]!;
     await call("POST", `/api/reviews/${review.id}/publish`, { token: "secret" });
     assert.deepEqual((await call("GET", "/web/reviews")).json.reviews,
-      [{ rating: 4, comment: "", displayName: "Annapurna guest", verified: true }]);
+      [{ rating: 4, comment: "", displayName: "Annapurna guest", verified: true, source: "order" }]);
   }, { web: { enabled: true } });
 });
 
@@ -1311,7 +1313,7 @@ test("owner replies can be created, edited and removed, and are public only with
 
     assert.equal((await call("POST", `/api/reviews/${review.id}/publish`, { token: "secret" })).status, 200);
     assert.deepEqual((await call("GET", "/web/reviews")).json.reviews, [{
-      rating: 5, comment: "Wonderful homemade food.", displayName: "Asha", verified: true, ownerReply: firstReply
+      rating: 5, comment: "Wonderful homemade food.", displayName: "Asha", verified: true, source: "order", ownerReply: firstReply
     }]);
 
     const editedReply = "Thank you, Asha! We look forward to cooking for you again.";
@@ -1320,8 +1322,98 @@ test("owner replies can be created, edited and removed, and are public only with
 
     assert.equal((await call("DELETE", replyPath, { token: "secret" })).status, 200);
     assert.deepEqual((await call("GET", "/web/reviews")).json.reviews, [{
-      rating: 5, comment: "Wonderful homemade food.", displayName: "Asha", verified: true
+      rating: 5, comment: "Wonderful homemade food.", displayName: "Asha", verified: true, source: "order"
     }]);
     assert.equal((await call("DELETE", replyPath, { token: "secret" })).status, 404);
   }, { web: { enabled: true } });
+});
+
+
+test("review links: the owner creates one, a past customer reviews once, the owner publishes it", async () => {
+  await withRig(async ({ t, call }) => {
+    // owner only
+    assert.equal((await call("POST", "/api/review-links", { body: { note: "Lakshmi" } })).status, 401);
+    assert.equal((await call("GET", "/api/review-links")).status, 401);
+
+    const made = await call("POST", "/api/review-links", { token: "secret", body: { note: "  Lakshmi – combo, Oct  " } });
+    assert.equal(made.status, 201);
+    const link = made.json.link;
+    assert.match(link.token, /^[A-Za-z0-9_-]{24}$/);
+    assert.equal(link.note, "Lakshmi – combo, Oct");
+    assert.equal(link.state, "open");
+    assert.equal(link.expiresAt - link.createdAt, 30 * DAY);
+    assert.equal((await call("GET", "/api/state", { token: "secret" })).json.reviewLinks[0].state, "open");
+
+    // the page and the link status
+    const page = await call("GET", `/review/${link.token}`);
+    assert.equal(page.status, 200);
+    assert.equal(page.text, "<html>review page</html>");
+    assert.equal(page.headers.get("cache-control"), "no-store");
+    assert.equal((await call("GET", "/review.js")).text, "//review");
+    const path = `/web/review-links/${link.token}`;
+    assert.deepEqual((await call("GET", path)).json, { state: "open" });
+
+    // the same checks as order reviews
+    assert.equal((await call("POST", path, { body: { rating: 0 } })).status, 400);
+    assert.equal((await call("POST", path, { body: { rating: 5, comment: "Call me 519-804-3658" } })).status, 400);
+    assert.equal((await call("POST", path, { body: { rating: 5, displayName: "Lakshmi Rao" } })).status, 400);
+    assert.deepEqual((await call("GET", path)).json, { state: "open" }, "a rejected attempt does not use the link");
+
+    const sent = await call("POST", path, { body: { rating: 5, comment: "Gongura pulao was amazing!", displayName: "Lakshmi" } });
+    assert.equal(sent.status, 201);
+    assert.deepEqual((await call("GET", path)).json, { state: "used" });
+    assert.equal((await call("POST", path, { body: { rating: 1, comment: "second try" } })).status, 409, "one review per link");
+
+    const reviews = (await call("GET", "/api/reviews", { token: "secret" })).json.reviews;
+    assert.equal(reviews.length, 1);
+    assert.equal(reviews[0].source, "invite");
+    assert.equal(reviews[0].orderId, null);
+    assert.equal(reviews[0].inviteNote, "Lakshmi – combo, Oct");
+    assert.equal(reviews[0].status, "pending", "nothing is public until the owner publishes");
+    assert.deepEqual((await call("GET", "/web/reviews")).json.reviews, []);
+    assert.equal((await call("GET", "/api/review-links", { token: "secret" })).json.links[0].state, "used");
+    assert.equal((await call("POST", `/api/review-links/${link.id}/cancel`, { token: "secret" })).status, 409, "a used link cannot be cancelled");
+
+    assert.equal((await call("POST", `/api/reviews/${reviews[0].id}/publish`, { token: "secret" })).status, 200);
+    assert.deepEqual((await call("GET", "/web/reviews")).json.reviews, [{
+      rating: 5, comment: "Gongura pulao was amazing!", displayName: "Lakshmi", verified: false, source: "customer",
+    }]);
+    // the public list never exposes the owner's note or the link
+    assert.doesNotMatch((await call("GET", "/web/reviews")).text, /Oct|token|invite/);
+    assert.equal(t.store.listReviews().length, 1);
+  }, { web: { enabled: true } });
+});
+
+test("review links expire after 30 days, can be cancelled, and unknown links are refused", async () => {
+  await withRig(async ({ call, advance }) => {
+    const mk = async (note: string) => (await call("POST", "/api/review-links", { token: "secret", body: { note } })).json.link;
+    const old = await mk("Ravi");
+    const cancelled = await mk("Sita");
+
+    assert.equal((await call("POST", `/api/review-links/${cancelled.id}/cancel`, { token: "secret" })).status, 200);
+    assert.equal((await call("POST", `/api/review-links/${cancelled.id}/cancel`, { token: "secret" })).status, 409);
+    assert.deepEqual((await call("GET", `/web/review-links/${cancelled.token}`)).json, { state: "missing" }, "cancelled looks like an unknown link");
+    assert.equal((await call("POST", `/web/review-links/${cancelled.token}`, { body: { rating: 5 } })).status, 404);
+
+    for (const bad of ["nope", "A".repeat(24), "../../etc/passwd"]) {
+      assert.deepEqual((await call("GET", `/web/review-links/${encodeURIComponent(bad)}`)).json, { state: "missing" });
+      assert.equal((await call("POST", `/web/review-links/${encodeURIComponent(bad)}`, { body: { rating: 5 } })).status, 404);
+    }
+
+    advance(30 * DAY);
+    assert.deepEqual((await call("GET", `/web/review-links/${old.token}`)).json, { state: "expired" });
+    assert.equal((await call("POST", `/web/review-links/${old.token}`, { body: { rating: 5 } })).status, 410);
+    const links = (await call("GET", "/api/review-links", { token: "secret" })).json.links;
+    assert.deepEqual(links.map((l: any) => [l.note, l.state]), [["Sita", "cancelled"], ["Ravi", "expired"]]);
+    assert.deepEqual((await call("GET", "/api/reviews", { token: "secret" })).json.reviews, []);
+  }, { web: { enabled: true } });
+});
+
+test("review link pages are off when the customer website is off", async () => {
+  await withRig(async ({ call }) => {
+    const link = (await call("POST", "/api/review-links", { token: "secret", body: {} })).json.link;
+    assert.equal(link.note, "");
+    assert.equal((await call("GET", `/review/${link.token}`)).status, 404);
+    assert.equal((await call("GET", `/web/review-links/${link.token}`)).status, 404);
+  }, { web: { enabled: false } });
 });

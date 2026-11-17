@@ -2,6 +2,10 @@ import { DatabaseSync } from "node:sqlite";
 import { defaultMenu, defaultSettings, MENU_VERSION, upgradeMenu } from "./menu.js";
 import type { Alert, Customer, Draft, MenuItem, Msg, Order, OrderItem, OrderStatus, Settings } from "./types.js";
 
+export interface ReviewInvite {
+  id: number; token: string; note: string; createdAt: number; expiresAt: number; usedAt: number | null; revokedAt: number | null;
+}
+
 type Row = Record<string, unknown>;
 
 /** SQLite via node:sqlite. Pass ":memory:" in tests. */
@@ -34,6 +38,10 @@ export class Store {
         created_at INTEGER NOT NULL, owner_reply TEXT NOT NULL DEFAULT '', owner_reply_at INTEGER
       );
       CREATE INDEX IF NOT EXISTS reviews_status ON reviews(status, id);
+      CREATE TABLE IF NOT EXISTS review_invites (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT NOT NULL UNIQUE, note TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, used_at INTEGER, revoked_at INTEGER
+      );
       CREATE TABLE IF NOT EXISTS alerts (
         id INTEGER PRIMARY KEY AUTOINCREMENT, wa_id TEXT NOT NULL, cust TEXT NOT NULL, note TEXT NOT NULL,
         order_id INTEGER, done INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
@@ -59,6 +67,7 @@ export class Store {
     } catch {
       /* owner reply timestamp column already exists */
     }
+    this.migrateReviewsForInvites();
     this.migrateMenu();
     this.seedOct2026WeekendClosure();
     this.initializeFreshVindhuOwnerChat();
@@ -347,6 +356,87 @@ export class Store {
     return this.getOrder(id);
   }
 
+  /**
+   * Reviews from owner-sent links have no website order, so order_id must allow NULL.
+   * SQLite cannot relax NOT NULL in place: rebuild the table once, keeping every row and id.
+   */
+  private migrateReviewsForInvites(): void {
+    const cols = this.db.prepare("PRAGMA table_info(reviews)").all() as Row[];
+    if (cols.some((c) => c.name === "invite_id")) return;
+    this.db.exec("BEGIN");
+    try {
+      this.db.exec(`
+        CREATE TABLE reviews_v2 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER UNIQUE REFERENCES orders(id),
+          invite_id INTEGER UNIQUE REFERENCES review_invites(id),
+          rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5), comment TEXT NOT NULL,
+          display_name TEXT NOT NULL DEFAULT 'Annapurna guest',
+          status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','published','hidden','deleted')),
+          created_at INTEGER NOT NULL, owner_reply TEXT NOT NULL DEFAULT '', owner_reply_at INTEGER,
+          CHECK((order_id IS NULL) <> (invite_id IS NULL))
+        );
+        INSERT INTO reviews_v2 (id, order_id, rating, comment, display_name, status, created_at, owner_reply, owner_reply_at)
+          SELECT id, order_id, rating, comment, display_name, status, created_at, owner_reply, owner_reply_at FROM reviews;
+        DROP TABLE reviews;
+        ALTER TABLE reviews_v2 RENAME TO reviews;
+        CREATE INDEX IF NOT EXISTS reviews_status ON reviews(status, id);
+      `);
+      this.db.exec("COMMIT");
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
+  }
+
+  /* ----- review links: one-time invitations the owner sends to past customers ----- */
+  createReviewInvite(token: string, note: string, at: number, expiresAt: number): ReviewInvite {
+    const r = this.db.prepare("INSERT INTO review_invites (token, note, created_at, expires_at) VALUES (?, ?, ?, ?)")
+      .run(token, note, at, expiresAt);
+    return this.getReviewInviteById(Number(r.lastInsertRowid))!;
+  }
+
+  private inviteRow(r: Row | undefined): ReviewInvite | undefined {
+    if (!r) return undefined;
+    return { id: Number(r.id), token: String(r.token), note: String(r.note), createdAt: Number(r.created_at),
+      expiresAt: Number(r.expires_at), usedAt: r.used_at == null ? null : Number(r.used_at),
+      revokedAt: r.revoked_at == null ? null : Number(r.revoked_at) };
+  }
+
+  getReviewInviteById(id: number): ReviewInvite | undefined {
+    return this.inviteRow(this.db.prepare("SELECT * FROM review_invites WHERE id = ?").get(id) as Row | undefined);
+  }
+
+  getReviewInvite(token: string): ReviewInvite | undefined {
+    return this.inviteRow(this.db.prepare("SELECT * FROM review_invites WHERE token = ?").get(token) as Row | undefined);
+  }
+
+  listReviewInvites(limit = 200): ReviewInvite[] {
+    return (this.db.prepare("SELECT * FROM review_invites ORDER BY id DESC LIMIT ?").all(limit) as Row[]).map((r) => this.inviteRow(r)!);
+  }
+
+  /** Only a link nobody has used yet can be cancelled. */
+  revokeReviewInvite(id: number, at: number): boolean {
+    const r = this.db.prepare("UPDATE review_invites SET revoked_at = ? WHERE id = ? AND used_at IS NULL AND revoked_at IS NULL").run(at, id);
+    return Number(r.changes) === 1;
+  }
+
+  /** Uses the link and stores the review together: a link can never produce two reviews. */
+  submitInviteReview(token: string, rating: number, comment: string, displayName: string, at: number): boolean {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const used = this.db.prepare(`UPDATE review_invites SET used_at = ?
+        WHERE token = ? AND used_at IS NULL AND revoked_at IS NULL AND expires_at > ?`).run(at, token, at);
+      if (Number(used.changes) !== 1) { this.db.exec("ROLLBACK"); return false; }
+      this.db.prepare(`INSERT INTO reviews (invite_id, rating, comment, display_name, created_at)
+        SELECT id, ?, ?, ?, ? FROM review_invites WHERE token = ?`).run(rating, comment, displayName, at, token);
+      this.db.exec("COMMIT");
+      return true;
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
+  }
+
   /* Reviews deliberately contain no customer contact or session identifiers. */
   reviewForOrder(orderId: number): { status: string } | undefined {
     return this.db.prepare("SELECT status FROM reviews WHERE order_id = ?").get(orderId) as { status: string } | undefined;
@@ -361,10 +451,13 @@ export class Store {
   }
 
   listReviews(publicOnly = false) {
+    const sel = "SELECT r.*, i.note AS invite_note FROM reviews r LEFT JOIN review_invites i ON i.id = r.invite_id";
     const rows = this.db.prepare(publicOnly
-      ? "SELECT * FROM reviews WHERE status = 'published' ORDER BY id DESC LIMIT 100"
-      : "SELECT * FROM reviews WHERE status != 'deleted' ORDER BY id DESC").all() as Row[];
-    return rows.map(r => ({ id: Number(r.id), orderId: Number(r.order_id), rating: Number(r.rating),
+      ? `${sel} WHERE r.status = 'published' ORDER BY r.id DESC LIMIT 100`
+      : `${sel} WHERE r.status != 'deleted' ORDER BY r.id DESC`).all() as Row[];
+    return rows.map(r => ({ id: Number(r.id), orderId: r.order_id == null ? null : Number(r.order_id),
+      source: (r.order_id == null ? "invite" : "order") as "invite" | "order",
+      inviteNote: r.invite_note == null ? "" : String(r.invite_note), rating: Number(r.rating),
       comment: String(r.comment), displayName: String(r.display_name), status: String(r.status), createdAt: Number(r.created_at),
       ownerReply: String(r.owner_reply ?? ""), ownerReplyAt: r.owner_reply_at == null ? null : Number(r.owner_reply_at) }));
   }

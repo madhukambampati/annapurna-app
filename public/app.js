@@ -827,7 +827,7 @@
           h("div", { class: "review-person" },
             h("b", {}, r.displayName),
             h("span", { class: "review-rating-badge", "aria-label": r.rating + " out of 5 stars" }, r.rating + "/5")),
-          h("small", {}, "✓ Verified order"),
+          h("small", {}, r.source === "customer" ? "✓ Annapurna customer" : "✓ Verified order"),
           r.ownerReply ? h("div", { class: "review-owner-reply" },
             h("b", {}, "Annapurna Home Foods"),
             h("p", {}, r.ownerReply)) : null));

@@ -8,7 +8,7 @@ import { cookSummary } from "./cook.js";
 import { RateLimiter } from "./limiter.js";
 import { DAILY_ORDER_CUTOFF_HOUR, afterDailyOrderCutoff, dayRange, itemDays, itemLabel, money, storeOpenOn, total } from "./menu.js";
 import { friendlyName } from "./guards.js";
-import type { Store } from "./store.js";
+import type { ReviewInvite, Store } from "./store.js";
 import { DAYN, dayLabel, formatWhen, nextDateForDow, pad, zonedParts } from "./time.js";
 import type { MenuItem, Order, OrderStatus, Settings } from "./types.js";
 
@@ -16,6 +16,31 @@ const MAX_BODY = 100_000;
 const MAX_DRAIN = 2_000_000;
 const MAX_TEXT = 1000;
 const HOUR = 3_600_000;
+/** A review link the owner sends works once and for this long. */
+export const REVIEW_INVITE_DAYS = 30;
+/** 18 random bytes = 24 URL-safe characters. */
+const INVITE_TOKEN = /^[A-Za-z0-9_-]{24}$/;
+
+/** Shared checks for every review, from an order or from a review link. Throws a customer-facing message. */
+function readReview(b: Record<string, unknown>): { rating: number; comment: string; name: string } {
+  const rating = b.rating;
+  const comment = typeof b.comment === "string" ? b.comment.trim() : "";
+  const name = typeof b.displayName === "string" ? b.displayName.trim() : "";
+  if (typeof rating !== "number" || !Number.isInteger(rating) || rating < 1 || rating > 5)
+    throw new HttpError(400, "Choose a rating from 1 to 5.");
+  if (comment.length > 500) throw new HttpError(400, "Please keep your optional comment within 500 characters.");
+  // Do not accept contact details into content that can become public.
+  if (/@|https?:|www\.|(?:\+?\d[\s().-]*){7,}/i.test(comment))
+    throw new HttpError(400, "Please remove phone numbers, email addresses and links from your review.");
+  if (name && !/^[\p{L}\p{M}]{1,30}(?:['’-][\p{L}\p{M}]+)?$/u.test(name))
+    throw new HttpError(400, "Use only your first name, or leave it blank for privacy.");
+  return { rating, comment, name: name || "Annapurna guest" };
+}
+
+type InviteState = "open" | "used" | "expired" | "cancelled";
+function inviteState(i: ReviewInvite, at: number): InviteState {
+  return i.usedAt != null ? "used" : i.revokedAt != null ? "cancelled" : i.expiresAt <= at ? "expired" : "open";
+}
 const DAY = 24 * HOUR;
 
 function validDateKey(value: string): boolean {
@@ -75,6 +100,7 @@ const ASSETS: Record<string, { file: string; type: string }> = {
   "/desk": { file: "desk.html", type: "text/html; charset=utf-8" },
   "/app.js": { file: "app.js", type: "text/javascript; charset=utf-8" },
   "/desk.js": { file: "desk.js", type: "text/javascript; charset=utf-8" },
+  "/review.js": { file: "review.js", type: "text/javascript; charset=utf-8" },
   "/heritage-v6.css": { file: "heritage-v6.css", type: "text/css; charset=utf-8" },
   "/heritage-v8.css": { file: "heritage-v8.css", type: "text/css; charset=utf-8" },
   "/heritage-v9.css": { file: "heritage-v9.css", type: "text/css; charset=utf-8" },
@@ -391,6 +417,15 @@ export function createServer(d: ServerDeps): Server {
         return void res.end(body);
       }
 
+      /* ----- review page opened from an owner-sent link ----- */
+      if (m === "GET" && /^\/review\/[^/]{1,64}$/.test(path)) {
+        if (!w.enabled) throw new HttpError(404, "Not found");
+        const body = asset("review.html");
+        if (body === undefined) throw new HttpError(404, "Not found");
+        res.writeHead(200, { ...baseHeaders(req), "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+        return void res.end(body);
+      }
+
       /* ----- customer website ----- */
       if (path.startsWith("/web/")) {
         if (!w.enabled) throw new HttpError(404, "Not found");
@@ -398,8 +433,10 @@ export function createServer(d: ServerDeps): Server {
 
         if (m === "GET" && path === "/web/reviews") {
           limit(`reviews:${ip}`, 60, 60_000);
+          // "order": a picked-up website order. "customer": someone the owner sent a review link to.
           const reviews = store.listReviews(true).map(r => ({ rating: r.rating, comment: r.comment,
-            displayName: r.displayName, verified: true, ...(r.ownerReply ? { ownerReply: r.ownerReply } : {}) }));
+            displayName: r.displayName, verified: r.source === "order", source: r.source === "order" ? "order" : "customer",
+            ...(r.ownerReply ? { ownerReply: r.ownerReply } : {}) }));
           return send(req, res, 200, { reviews });
         }
         const reviewOrder = /^\/web\/orders\/(\d+)\/review$/.exec(path);
@@ -410,20 +447,26 @@ export function createServer(d: ServerDeps): Server {
           const order = store.getOrder(id);
           if (!order || order.waId !== waId) throw new HttpError(404, "No such order");
           if (order.status !== "done") throw new HttpError(409, "You can review this order after pickup.");
-          const b = await readJson(req);
-          const rating = b.rating;
-          const comment = typeof b.comment === "string" ? b.comment.trim() : "";
-          const name = typeof b.displayName === "string" ? b.displayName.trim() : "";
-          if (typeof rating !== "number" || !Number.isInteger(rating) || rating < 1 || rating > 5)
-            throw new HttpError(400, "Choose a rating from 1 to 5.");
-          if (comment.length > 500) throw new HttpError(400, "Please keep your optional comment within 500 characters.");
-          // Do not accept contact details into content that can become public.
-          if (/@|https?:|www\.|(?:\+?\d[\s().-]*){7,}/i.test(comment))
-            throw new HttpError(400, "Please remove phone numbers, email addresses and links from your review.");
-          if (name && !/^[\p{L}\p{M}]{1,30}(?:['’-][\p{L}\p{M}]+)?$/u.test(name))
-            throw new HttpError(400, "Use only your first name, or leave it blank for privacy.");
-          if (!store.submitReview(waId, id, rating, comment, name || "Annapurna guest", now()))
+          const { rating, comment, name } = readReview(await readJson(req));
+          if (!store.submitReview(waId, id, rating, comment, name, now()))
             throw new HttpError(409, "A review has already been submitted for this order.");
+          return send(req, res, 201, { ok: true, status: "pending" });
+        }
+        const inviteMatch = /^\/web\/review-links\/([^/]+)$/.exec(path);
+        if (inviteMatch) {
+          const tok = inviteMatch[1]!;
+          limit(`review-link:${ip}`, m === "POST" ? 10 : 60, m === "POST" ? HOUR : 60_000);
+          const invite = INVITE_TOKEN.test(tok) ? store.getReviewInvite(tok) : undefined;
+          // An unknown and a cancelled link look the same to the public.
+          const state: InviteState | "missing" = !invite ? "missing" : inviteState(invite, now());
+          if (m === "GET") return send(req, res, 200, { state: state === "cancelled" ? "missing" : state });
+          if (m !== "POST") throw new HttpError(405, "Method not allowed");
+          const review = readReview(await readJson(req));
+          if (state === "used") throw new HttpError(409, "This review link has already been used. Thank you!");
+          if (state === "expired") throw new HttpError(410, "This review link has expired. Ask Annapurna Home Foods for a new one.");
+          if (state !== "open") throw new HttpError(404, "This review link isn't valid. Ask Annapurna Home Foods for a new one.");
+          if (!store.submitInviteReview(tok, review.rating, review.comment, review.name, now()))
+            throw new HttpError(409, "This review link has already been used. Thank you!");
           return send(req, res, 201, { ok: true, status: "pending" });
         }
 
@@ -590,6 +633,21 @@ export function createServer(d: ServerDeps): Server {
       if (path.startsWith("/api/")) {
         ownerAuth(req);
         if (m === "GET" && path === "/api/reviews") return send(req, res, 200, { reviews: store.listReviews() });
+        const ownerInvites = () => store.listReviewInvites().map((i) => ({ ...i, state: inviteState(i, now()) }));
+        if (m === "GET" && path === "/api/review-links") return send(req, res, 200, { links: ownerInvites() });
+        if (m === "POST" && path === "/api/review-links") {
+          const b = await readJson(req);
+          const note = cleanText(b.note, 80);
+          const at = now();
+          const invite = store.createReviewInvite(randomBytes(18).toString("base64url"), note, at, at + REVIEW_INVITE_DAYS * 24 * HOUR);
+          return send(req, res, 201, { link: { ...invite, state: inviteState(invite, at) } });
+        }
+        const cancelInvite = /^\/api\/review-links\/(\d+)\/cancel$/.exec(path);
+        if (m === "POST" && cancelInvite) {
+          if (!store.revokeReviewInvite(Number(cancelInvite[1]), now()))
+            throw new HttpError(409, "Only an unused link can be cancelled.");
+          return send(req, res, 200, { ok: true });
+        }
         const reviewReply = /^\/api\/reviews\/(\d+)\/reply$/.exec(path);
         if (reviewReply && m === "POST") {
           const b = await readJson(req);
@@ -627,6 +685,7 @@ export function createServer(d: ServerDeps): Server {
           const settings = store.getSettings();
           return send(req, res, 200, {
             reviews: store.listReviews(),
+            reviewLinks: store.listReviewInvites().map((i) => ({ ...i, state: inviteState(i, now()) })),
             orders: store.listOrders().map((o) => ({ ...o, contact: contactOf(o.waId) })),
             alerts: store.listAlerts().map((a) => ({ ...a, contact: contactOf(a.waId) })),
             menu: store.getMenu(), settings, storeStatus: businessStatus(settings, now()), ownerLaunchAt: store.ownerFreshLaunchAt(),

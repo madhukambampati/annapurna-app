@@ -2,7 +2,16 @@
 
 Reviews use the app's existing SQLite database (`DB_PATH`). Startup adds only the `reviews` table and its index; no order, session, chat, menu, or opening-hours data is changed by this feature. Back up the database before deploying as usual.
 
-Customers use **Orders → picked-up order → Review your meal** in the same browser session used for the order. Ready, cancelled, held and cooking orders cannot be reviewed. Possession of an order number or matching contact details grants no access. There is no review access recovery or invitation link for phone/WhatsApp orders in this release.
+Customers use **Orders → picked-up order → Review your meal** in the same browser session used for the order. Ready, cancelled, held and cooking orders cannot be reviewed. Possession of an order number or matching contact details grants no access.
+
+## Review links for past customers
+
+Customers who ordered on WhatsApp, Instagram or by phone (or from another browser) get a **review link** from the owner instead. In **More → Reviews → Ask a past customer for a review** the owner types an optional note (who it's for, kept private), creates the link and sends it with **Copy link** or **Send on WhatsApp**.
+
+- The link is `/review/<code>` with a random 24-character code. It works **once** and **expires after 30 days**. An unused link can be cancelled; a cancelled link looks the same as an unknown one.
+- The customer gives 1–5 stars, an optional comment and an optional first name. The same rules apply as for order reviews (no phone numbers, emails or links; first name only).
+- The review arrives **pending**, like every review. Published, it shows **"✓ Annapurna customer"** rather than "✓ Verified order", because no website order backs it. The owner's note and the link code are never public.
+- Storage: a `review_invites` table, and `reviews` gains an `invite_id` column with `order_id` now optional (exactly one of the two is set). Startup rebuilds the `reviews` table once to allow this, keeping every row and id.
 
 A review needs an integer rating of 1–5 and an optional comment of up to 500 characters. Only the star rating is required. A first name is optional and never copied from the order/customer record; blank names display as **Annapurna guest**. Direct email addresses, phone numbers and links are rejected in comments. Owners must still check for other personal details before publishing. Content is rendered as text, never HTML.
 
