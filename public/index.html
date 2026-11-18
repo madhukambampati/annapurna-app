@@ -2412,7 +2412,7 @@ html[data-theme="dark"] body.customer-mode #startForm input:-webkit-autofill{
 
     <section class="customer-reviews" aria-labelledby="reviewsTitle">
       <div class="review-heading"><span>FROM OUR COMMUNITY</span><h3 id="reviewsTitle">A little love from your table</h3></div>
-      <p>Real meals. Feedback from verified orders.</p>
+      <p>Real meals, real words from our customers.</p>
       <div id="publicReviewList" class="review-grid" aria-live="polite"><p>Loading reviews…</p></div>
     </section>
 
@@ -2446,9 +2446,13 @@ html[data-theme="dark"] body.customer-mode #startForm input:-webkit-autofill{
         <input type="text" id="fName" name="name" autocomplete="name" autocapitalize="words" maxlength="60" aria-describedby="fNameErr" required>
         <span class="field-error" id="fNameErr" aria-live="polite"></span>
       </label>
-      <label class="f">Phone or email
-        <span class="f-hint">So Annapurna Home Foods can reach you about your order.</span>
-        <input type="text" id="fContact" name="contact" autocomplete="tel" inputmode="text" maxlength="80" aria-describedby="fContactErr" required>
+      <label class="f"><span id="fContactLbl">Phone or email</span>
+        <span class="f-hint" id="fContactHint">So Annapurna Home Foods can reach you about your order.</span>
+        <span class="contact-kind" role="group" aria-label="Contact by">
+          <button type="button" data-kind="phone" aria-pressed="true">Phone</button>
+          <button type="button" data-kind="email" aria-pressed="false">Email</button>
+        </span>
+        <input type="text" id="fContact" name="contact" autocomplete="tel" inputmode="tel" maxlength="80" placeholder="10-digit phone number" aria-labelledby="fContactLbl" aria-describedby="fContactHint fContactErr" required>
         <span class="field-error" id="fContactErr" aria-live="polite"></span>
       </label>
       <label class="check"><input type="checkbox" id="fConsent"><span>I agree that my name and messages may be processed to provide this ordering chat, and the Annapurna Home Foods team can review my chat and orders.</span></label>
@@ -2463,7 +2467,7 @@ html[data-theme="dark"] body.customer-mode #startForm input:-webkit-autofill{
     <p class="tiny">You can delete your chat any time from Help. Placed orders are kept so we can cook them.</p>
     <section class="customer-reviews" aria-labelledby="onboardReviewsTitle">
       <div class="review-heading"><span>FROM OUR COMMUNITY</span><h3 id="onboardReviewsTitle">A little love from your table</h3></div>
-      <p>Real meals. Feedback from verified orders.</p>
+      <p>Real meals, real words from our customers.</p>
       <div id="onboardReviewList" class="review-grid" aria-live="polite"><p>Loading reviews…</p></div>
     </section>
   </main>

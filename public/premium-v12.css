@@ -281,3 +281,27 @@ html body.customer-mode #text::placeholder{font-size:14px;white-space:nowrap;ove
 @media(prefers-reduced-motion:reduce){
   html body.customer-mode *{transition:none!important}
 }
+
+/* ---------- public reviews: full cards, no inner scroll box, no stretched blank space ---------- */
+html body.customer-mode .review-grid{display:block!important;max-height:none!important;overflow:visible!important;columns:2 280px;column-gap:16px}
+html body.customer-mode .review-card{display:block!important;break-inside:avoid;margin:0 0 16px!important;padding:18px 20px!important;border-radius:18px!important;height:auto!important}
+html body.customer-mode .review-card[hidden]{display:none!important}
+html body.customer-mode .review-stars{font-size:16px;letter-spacing:2px;line-height:1;margin-bottom:8px}
+html body.customer-mode .review-stars .on{color:#e9a215}
+html body.customer-mode .review-stars span:not(.on){color:#ddd5c3}
+html body.customer-mode .review-card .review-text{margin:0!important;font-size:15px!important;line-height:1.6!important;color:var(--p-ink)!important}
+html body.customer-mode .review-card .clamp{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:6;line-clamp:6;overflow:hidden}
+html body.customer-mode .review-card .clamp.clamp-short{-webkit-line-clamp:3;line-clamp:3}
+html body.customer-mode .review-card.expanded .clamp{display:block;-webkit-line-clamp:unset;line-clamp:none;overflow:visible}
+html body.customer-mode .review-person{margin-top:12px!important}
+html body.customer-mode .review-owner-reply{margin-top:12px!important}
+html body.customer-mode .review-more{display:inline-block;margin-top:10px;padding:0;min-height:32px;border:0;background:none;color:var(--p-leaf);font:700 14px var(--font, inherit);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+html body.customer-mode .review-more[hidden]{display:none}
+html body.customer-mode .review-show-all{display:block;margin:4px auto 0;min-height:44px;padding:10px 20px;border-radius:12px;border:1px solid #d8ccb0;background:var(--p-ivory);color:var(--p-leaf);font-weight:700;cursor:pointer}
+html body.customer-mode .review-show-all:hover{background:var(--p-cream)}
+@media(max-width:759px){html body.customer-mode .review-grid{columns:1}}
+
+/* ---------- contact field: pick phone or email so the phone shows the right keyboard ---------- */
+html body.customer-mode .contact-kind{display:inline-flex;gap:4px;padding:3px;margin:0 0 6px;border-radius:11px;background:#efe6d3;border:1px solid #e2d6bb;width:max-content}
+html body.customer-mode .contact-kind button{min-height:34px;padding:5px 14px;border:0;border-radius:8px;background:transparent;font:600 13.5px inherit;color:#3d4a41;cursor:pointer}
+html body.customer-mode .contact-kind button[aria-pressed=true]{background:var(--p-leaf);color:#fff}
