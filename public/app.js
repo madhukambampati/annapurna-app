@@ -816,8 +816,42 @@
     $("sheetBody").replaceChildren(form); stars.focus();
   }
 
+  /* Public reviews. Every card shows in full height-wise: long text is shortened with a "Read more",
+     never cut off by a scrolling box. Four cards show at first; "Show all" reveals the rest. */
+  var REVIEWS_SHOWN = 4;
+  var lastReviewsJson = "";
+  function reviewCard(r) {
+    var text = r.comment ? h("p", { class: "review-text clamp" }, r.comment) : null;
+    var reply = r.ownerReply ? h("p", { class: "clamp clamp-short" }, r.ownerReply) : null;
+    var more = h("button", { class: "review-more", type: "button", hidden: true, "aria-expanded": "false" }, "Read more");
+    var card = h("article", { class: "review-card" },
+      h("div", { class: "review-stars", role: "img", "aria-label": r.rating + " out of 5 stars" },
+        h("span", { class: "on" }, "★".repeat(r.rating)), h("span", {}, "★".repeat(5 - r.rating))),
+      text,
+      h("div", { class: "review-person" }, h("b", {}, r.displayName)),
+      h("small", {}, r.source === "customer" ? "✓ Annapurna customer" : "✓ Verified order"),
+      reply ? h("div", { class: "review-owner-reply" }, h("b", {}, "Annapurna Home Foods"), reply) : null,
+      more);
+    more.addEventListener("click", function () {
+      var open = card.classList.toggle("expanded");
+      more.textContent = open ? "Show less" : "Read more";
+      more.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    return card;
+  }
+  // Only offer "Read more" where something is actually shortened.
+  function markTruncated(list) {
+    list.querySelectorAll(".review-card").forEach(function (card) {
+      var cut = Array.prototype.some.call(card.querySelectorAll(".clamp"), function (el) { return el.scrollHeight > el.clientHeight + 2; });
+      var more = card.querySelector(".review-more");
+      if (more && !card.classList.contains("expanded")) more.hidden = !cut;
+    });
+  }
   function loadPublicReviews() {
     fetch("/web/reviews").then(function (r) { if (!r.ok) throw new Error("reviews unavailable"); return r.json(); }).then(function (j) {
+      var json = JSON.stringify(j.reviews);
+      if (json === lastReviewsJson) return; // nothing new: keep what the reader has opened
+      lastReviewsJson = json;
       ["publicReviewList", "onboardReviewList"].forEach(function (id) {
       var list = $(id); if (!list) return;
       list.replaceChildren();
@@ -825,20 +859,23 @@
       var section = list.closest(".customer-reviews");
       if (section) section.classList.toggle("no-reviews", !j.reviews.length);
       if (!j.reviews.length) { list.append(h("p", {}, "Your table, your stories. Reviews from picked-up orders will appear here once published.")); return; }
-      j.reviews.forEach(function (r) {
-        list.append(h("article", { class: "review-card" },
-          r.comment ? h("p", {}, r.comment) : null,
-          h("div", { class: "review-person" },
-            h("b", {}, r.displayName),
-            h("span", { class: "review-rating-badge", "aria-label": r.rating + " out of 5 stars" }, r.rating + "/5")),
-          h("small", {}, r.source === "customer" ? "✓ Annapurna customer" : "✓ Verified order"),
-          r.ownerReply ? h("div", { class: "review-owner-reply" },
-            h("b", {}, "Annapurna Home Foods"),
-            h("p", {}, r.ownerReply)) : null));
-      });
+      var cards = j.reviews.map(reviewCard);
+      cards.forEach(function (c, i) { if (i >= REVIEWS_SHOWN) c.hidden = true; list.append(c); });
+      var old = section && section.querySelector(".review-show-all"); if (old) old.remove();
+      if (cards.length > REVIEWS_SHOWN && section) {
+        var all = h("button", { class: "review-show-all", type: "button" }, "Show all " + cards.length + " reviews");
+        all.addEventListener("click", function () {
+          cards.forEach(function (c) { c.hidden = false; });
+          all.remove();
+          markTruncated(list);
+        });
+        section.append(all);
+      }
+      requestAnimationFrame(function () { markTruncated(list); });
       });
     }).catch(function () { ["publicReviewList", "onboardReviewList"].forEach(function (id) { var list = $(id); if (list) list.textContent = "Reviews are temporarily unavailable."; }); });
   }
+  window.addEventListener("resize", function () { ["publicReviewList", "onboardReviewList"].forEach(function (id) { var l = $(id); if (l) markTruncated(l); }); });
   loadPublicReviews();
   setInterval(loadPublicReviews, 60000);
 
@@ -1196,7 +1233,10 @@
   $("fName").addEventListener("blur", function () {
     setFieldValidation("fName", "fNameErr", nameValidationError($("fName").value));
   });
-  $("fContact").addEventListener("blur", function () {
+  var switchingContactKind = false;
+  $("fContact").addEventListener("blur", function (e) {
+    // Tapping Phone / Email is not "leaving the field": don't flag an empty field for it.
+    if (switchingContactKind || (e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest(".contact-kind"))) return;
     setFieldValidation("fContact", "fContactErr", contactValidationError($("fContact").value));
   });
   function clearResolvedStartError() {
@@ -1209,6 +1249,24 @@
   $("fName").addEventListener("input", function () {
     if ($("fName").getAttribute("aria-invalid") === "true") setFieldValidation("fName", "fNameErr", nameValidationError($("fName").value));
     clearResolvedStartError();
+  });
+  /* Phone / Email choice: only changes which keyboard the phone shows. Either kind is still accepted. */
+  function setContactKind(kind, refocus) {
+    var input = $("fContact");
+    var email = kind === "email";
+    input.setAttribute("inputmode", email ? "email" : "tel");
+    input.setAttribute("autocomplete", email ? "email" : "tel");
+    input.setAttribute("placeholder", email ? "e.g. name@example.com" : "10-digit phone number");
+    document.querySelectorAll(".contact-kind button").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.kind === kind ? "true" : "false"); });
+    // A phone only swaps its keyboard when the field is focused again.
+    if (refocus) { switchingContactKind = true; input.blur(); input.focus(); switchingContactKind = false; }
+  }
+  document.querySelectorAll(".contact-kind button").forEach(function (b) {
+    b.addEventListener("click", function () { setContactKind(b.dataset.kind, true); });
+  });
+  $("fContact").addEventListener("input", function () {
+    var v = $("fContact").value;
+    if (v.indexOf("@") !== -1 && $("fContact").getAttribute("inputmode") === "tel") setContactKind("email", false);
   });
   $("fContact").addEventListener("input", function () {
     if ($("fContact").getAttribute("aria-invalid") === "true") setFieldValidation("fContact", "fContactErr", contactValidationError($("fContact").value));
