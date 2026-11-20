@@ -706,6 +706,8 @@ export class Agent {
     const { store } = this.d;
     const now = this.now();
     const menu = store.getMenu();
+    const liveWeekendOffer = activeWeekendOffer(settings, now);
+    const weekendSpecialIds = new Set((liveWeekendOffer?.items ?? []).map((x) => x.menuId));
     // A clarify turn, or a customer who only asked a question, must not start or change the order.
     const frozen = r.kind === "clarify" || (r.kind === "normal" && r.freeze === true);
     const hint = r.kind === "clarify" ? r.hint : frozen ? "The customer is only asking a question or chatting. Answer it. Do not start or change the order, and keep stage as it is." : r.kind === "owner_topic" ? "This is a topic only Maddy can settle (payment, delivery, refund, allergy, custom or complaint). Do not answer it yourself. Say warmly that Annapurna Home Foods will reach out to them here in this chat. Never name Maddy to the customer." : undefined;
@@ -781,7 +783,7 @@ export class Agent {
         // run normal menu-item ambiguity checks on phrases such as "15-person medium tray".
         custom = custom ?? { request: text.slice(0, 300), price: null, approved: false };
         if (Array.isArray(rd.items) && rd.items.length) {
-          const s = sanitizeItems(proposedItems, menu);
+          const s = sanitizeItems(proposedItems, menu, weekendSpecialIds);
           // Keep any clearly resolved menu items for a useful label, but ambiguity must not block catering.
           if (s.items.length) items = s.items;
           issues.push(...s.issues.filter((i) => i.kind === "not_live" || i.kind === "weekday_mismatch"));
@@ -790,9 +792,14 @@ export class Agent {
         if (typeof rd.notes === "string" && rd.notes.trim()) notes = rd.notes.slice(0, 300);
         if (typeof rd.customer_name === "string" && rd.customer_name.trim()) custName = rd.customer_name.trim().slice(0, 60);
       } else {
-        const s = sanitizeItems(proposedItems, menu);
-        items = s.items;
-        issues.push(...s.issues);
+        const sanitized = sanitizeItems(proposedItems, menu, weekendSpecialIds);
+        const explicitWeekendSpecial = WEEKEND_SPECIAL.test(text);
+        items = sanitized.items.map((it) => {
+          const priorSpecial = draft?.items.some((old) => old.id === it.id && old.pack === it.pack && old.promotion === "weekend_special");
+          const useSpecial = it.pack === "single" && (it.promotion === "weekend_special" || priorSpecial || (explicitWeekendSpecial && weekendSpecialIds.has(it.id)));
+          return useSpecial ? { ...it, promotion: "weekend_special" as const } : it;
+        });
+        issues.push(...sanitized.issues);
         pickup = typeof rd.pickup_local === "string" && isLocalIso(rd.pickup_local) ? rd.pickup_local : null;
         notes = typeof rd.notes === "string" ? rd.notes.slice(0, 300) : "";
         custName = typeof rd.customer_name === "string" && rd.customer_name.trim() ? rd.customer_name.trim().slice(0, 60) : null;
@@ -803,11 +810,22 @@ export class Agent {
         issues.push(wk);
         pickup = null;
       }
-      // Re-price normal menu items after the pickup is known. Weekend promotions apply only
-      // to pickups inside their configured date range; ordinary prices return outside it.
+      // Regular weekend combos keep their normal prices. Only an explicitly tagged Weekend
+      // Special line can use the promotional price, and only for a pickup inside the offer dates.
       if (!custom && items.length) {
-        const priceMenu = effectiveMenu(store.getMenu(), settings, now, pickup);
-        items = items.map((it) => ({ ...it, amt: lineAmt(priceMenu, it) }));
+        items = items.map((it) => {
+          const amt = orderLineAmt(menu, it, settings, now, pickup);
+          if (it.promotion === "weekend_special" && amt == null) {
+            const cfg = settings.weekendOffer;
+            issues.push({
+              kind: "weekend_special_unavailable",
+              name: it.name,
+              startDate: cfg?.startDate || "",
+              endDate: cfg?.endDate || "",
+            });
+          }
+          return { ...it, amt };
+        });
       }
     }
 
@@ -835,6 +853,7 @@ export class Agent {
     const notLive = issues.filter((i): i is Extract<Issue, { kind: "not_live" }> => i.kind === "not_live");
     const unclear = issues.filter((i): i is Extract<Issue, { kind: "unclear_item" }> => i.kind === "unclear_item");
     const weekday = issues.find((i): i is Extract<Issue, { kind: "weekday_mismatch" }> => i.kind === "weekday_mismatch");
+    const specialUnavailable = issues.filter((i): i is Extract<Issue, { kind: "weekend_special_unavailable" }> => i.kind === "weekend_special_unavailable");
     if (notLive.length) {
       fixes.push(`Sorry, ${notLive.map((n) => n.name).join(" and ")} ${notLive.length > 1 ? "aren't" : "isn't"} running right now, so I can't take that one. I've let Annapurna Home Foods know.`);
       await this.raise(msg.from, customer.name || msg.name || "Customer", `Asked for ${notLive.map((n) => n.name).join(", ")}, which is switched off right now.`, null, out);
@@ -849,6 +868,10 @@ export class Agent {
     }
     if (weekday) {
       fixes.push(`Just checking, did you mean ${dayLabel(weekday.suggestion)}? Please tell me the day and time you'd like to pick up.`);
+    }
+    for (const sp of specialUnavailable) {
+      const range = sp.startDate && sp.endDate ? ` from ${sp.startDate} through ${sp.endDate}` : "";
+      fixes.push(`The Weekend Special for ${sp.name} is only available for the offer pickup dates${range}. Please choose a pickup inside the special dates, or tell me you want the regular weekend combo at its normal price.`);
     }
 
     // The same items and pickup as an order that is already placed is not a new order. Never read it back
@@ -1059,7 +1082,20 @@ export class Agent {
       const m = findItem(menu, it.id);
       return !m || (m.kind === "combo" && !m.live);
     });
-    const items = draft.items.filter((it) => !off.includes(it)).map((it) => ({ ...it, amt: lineAmt(menu, it) }));
+    const invalidSpecial = draft.items.filter((it) =>
+      it.promotion === "weekend_special" && weekendOfferPrice(s, now, it.id, draft.pickup_local) == null
+    );
+    if (invalidSpecial.length) {
+      const cfg = s.weekendOffer;
+      const items = draft.items.map((it) => invalidSpecial.includes(it) ? { ...it, amt: null } : it);
+      const next: Draft = { ...draft, items, stage: "collecting", readback_hash: null };
+      store.putDraft(waId, next);
+      out.route = "confirm_order+weekend_special_unavailable";
+      const range = cfg?.startDate && cfg?.endDate ? ` from ${cfg.startDate} through ${cfg.endDate}` : "";
+      out.replies.push(`That Weekend Special is only available for the offer pickup dates${range}, so I haven't placed this order. Choose a pickup inside the special dates, or tell me you want the regular weekend combo at its normal price.`);
+      return;
+    }
+    const items = draft.items.filter((it) => !off.includes(it)).map((it) => ({ ...it, amt: orderLineAmt(menu, it, s, now, draft.pickup_local) }));
     if (off.length || items.some((it, i) => it.amt !== draft.items[i]?.amt)) {
       const stage: Stage = items.length && draft.pickup_local ? "awaiting_confirmation" : "collecting";
       const next: Draft = { ...draft, items, stage, readback_hash: null };
