@@ -527,8 +527,15 @@ export class Store {
   }
 
   setReviewReply(id: number, reply: string, at: number | null): boolean {
-    const r = this.db.prepare("UPDATE reviews SET owner_reply = ?, owner_reply_at = ? WHERE id = ? AND status != 'deleted'")
-      .run(reply, reply ? at : null, id);
+    // Clearing an already-empty reply is a no-op and should report "not found" to the API.
+    // SQLite may count a matched UPDATE even when the stored values are unchanged, so make
+    // the state transition explicit in the WHERE clause for deletes.
+    const sql = reply
+      ? "UPDATE reviews SET owner_reply = ?, owner_reply_at = ? WHERE id = ? AND status != 'deleted'"
+      : "UPDATE reviews SET owner_reply = '', owner_reply_at = NULL WHERE id = ? AND status != 'deleted' AND owner_reply != ''";
+    const r = reply
+      ? this.db.prepare(sql).run(reply, at, id)
+      : this.db.prepare(sql).run(id);
     return Number(r.changes) === 1;
   }
 
