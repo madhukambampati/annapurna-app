@@ -41,6 +41,28 @@ test("happy path: model proposes, CODE reads back, customer says yes, CODE place
   assert.match(t.store.getCustomer("+15198043658")!.profile, /Last order/);
 });
 
+test("single-day Full Meal is $18 and confirms without an owner approval step", async () => {
+  const t = setup({ judge: yesJudge });
+  const r1 = await orderAndReadBack(
+    t,
+    [{ id: "full_meal_day", qty: 1, pack: "single", asked_for: "Friday healthy combo" }],
+    FRI_6PM,
+    "I only want Friday's healthy combo for today at 6 PM",
+  );
+  assert.match(r1.replies[0]!, /1 x Single-day Full Meal: \$18/);
+  assert.match(r1.replies[0]!, /Total: \$18/);
+  assert.match(r1.replies[0]!, /Reply YES to confirm this order/);
+  assert.doesNotMatch(r1.replies[0]!, /price to be confirmed|submit this order for Annapurna confirmation/i);
+
+  const r2 = await t.say("yes");
+  assert.equal(r2.orderId, 1);
+  const order = t.store.getOrder(1)!;
+  assert.deepEqual([order.status, order.flags], ["cook", []]);
+  assert.match(r2.replies[0]!, /Order #1 is confirmed:/);
+  assert.match(r2.replies[0]!, /Total: \$18/);
+  assert.equal(t.notifier.sent.at(-1)!.title, "Order #1 confirmed");
+});
+
 test("the model saying 'confirmed' does nothing: only the customer's yes places an order", async () => {
   const t = setup();
   t.llm.push({ ...(modelReply({ items: [KHEEMA_BOGO], pickup: FRI_6PM }) as object), stage: "confirmed", reply: "Your order is confirmed!" });
