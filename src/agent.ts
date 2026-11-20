@@ -199,7 +199,8 @@ function deterministicFreshDraft(text: string, menu: MenuItem[], now: number, se
   const wantsBogo = /\b(?:bogo|buy\s*1\s*get\s*1|buy\s+one\s+get\s+one)\b/i.test(text);
   const pack = item.kind === "plan" ? "plan" : item.kind === "combo" && wantsBogo ? "bogo" : "single";
   if (pack === "bogo" && item.bogo == null) return null;
-  const orderItem = { id: item.id, name: item.name, qty, pack, amt: lineAmt(menu, { id: item.id, qty, pack }) } as Draft["items"][number];
+  const priceMenu = effectiveMenu(menu, settings, now, pickup);
+  const orderItem = { id: item.id, name: item.name, qty, pack, amt: lineAmt(priceMenu, { id: item.id, qty, pack }) } as Draft["items"][number];
   const draft: Draft = {
     items: [orderItem],
     pickup_local: pickup,
@@ -444,7 +445,7 @@ export class Agent {
     // For an explicit fresh-order reset, exact one-item menu orders with a clear pickup
     // are rebuilt entirely in code. This path must never wait on Claude just to forget old draft state.
     if (freshResetContext) {
-      const rebuilt = deterministicFreshDraft(text, menu, now, settings, customer.name || msg.name || null);
+      const rebuilt = deterministicFreshDraft(text, store.getMenu(), now, settings, customer.name || msg.name || null);
       if (rebuilt) {
         store.putDraft(msg.from, rebuilt);
         out.route = "fresh_order";
@@ -713,7 +714,7 @@ export class Agent {
     if (newest?.who === "cust" && newest.text !== text) promptHistory[promptHistory.length - 1] = { ...newest, text };
     if (freshContext && promptHistory.length) promptHistory.splice(0, promptHistory.length - 1);
     const prompt = buildPrompt({
-      now, settings, menu, customer: { waId: msg.from, name: customer.name, contact: "", profile: customer.profile, uncertainStreak: streak },
+      now, settings, menu: store.getMenu(), customer: { waId: msg.from, name: customer.name, contact: "", profile: customer.profile, uncertainStreak: streak },
       draft, history: promptHistory, hint: [pickHint, hint].filter(Boolean).join(" ") || undefined,
       placed: open.map((o) => `#${o.id} (${o.status}) ${o.items.map(itemLabel).join(", ")}, pickup ${formatWhen(o.pickup)}`),
     });
