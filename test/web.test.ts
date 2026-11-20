@@ -990,6 +990,48 @@ describe("web: menu status, pickup days and human handoff", () => {
       assert.deepEqual(m.contact, { instagram: "annapurna_hometaste", phone: "" });
     }));
 
+  test("weekend offers are hidden by default, live in range, and expire back to regular prices", () =>
+    withRig(async ({ call, advance }) => {
+      let menu = (await call("GET", "/web/menu")).json;
+      assert.equal(menu.weekendOffer, null);
+      assert.equal(menu.items.find((x: any) => x.id === "bagara_chicken_fry").single, 15);
+
+      const saved = await call("PUT", "/api/settings", { token: "secret", body: { weekendOffer: {
+        active: true, title: "Weekend Specials", label: "Only this weekend",
+        startDate: "2026-09-23", endDate: "2026-09-27",
+        items: [
+          { menuId: "bagara_chicken_fry", price: 12 },
+          { menuId: "kobbari_annam_fry", price: 12 },
+        ],
+      } } });
+      assert.equal(saved.status, 200, saved.text);
+
+      menu = (await call("GET", "/web/menu")).json;
+      assert.equal(menu.weekendOffer.title, "Weekend Specials");
+      assert.deepEqual(menu.weekendOffer.items.map((x: any) => [x.id, x.price]), [
+        ["bagara_chicken_fry", 12],
+        ["kobbari_annam_fry", 12],
+      ]);
+      assert.equal(menu.items.find((x: any) => x.id === "bagara_chicken_fry").single, 12);
+
+      advance(5 * DAY);
+      menu = (await call("GET", "/web/menu")).json;
+      assert.equal(menu.weekendOffer, null);
+      assert.equal(menu.items.find((x: any) => x.id === "bagara_chicken_fry").single, 15);
+    }));
+
+  test("weekend offer settings reject missing dates and non-combo items", () =>
+    withRig(async ({ call }) => {
+      assert.equal((await call("PUT", "/api/settings", { token: "secret", body: { weekendOffer: {
+        active: true, title: "Sale", label: "Weekend", startDate: "", endDate: "",
+        items: [{ menuId: "bagara_chicken_fry", price: 12 }],
+      } } })).status, 400);
+      assert.equal((await call("PUT", "/api/settings", { token: "secret", body: { weekendOffer: {
+        active: false, title: "Sale", label: "Weekend", startDate: "2026-09-23", endDate: "2026-09-27",
+        items: [{ menuId: "extra_raita", price: 1 }],
+      } } })).status, 400);
+    }));
+
   test("Talk to a person: visible status in history, one alert, cleared when the owner replies", () =>
     withRig(async ({ t, call, start }) => {
       const token = await start("Asha");
