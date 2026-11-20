@@ -335,3 +335,13 @@ html body.customer-mode .weekend-offer-panel .dish{border-color:#dfc16b!importan
   html body.customer-mode .weekend-offer-card strong{grid-column:2;grid-row:1 / span 2}
   html body.customer-mode .weekend-offer-card small{grid-column:1}
 }
+
+html body.customer-mode .onboarding-weekend-offer{grid-column:1/-1;width:100%}
+@media(max-width:759px){
+  html body.customer-mode .onboard .onboarding-weekend-offer{order:3!important;margin:0!important}
+  html body.customer-mode .onboard #startForm{order:4!important}
+  html body.customer-mode .onboard .steps{order:5!important}
+  html body.customer-mode .onboard .assistant-trust{order:6!important}
+  html body.customer-mode .onboard>.tiny{order:7!important}
+  html body.customer-mode .onboard .customer-reviews{order:8!important}
+}
