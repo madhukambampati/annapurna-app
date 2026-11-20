@@ -188,7 +188,7 @@ export function defaultSettings(): Settings {
       items: [
         { menuId: "kobbari_annam_fry", price: 12 },
         { menuId: "bagara_chicken_fry", price: 12 },
-        { menuId: "kheema_fry", price: 12 },
+        { menuId: "chicken_kheema_pulao", price: 12 },
       ],
     },
   };
@@ -204,18 +204,31 @@ export function activeWeekendOffer(s: Settings, now: number) {
   return items.length ? { ...offer, items } : null;
 }
 
-/** Menu used for customer quotes/orders. Promotional prices override only the configured single price. */
-export function effectiveMenu(menu: MenuItem[], s: Settings, now: number, pickupLocal?: string | null): MenuItem[] {
+/** Promotional price for an explicitly selected Weekend Special item.
+ * Regular menu prices are never overwritten by a promotion. */
+export function weekendOfferPrice(s: Settings, now: number, menuId: string, pickupLocal?: string | null): number | null {
   const offer = activeWeekendOffer(s, now);
-  if (!offer) return menu;
-  // "Only this weekend" is a pickup-date promotion. Once a pickup day is known, a later
-  // non-offer pickup immediately falls back to the normal menu price.
+  if (!offer) return null;
   if (pickupLocal && /^\d{4}-\d{2}-\d{2}T/.test(pickupLocal)) {
     const pickupDate = pickupLocal.slice(0, 10);
-    if (pickupDate < offer.startDate || pickupDate > offer.endDate) return menu;
+    if (pickupDate < offer.startDate || pickupDate > offer.endDate) return null;
   }
-  const prices = new Map(offer.items.map((x) => [x.menuId, x.price]));
-  return menu.map((m) => prices.has(m.id) ? { ...m, single: prices.get(m.id)! } : m);
+  return offer.items.find((x) => x.menuId === menuId)?.price ?? null;
+}
+
+/** Amount for a real order line. Only lines explicitly tagged Weekend Special use promo pricing. */
+export function orderLineAmt(
+  menu: MenuItem[],
+  it: Pick<OrderItem, "id" | "qty" | "pack" | "promotion">,
+  s: Settings,
+  now: number,
+  pickupLocal?: string | null,
+): number | null {
+  if (it.promotion === "weekend_special") {
+    const promo = weekendOfferPrice(s, now, it.id, pickupLocal);
+    return promo == null ? null : Math.round(promo * it.qty * 100) / 100;
+  }
+  return lineAmt(menu, it);
 }
 
 /** Daily business switch. Missing dates intentionally default open so an old closure never carries into tomorrow. */
@@ -333,6 +346,7 @@ export function money(n: number | null): string {
 }
 
 export function itemLabel(it: OrderItem): string {
+  if (it.promotion === "weekend_special") return `${it.qty} x ${it.name} (Weekend Special)`;
   if (it.pack === "bogo") return `${it.qty} x ${it.name} (Buy 1 Get 1)`;
   if (it.pack === "plan") return `${it.qty} x ${it.name} (${it.qty} ${it.qty > 1 ? "people" : "person"})`;
   return `${it.qty} x ${it.name}`;
