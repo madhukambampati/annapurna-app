@@ -21,6 +21,21 @@ test("fmtAmt switches grams to kg", () => {
   assert.equal(fmtAmt(2500, "g"), "2.5 kg");
 });
 
+test("kitchen labels Weekend Special separately from the regular version of the same dish", () => {
+  const menu = defaultMenu();
+  const special = { ...item("bagara_chicken_fry", "Bagara Rice and Chicken Fry combo", 1, "single"), promotion: "weekend_special" as const };
+  const regular = item("bagara_chicken_fry", "Bagara Rice and Chicken Fry combo", 1, "single");
+  const s = cookSummary([
+    order(1, "Kiran", "2026-11-21T13:00", [special]),
+    order(2, "Asha", "2026-11-21T14:00", [regular]),
+  ], menu);
+  const names = s.days[0]!.dishes.map((d) => d.name).sort();
+  assert.deepEqual(names, [
+    "Bagara Rice and Chicken Fry combo",
+    "Bagara Rice and Chicken Fry combo (Weekend Special)",
+  ]);
+});
+
 test("cook list groups by pickup day, counts BOGO as two meals, ignores non-cook orders", () => {
   const menu = defaultMenu();
   menu.find((m) => m.id === "kheema_fry")!.recipe = "Chicken | 250 | g\nRice | 300 | g";
