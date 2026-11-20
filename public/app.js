@@ -1015,7 +1015,10 @@
     var panels = [];
     var combos = byKind("combo"), plans = byKind("plan"), other = byKind("item"), extras = byKind("addon");
     if (m.weekendOffer && m.weekendOffer.items && m.weekendOffer.items.length) {
-      var offerItems = m.weekendOffer.items.map(function (o) { return (m.items || []).find(function (x) { return x.id === o.id; }); }).filter(Boolean);
+      var offerItems = m.weekendOffer.items.map(function (o) {
+        var item = (m.items || []).find(function (x) { return x.id === o.id; });
+        return item ? Object.assign({}, item, { bogo: null }) : null;
+      }).filter(Boolean);
       if (offerItems.length) panels.push(["Weekend Offers", h("div", { class: "panel weekend-offer-panel" },
         h("p", { class: "lead" }, (m.weekendOffer.label || "Only this weekend") + " · Promotional prices shown below."),
         offerItems.map(dish))]);
