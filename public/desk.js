@@ -642,26 +642,40 @@ function renderWeekendOffers() {
   const endDate = h("input", { type: "date", value: d.endDate || "", "aria-label": "Weekend offer end date",
     onchange: (e) => { d.endDate = e.target.value; render(); } });
   const active = h("input", { type: "checkbox", checked: !!d.active, "aria-label": "Show weekend offer on website",
-    onchange: (e) => { d.active = e.target.checked; render(); } });
+    onchange: async (e) => {
+      const before = d.active;
+      d.active = e.target.checked;
+      const ok = await save(false);
+      if (!ok) {
+        d.active = before;
+        render();
+      }
+    } });
 
   const today = localDateKey(Date.now(), state.settings.tz);
   const inRange = !!d.startDate && !!d.endDate && today >= d.startDate && today <= d.endDate;
-  const live = !!d.active && inRange && (d.items || []).length > 0;
+  const draftLive = !!d.active && inRange && (d.items || []).length > 0;
+  const savedOffer = state.settings.weekendOffer || { active: false, title: "", label: "", startDate: "", endDate: "", items: [] };
+  const savedInRange = !!savedOffer.startDate && !!savedOffer.endDate && today >= savedOffer.startDate && today <= savedOffer.endDate;
+  const savedLive = !!savedOffer.active && savedInRange && (savedOffer.items || []).length > 0;
+  const dirty = JSON.stringify(d) !== JSON.stringify(savedOffer);
   const saveMsg = h("span", { class: "ok" });
 
-  const save = async () => {
+  async function save(showMessage = true) {
     try {
       const j = await api("/api/settings", { method: "PUT", body: JSON.stringify({ weekendOffer: d }) });
       state.settings = j.settings;
       offerDraft = freshOfferDraft();
-      saveMsg.textContent = "Saved.";
+      if (showMessage) saveMsg.textContent = "Saved.";
       showErr(null);
       render();
+      return true;
     } catch (e) {
       saveMsg.textContent = "";
       showErr(e);
+      return false;
     }
-  };
+  }
 
   const discard = () => {
     offerDraft = freshOfferDraft();
@@ -719,12 +733,14 @@ function renderWeekendOffers() {
       h("div", { class: "offer-preview-note" },
         h("b", {}, "Regular Weekend Combos?"),
         h("span", {}, "Use the Weekend Combos section at normal prices."))),
-    h("div", { class: "offer-preview-status " + (live ? "live" : "") }, live ? "Live now" : d.active ? "Scheduled / outside dates" : "Preview only · offer is off"));
+    h("div", { class: "offer-preview-status " + (savedLive && !dirty ? "live" : "") },
+      dirty ? "Unsaved changes · Save Changes to publish" : savedLive ? "Live now" : savedOffer.active ? "Scheduled / outside dates" : "Preview only · offer is off"));
 
   const settingsCard = h("section", { class: "card offer-owner-settings" },
     h("div", { class: "offer-owner-card-title" },
       h("div", {}, h("h3", {}, "Offer Settings"), h("p", { class: "sub" }, "Set the title, dates and visibility for this separate Weekend Special.")),
-      h("span", { class: "offer-live-pill " + (live ? "live" : "") }, live ? "Live on website" : d.active ? "Scheduled" : "Off")),
+      h("span", { class: "offer-live-pill " + (savedLive && !dirty ? "live" : "") },
+        dirty ? "Unsaved changes" : savedLive ? "Live on website" : savedOffer.active ? "Scheduled" : "Off")),
     h("div", { class: "grid2" },
       h("label", {}, "Offer title", title),
       h("label", {}, "Promo label", promo),
@@ -749,7 +765,7 @@ function renderWeekendOffers() {
       h("div", { class: "offer-owner-top-actions" },
         h("button", { class: "ghost", type: "button", onclick: () => window.open("/", "_blank", "noopener") }, "View on Website"),
         h("button", { class: "ghost", type: "button", onclick: discard }, "Discard Changes"),
-        h("button", { class: "pri", type: "button", onclick: save }, "Save Changes"))),
+        h("button", { class: "pri", type: "button", onclick: () => save(true) }, "Save Changes"))),
     h("div", { class: "owner-note offer-owner-note" },
       h("b", {}, "Important: "),
       "The $12 prices are only for the Weekend Special. If a customer wants the regular Weekend Combos, they should order from the Weekend Combos section at normal prices."),
