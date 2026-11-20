@@ -29,6 +29,8 @@ export interface OrderItem {
   name: string;
   qty: number;
   pack: Pack;
+  /** Set only when the customer explicitly chose the separate Weekend Special promotion. */
+  promotion?: "weekend_special";
   /** Amount in CAD, null when the price is not set. */
   amt: number | null;
 }
