@@ -141,16 +141,32 @@ function clearlyNormalMenuOrder(text: string, menu: MenuItem[]): boolean {
 function requestedSwitchedOffCombo(text: string, menu: MenuItem[]): MenuItem | null {
   const said = tokens(text);
   if (!said.size) return null;
-  let best: { item: MenuItem; specificity: number } | null = null;
+
+  let inactive: { item: MenuItem; specificity: number } | null = null;
+  let liveBest = 0;
+
   for (const item of menu) {
-    if (item.kind !== "combo" || item.live) continue;
+    if (item.kind !== "combo") continue;
+    let bestForItem = 0;
     for (const label of [item.name, ...item.aliases]) {
       const want = tokens(label);
       if (want.size < 2 || ![...want].every((t) => said.has(t))) continue;
-      if (!best || want.size > best.specificity) best = { item, specificity: want.size };
+      bestForItem = Math.max(bestForItem, want.size);
+    }
+    if (!bestForItem) continue;
+    if (item.live) {
+      liveBest = Math.max(liveBest, bestForItem);
+    } else if (!inactive || bestForItem > inactive.specificity) {
+      inactive = { item, specificity: bestForItem };
     }
   }
-  return best?.item ?? null;
+
+  if (!inactive) return null;
+  // If a live menu item is a more-specific match, the customer's weekday/date must not cause an
+  // old switched-off promo to hijack it. On an equal match, require explicit promo wording.
+  if (liveBest > inactive.specificity) return null;
+  if (liveBest === inactive.specificity && !/\b(?:bogo|buy\s*1\s*get\s*1|buy\s+one\s+get\s+one|free)\b/i.test(text)) return null;
+  return inactive.item;
 }
 
 function deterministicFreshMenuItem(text: string, menu: MenuItem[]): MenuItem | null {
