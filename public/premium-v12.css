@@ -345,3 +345,20 @@ html body.customer-mode .onboarding-weekend-offer{grid-column:1/-1;width:100%}
   html body.customer-mode .onboard>.tiny{order:7!important}
   html body.customer-mode .onboard .customer-reviews{order:8!important}
 }
+
+/* Active Weekend Special placement. No active offer = original onboarding grid remains untouched. */
+@media(min-width:760px){
+  html body.customer-mode .onboard.has-weekend-offer{
+    grid-template-areas:"offer offer" "hero form" "status form" "steps form" "trust form" "tiny form" "reviews form"!important;
+  }
+  html body.customer-mode .onboard.has-weekend-offer .onboarding-weekend-offer{grid-area:offer!important;margin:0!important}
+}
+@media(max-width:759px){
+  html body.customer-mode .onboard.has-weekend-offer .onboarding-weekend-offer{order:2!important}
+  html body.customer-mode .onboard.has-weekend-offer .daily-status-onboard{order:3!important}
+  html body.customer-mode .onboard.has-weekend-offer #startForm{order:4!important}
+  html body.customer-mode .onboard.has-weekend-offer .steps{order:5!important}
+  html body.customer-mode .onboard.has-weekend-offer .assistant-trust{order:6!important}
+  html body.customer-mode .onboard.has-weekend-offer>.tiny{order:7!important}
+  html body.customer-mode .onboard.has-weekend-offer .customer-reviews{order:8!important}
+}
