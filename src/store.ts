@@ -163,12 +163,25 @@ export class Store {
     return hasOrder && lifecycleOnly;
   }
 
-  /** One-time refresh of combo names and prices when MENU_VERSION goes up. */
+  /** One-time refresh of menu business rules when MENU_VERSION goes up. */
   private migrateMenu(): void {
     const v = this.kvGet<number>("menu_version", () => 0);
     if (v >= MENU_VERSION) return;
     const has = this.db.prepare("SELECT 1 FROM kv WHERE key = 'menu'").get();
     if (has) this.kvPut("menu", upgradeMenu(this.kvGet<MenuItem[]>("menu", defaultMenu), v));
+
+    // Version 5 changes the old "weekday boxes are unpriced" note only when that exact legacy
+    // sentence is still present. Any owner-written notes around it are preserved.
+    if (v < 5) {
+      const settings = this.getSettings();
+      const legacy = "Single weekday boxes have no prices set here, so never quote a price for them. Annapurna Home Foods confirms those.";
+      const replacement = "A single weekday of the Full Meal Plan is available for $18 per person. It includes that weekday's breakfast + lunch + dinner with rice. Other unpriced individual weekday components are not sold separately unless they are listed as menu items.";
+      if (settings.notes.includes(legacy)) {
+        settings.notes = settings.notes.replace(legacy, replacement);
+        this.putSettings(settings);
+      }
+    }
+
     this.kvPut("menu_version", MENU_VERSION);
   }
 
