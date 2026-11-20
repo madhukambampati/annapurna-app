@@ -582,7 +582,7 @@ function patchMenu(id, body) {
 }
 function priceCell(m, f) {
   if ((f === "bogo" && m.kind !== "combo") || (f === "single" && m.kind === "plan") || (f === "plan" && m.kind !== "plan")) return h("td", {}, "");
-  const inp = h("input", { type: "number", min: "0", step: "0.5", value: m[f] == null ? "" : m[f], "aria-label": f + " price " + m.name });
+  const inp = h("input", { type: "number", min: "0", step: "0.01", value: m[f] == null ? "" : m[f], "aria-label": f + " price " + m.name });
   inp.addEventListener("change", () => patchMenu(m.id, { [f]: inp.value === "" ? null : Number(inp.value) }));
   return h("td", {}, inp);
 }
@@ -671,7 +671,7 @@ function renderWeekendOffers() {
 
   const rows = (d.items || []).map((row, idx) => {
     const item = combos.find((m) => m.id === row.menuId);
-    const price = h("input", { type: "number", min: "0.01", max: "500", step: "0.5", value: row.price,
+    const price = h("input", { type: "number", min: "0.01", max: "500", step: "0.01", value: row.price,
       "aria-label": "Special price for " + (item ? item.name : row.menuId),
       onchange: (e) => { row.price = Number(e.target.value); render(); } });
     return h("div", { class: "offer-owner-row" },
@@ -687,7 +687,7 @@ function renderWeekendOffers() {
   const select = h("select", { "aria-label": "Combo to add" },
     h("option", { value: "" }, available.length ? "Choose a Weekend Combo" : "All Weekend Combos added"),
     available.map((m) => h("option", { value: m.id }, m.name)));
-  const addPrice = h("input", { type: "number", min: "0.01", max: "500", step: "0.5", value: "12", "aria-label": "New special price" });
+  const addPrice = h("input", { type: "number", min: "0.01", max: "500", step: "0.01", value: "12", "aria-label": "New special price" });
   const add = h("button", { class: "ghost offer-add-btn", type: "button", disabled: !available.length, onclick: () => {
     if (!select.value) return;
     const price = Number(addPrice.value);
@@ -764,7 +764,7 @@ function renderWeekendOffers() {
 /* ---------- rules ---------- */
 function renderRules() {
   const s = state.settings;
-  const notice = h("input", { type: "number", min: "0", step: "0.5", value: s.noticeHrs, id: "setNotice" });
+  const notice = h("input", { type: "number", min: "0", step: "0.01", value: s.noticeHrs, id: "setNotice" });
   const addr = h("input", { type: "text", value: s.address, maxlength: "200", id: "setAddr" });
   const notes = h("textarea", { id: "setNotes", rows: "5", maxlength: "6000" }, s.notes || "");
   const weekly = h("textarea", { id: "setWeekly", rows: "8", maxlength: "3000" }, s.weeklyMenu || "");
