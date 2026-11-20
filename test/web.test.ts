@@ -14,6 +14,7 @@ const ASSETS = {
   "desk.js": "//desk",
   "review.html": "<html>review page</html>",
   "review.js": "//review",
+  "assets/weekend-special-foods.webp": "weekend-special-sprite",
   "robots.txt": "User-agent: *\nSitemap: https://annapurnahomefoods.shop/sitemap.xml\n",
   "sitemap.xml": "<?xml version=\"1.0\"?><urlset><url><loc>https://annapurnahomefoods.shop/</loc></url></urlset>",
 };
@@ -122,6 +123,10 @@ describe("web: files and headers", () => {
       assert.equal(home.headers.get("x-frame-options"), "DENY");
       assert.equal((await call("GET", "/desk")).text, "<html>desk</html>");
       assert.equal((await call("GET", "/app.js")).text, "//app");
+      const weekendArt = await call("GET", "/assets/weekend-special-foods.webp");
+      assert.equal(weekendArt.status, 200);
+      assert.equal(weekendArt.text, "weekend-special-sprite");
+      assert.equal(weekendArt.headers.get("content-type"), "image/webp");
       assert.match((await call("GET", "/robots.txt")).text, /Sitemap: https:\/\/annapurnahomefoods\.shop\/sitemap\.xml/);
       assert.match((await call("GET", "/sitemap.xml")).text, /https:\/\/annapurnahomefoods\.shop\//);
       for (const bad of ["/desk.html", "/index.html", "/package.json", "/src/server.js", "/../package.json", "/%2e%2e/package.json", "/public/app.js", "/.env", "/annapurna.db"]) {
