@@ -512,9 +512,9 @@ dialog.cancel .row{display:flex;gap:8px;justify-content:flex-end;margin-top:14px
   border:1px solid var(--line);border-radius:13px;background:#fffdf8
 }
 .offer-owner-thumb,.offer-preview-thumb{
-  display:block;border-radius:10px;border:1px solid #e0cf9d;background-image:url('/assets/weekend-special-foods.webp?v=1');background-repeat:no-repeat;background-size:300% 100%
+  display:block;border-radius:10px;border:1px solid #e0cf9d;background-image:url('/assets/weekend-special-foods.webp?v=1');background-repeat:no-repeat;background-size:300% auto;aspect-ratio:300/194
 }
-.offer-owner-thumb{width:98px;height:72px}
+.offer-owner-thumb{width:98px;height:auto}
 .offer-owner-thumb.art-kobbari,.offer-preview-thumb.art-kobbari{background-position:left center}
 .offer-owner-thumb.art-bagara,.offer-preview-thumb.art-bagara{background-position:center center}
 .offer-owner-thumb.art-kheema,.offer-preview-thumb.art-kheema{background-position:right center}
@@ -540,7 +540,7 @@ dialog.cancel .row{display:flex;gap:8px;justify-content:flex-end;margin-top:14px
 .offer-preview-title span{justify-self:center;padding:5px 13px;border-radius:999px;background:linear-gradient(#f7d575,#ecb63d);font-size:11px;font-weight:850;color:#4b3500}
 .offer-preview-list{display:grid;gap:8px}
 .offer-preview-card{display:grid;grid-template-columns:78px minmax(0,1fr);gap:10px;align-items:center;padding:8px;border:1px solid #eadbb5;border-radius:12px;background:#fff}
-.offer-preview-thumb{width:78px;height:62px}
+.offer-preview-thumb{width:78px;height:auto}
 .offer-preview-copy{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:center}
 .offer-preview-copy b{font-size:12.5px;line-height:1.2;color:#183b2d}.offer-preview-copy small{font-size:10.5px;color:#69756d}
 .offer-preview-copy strong{grid-column:2;grid-row:1 / span 2;padding:5px 8px;border-radius:9px;background:#f7cf69;color:#4d3400;font-size:15px}
@@ -555,7 +555,7 @@ dialog.cancel .row{display:flex;gap:8px;justify-content:flex-end;margin-top:14px
   .offer-owner-page-title{display:grid!important}
   .offer-owner-top-actions{justify-content:flex-start}
   .offer-owner-row{grid-template-columns:76px minmax(0,1fr)}
-  .offer-owner-thumb{width:76px;height:62px}
+  .offer-owner-thumb{width:76px;height:auto}
   .offer-owner-row .offer-price{grid-column:1 / 3}
   .offer-owner-row>.danger{grid-column:1 / 3;justify-self:start}
   .offer-add-row{grid-template-columns:1fr 110px}.offer-add-row .sub{grid-column:1 / 3}
