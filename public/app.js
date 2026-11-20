@@ -938,7 +938,7 @@
       h("p", { class: "lead" }, "Cooked fresh for weekend pickup. Order at least " + m.noticeHrs + " hours ahead."),
       combos.map(dish))]);
     if (plans.length || other.length) panels.push(["Weekly plans", h("div", { class: "panel" },
-      h("p", { class: "lead" }, "Meals for the whole week, per person. Prices in CAD."),
+      h("p", { class: "lead" }, "Weekly plans plus a one-day Full Meal option. Prices in CAD."),
       plans.concat(other).map(dish))]);
     if (extras.length) panels.push(["Extras", h("div", { class: "panel" },
       h("p", { class: "lead" }, "Add these to any order. Chicken extras come in a 12oz box."),
