@@ -104,6 +104,30 @@ test("explicit Weekend Special uses $12 while the regular combo stays at its nor
   assert.doesNotMatch(regular.replies[0]!, /Weekend Special|\$12/);
 });
 
+test("Weekend Special for Sunday is not confused with the old Fry Piece Sunday BOGO", async () => {
+  const now = localToEpoch("2026-11-20T18:45", TZ);
+  const t = setup({ judge: yesJudge, now });
+  const settings = t.store.getSettings();
+  settings.weekendOffer = {
+    active: true, title: "Weekend Special", label: "Only this weekend",
+    startDate: "2026-11-20", endDate: "2026-11-22",
+    items: [{ menuId: "bagara_chicken_fry", price: 12 }],
+  };
+  t.store.putSettings(settings);
+
+  // Simulate the model making the exact old bad pick. Code must correct it from the customer's words.
+  const said = "1 Bagara Rice and Chicken Fry combo Weekend Special, medium, pickup Sunday Nov 22 1pm";
+  const r = await orderAndReadBack(
+    t,
+    [{ id: "sunday_bogo_special", qty: 1, pack: "single", promotion: "weekend_special", asked_for: said }],
+    "2026-11-22T13:00",
+    said,
+  );
+  assert.match(r.replies[0]!, /Bagara Rice and Chicken Fry combo \(Weekend Special\): \$12/);
+  assert.doesNotMatch(r.replies.join("\n"), /Fry Piece Pulao \+ free Chicken Kheema Pulao|isn't running right now/i);
+  assert.equal(t.store.getDraft("+15198043658")!.items[0]!.id, "bagara_chicken_fry");
+});
+
 test("Weekend Special is refused for a pickup outside its offer dates instead of silently using the regular price", async () => {
   const t = setup({ judge: yesJudge });
   const settings = t.store.getSettings();
