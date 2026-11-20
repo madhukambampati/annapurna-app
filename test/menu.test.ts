@@ -4,7 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../src/store.js";
-import { defaultMenu } from "../src/menu.js";
+import { activeWeekendOffer, defaultMenu, defaultSettings, effectiveMenu } from "../src/menu.js";
 
 test("default menu matches the posters", () => {
   const m = new Map(defaultMenu().map((x) => [x.id, x]));
@@ -22,6 +22,22 @@ test("default menu matches the posters", () => {
     [m.get("full_meal_day")!.kind, m.get("full_meal_day")!.single, m.get("full_meal_day")!.days],
     ["item", 18, [1, 2, 3, 4, 5]],
   );
+});
+
+test("weekend offers override only the single price inside the configured date range", () => {
+  const settings = defaultSettings();
+  settings.weekendOffer = {
+    active: true, title: "Weekend Specials", label: "Only this weekend",
+    startDate: "2026-09-23", endDate: "2026-09-27",
+    items: [{ menuId: "bagara_chicken_fry", price: 12 }],
+  };
+  const inside = Date.parse("2026-09-25T16:00:00Z");
+  const outside = Date.parse("2026-09-29T16:00:00Z");
+  assert.ok(activeWeekendOffer(settings, inside));
+  assert.equal(effectiveMenu(defaultMenu(), settings, inside).find((x) => x.id === "bagara_chicken_fry")!.single, 12);
+  assert.equal(effectiveMenu(defaultMenu(), settings, inside).find((x) => x.id === "bagara_chicken_fry")!.bogo, 22);
+  assert.equal(activeWeekendOffer(settings, outside), null);
+  assert.equal(effectiveMenu(defaultMenu(), settings, outside).find((x) => x.id === "bagara_chicken_fry")!.single, 15);
 });
 
 test("an old stored menu is upgraded once and keeps live/recipe choices", () => {
