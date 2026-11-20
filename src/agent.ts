@@ -798,6 +798,12 @@ export class Agent {
         issues.push(wk);
         pickup = null;
       }
+      // Re-price normal menu items after the pickup is known. Weekend promotions apply only
+      // to pickups inside their configured date range; ordinary prices return outside it.
+      if (!custom && items.length) {
+        const priceMenu = effectiveMenu(store.getMenu(), settings, now, pickup);
+        items = items.map((it) => ({ ...it, amt: lineAmt(priceMenu, it) }));
+      }
     }
 
     // An owner quote belongs to the exact custom food terms that existed when it was sent. If the
@@ -912,7 +918,7 @@ export class Agent {
 
   /** The read-back is built here, not by the model, so the total, dates and items are always right. */
   readBack(d: Draft, s: Settings, now: number, open: Order[] = []): string {
-    const menu = effectiveMenu(this.d.store.getMenu(), s, now);
+    const menu = effectiveMenu(this.d.store.getMenu(), s, now, d.pickup_local);
     const lines = d.items.map((it) => `- ${itemLabel(it)}: ${it.amt == null ? "price to be confirmed" : money(it.amt)}`);
     const t = total(d.items);
     const flags = checkFlags(d.items, d.pickup_local, s, now, menu, open);
@@ -1041,7 +1047,7 @@ export class Agent {
       out.replies.push(outsideHoursReply(s, now, true));
       return;
     }
-    const menu = effectiveMenu(store.getMenu(), s, now);
+    const menu = effectiveMenu(store.getMenu(), s, now, draft.pickup_local);
     // The menu may have changed between the read-back and the yes. Never charge a price the
     // customer did not see, and never place a combo that was switched off in the meantime.
     const off = draft.items.filter((it) => {
