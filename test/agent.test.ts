@@ -64,6 +64,25 @@ test("active weekend offer price is used in Vindhu read-back and stored order", 
   assert.equal(order.items[0]!.amt, 12);
 });
 
+test("weekend offer price falls back to regular price for pickup outside the offer dates", async () => {
+  const t = setup({ judge: yesJudge });
+  const settings = t.store.getSettings();
+  settings.weekendOffer = {
+    active: true, title: "Weekend Specials", label: "Only this weekend",
+    startDate: "2026-09-23", endDate: "2026-09-27",
+    items: [{ menuId: "bagara_chicken_fry", price: 12 }],
+  };
+  t.store.putSettings(settings);
+  const r = await orderAndReadBack(
+    t,
+    [{ id: "bagara_chicken_fry", qty: 1, pack: "single", asked_for: "Bagara rice and chicken fry" }],
+    "2026-09-28T18:00",
+    "1 Bagara rice and chicken fry, Monday 6pm",
+  );
+  assert.match(r.replies[0]!, /1 x Bagara Rice and Chicken Fry combo: \$15/);
+  assert.doesNotMatch(r.replies[0]!, /\$12/);
+});
+
 test("weekday menu context lets 'order this' select the $18 single-day Full Meal", async () => {
   const t = setup({ judge: (ctx) => {
     if (/what is today's weekday order/i.test(ctx.message)) return { intent: { label: "question", prob: 0.98, confidence: 0.95 } };
