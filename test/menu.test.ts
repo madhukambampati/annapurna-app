@@ -4,7 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../src/store.js";
-import { activeWeekendOffer, defaultMenu, defaultSettings, effectiveMenu } from "../src/menu.js";
+import { activeWeekendOffer, defaultMenu, defaultSettings, orderLineAmt, weekendOfferPrice } from "../src/menu.js";
 
 test("default menu matches the posters", () => {
   const m = new Map(defaultMenu().map((x) => [x.id, x]));
@@ -24,20 +24,23 @@ test("default menu matches the posters", () => {
   );
 });
 
-test("weekend offers override only the single price inside the configured date range", () => {
+test("Weekend Special pricing is separate and never changes regular combo prices", () => {
   const settings = defaultSettings();
   settings.weekendOffer = {
     active: true, title: "Weekend Specials", label: "Only this weekend",
     startDate: "2026-09-23", endDate: "2026-09-27",
     items: [{ menuId: "bagara_chicken_fry", price: 12 }],
   };
+  const menu = defaultMenu();
   const inside = Date.parse("2026-09-25T16:00:00Z");
   const outside = Date.parse("2026-09-29T16:00:00Z");
   assert.ok(activeWeekendOffer(settings, inside));
-  assert.equal(effectiveMenu(defaultMenu(), settings, inside).find((x) => x.id === "bagara_chicken_fry")!.single, 12);
-  assert.equal(effectiveMenu(defaultMenu(), settings, inside).find((x) => x.id === "bagara_chicken_fry")!.bogo, 22);
+  assert.equal(menu.find((x) => x.id === "bagara_chicken_fry")!.single, 15, "regular combo stays $15");
+  assert.equal(weekendOfferPrice(settings, inside, "bagara_chicken_fry", "2026-09-25T18:00"), 12);
+  assert.equal(orderLineAmt(menu, { id: "bagara_chicken_fry", qty: 1, pack: "single" }, settings, inside, "2026-09-25T18:00"), 15);
+  assert.equal(orderLineAmt(menu, { id: "bagara_chicken_fry", qty: 1, pack: "single", promotion: "weekend_special" }, settings, inside, "2026-09-25T18:00"), 12);
+  assert.equal(weekendOfferPrice(settings, inside, "bagara_chicken_fry", "2026-09-28T18:00"), null);
   assert.equal(activeWeekendOffer(settings, outside), null);
-  assert.equal(effectiveMenu(defaultMenu(), settings, outside).find((x) => x.id === "bagara_chicken_fry")!.single, 15);
 });
 
 test("an old stored menu is upgraded once and keeps live/recipe choices", () => {
