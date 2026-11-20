@@ -200,7 +200,7 @@ function renderDashboard() {
     }, 0);
 
   const totalSales = state.orders
-    .filter((o) => o.status !== "cancelled")
+    .filter((o) => !["hold", "cancelled"].includes(o.status))
     .reduce((sum, o) => {
       const t = totalOf(o.items);
       return sum + (t == null ? 0 : t);
@@ -233,7 +233,7 @@ function renderDashboard() {
     h("div", { class: "owner-kpi kpi-ready" }, h("small", {}, "Ready"), h("strong", {}, ready), h("span", {}, "Waiting for pickup")),
     h("div", { class: "owner-kpi kpi-attn" + (activeAlerts + held ? " has-items" : "") }, h("small", {}, "Needs attention"), h("strong", {}, activeAlerts + held), h("span", {}, "Alerts + held orders")),
     h("div", { class: "owner-kpi kpi-sales" }, h("small", {}, "Today's sales"), h("strong", {}, money(sales)), h("span", {}, "Fresh orders today")),
-    h("div", { class: "owner-kpi kpi-total-sales" }, h("small", {}, "Total sales"), h("strong", {}, money(totalSales)), h("span", {}, "All non-cancelled orders"))
+    h("div", { class: "owner-kpi kpi-total-sales" }, h("small", {}, "Total sales"), h("strong", {}, money(totalSales)), h("span", {}, "Accepted + completed orders"))
   );
 
   const out = [
