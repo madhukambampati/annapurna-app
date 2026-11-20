@@ -81,6 +81,23 @@ export interface Alert {
   createdAt: number;
 }
 
+export interface WeekendOfferItem {
+  /** Existing menu item id. Weekend offers never invent a dish outside the menu. */
+  menuId: string;
+  /** Promotional single price in CAD while the offer is active. */
+  price: number;
+}
+
+export interface WeekendOfferConfig {
+  active: boolean;
+  title: string;
+  label: string;
+  /** Inclusive kitchen-local dates, YYYY-MM-DD. Empty dates mean the offer cannot go live. */
+  startDate: string;
+  endDate: string;
+  items: WeekendOfferItem[];
+}
+
 export interface Settings {
   noticeHrs: number;
   address: string;
@@ -99,6 +116,8 @@ export interface Settings {
   contactPhone: string;
   /** Per-date store status overrides. YYYY-MM-DD -> true=open, false=closed. Missing dates default open. */
   dayOpen?: Record<string, boolean>;
+  /** Optional date-based promotion shown on the website and used by Vindhu for pricing. */
+  weekendOffer?: WeekendOfferConfig;
 }
 
 export interface Msg {
