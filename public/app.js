@@ -290,6 +290,42 @@
     if (greeting) greeting.textContent = name ? "Namaste, " + name + ". What are you craving?" : "What are you craving today?";
   }
 
+  function beginWeekendOffer(prefill) {
+    var text = prefill || "What weekend offers are running?";
+    if (token) { openChat(text); return; }
+    pendingOrderText = text;
+    show("onboard");
+    if ($("startErr")) $("startErr").textContent = "Enter your details to continue with this weekend offer.";
+    if ($("fName")) $("fName").focus();
+  }
+
+  function renderWeekendOffer() {
+    var box = $("homeWeekendOffer");
+    if (!box) return;
+    var offer = menuData && menuData.weekendOffer;
+    if (!offer || !offer.items || !offer.items.length) {
+      box.hidden = true;
+      box.replaceChildren();
+      return;
+    }
+    box.hidden = false;
+    var cards = offer.items.map(function (it) {
+      return h("button", { class: "weekend-offer-card", type: "button", onclick: function () {
+        beginWeekendOffer("I'd like to order the " + it.name + " weekend offer.");
+      } },
+        h("span", { class: "weekend-offer-name" }, it.name),
+        h("strong", {}, money(it.price)),
+        h("small", {}, "Order with Vindhu →"));
+    });
+    box.replaceChildren(
+      h("div", { class: "weekend-offer-head" },
+        h("div", {}, h("span", { class: "weekend-offer-label" }, offer.label || "Only this weekend"),
+          h("h3", {}, offer.title || "Weekend Specials")),
+        h("button", { class: "weekend-offer-view", type: "button", onclick: function (e) { showMenu(e, "Weekend Offers"); } }, "View offers →")),
+      h("div", { class: "weekend-offer-grid" }, cards)
+    );
+  }
+
   function renderHomeActive() {
     var box = $("homeActive");
     if (!box) return;
@@ -318,7 +354,7 @@
     initHome();
     var home = $("home");
     if (home) home.scrollTop = 0;
-    loadMenu(true).then(renderStoreStatus);
+    loadMenu(true).then(function () { renderStoreStatus(); renderWeekendOffer(); });
     loadOrders();
     startPolling();
   }
@@ -708,6 +744,7 @@
       menuData = m;
       storeStatus = m.storeStatus || null;
       renderStoreStatus();
+      renderWeekendOffer();
       return m;
     }).catch(function () { return null; });
   }
@@ -975,6 +1012,12 @@
     var byKind = function (k) { return (m.items || []).filter(function (x) { return x.kind === k; }); };
     var panels = [];
     var combos = byKind("combo"), plans = byKind("plan"), other = byKind("item"), extras = byKind("addon");
+    if (m.weekendOffer && m.weekendOffer.items && m.weekendOffer.items.length) {
+      var offerItems = m.weekendOffer.items.map(function (o) { return (m.items || []).find(function (x) { return x.id === o.id; }); }).filter(Boolean);
+      if (offerItems.length) panels.push(["Weekend Offers", h("div", { class: "panel weekend-offer-panel" },
+        h("p", { class: "lead" }, (m.weekendOffer.label || "Only this weekend") + " · Promotional prices shown below."),
+        offerItems.map(dish))]);
+    }
     if (combos.length) panels.push(["Combos", h("div", { class: "panel" },
       h("p", { class: "lead" }, "Cooked fresh for weekend pickup. Order at least " + m.noticeHrs + " hours ahead."),
       combos.map(dish))]);
