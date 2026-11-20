@@ -50,7 +50,7 @@ export interface Outcome {
 const MAX_TEXT = 1000;
 
 const ADD_MORE = /\b(another|again|second|one more|extra|also|additional|add|more)\b/i;
-const WEEKEND_SPECIAL = /\bweekend\s+(?:special|offer)\b|\bonly\s+this\s+weekend\b/i;
+const WEEKEND_SPECIAL = /\bweekend\s+(?:specials?|offers?)\b|\bonly\s+this\s+weekend\b/i;
 
 /** Thanks and short acknowledgements never change an order. */
 const THANKS = /^(thanks|thank you|thank u|thankyou|thx|ty|tq|many thanks|thanks a lot|thank you so much|great|perfect|awesome|cool|nice|noted|got it|super|superb|ok thanks|okay thanks|ok thank you|okay thank you)[\s!.]*$/i;
