@@ -41,6 +41,29 @@ test("happy path: model proposes, CODE reads back, customer says yes, CODE place
   assert.match(t.store.getCustomer("+15198043658")!.profile, /Last order/);
 });
 
+test("active weekend offer price is used in Vindhu read-back and stored order", async () => {
+  const t = setup({ judge: yesJudge });
+  const settings = t.store.getSettings();
+  settings.weekendOffer = {
+    active: true, title: "Weekend Specials", label: "Only this weekend",
+    startDate: "2026-09-23", endDate: "2026-09-27",
+    items: [{ menuId: "bagara_chicken_fry", price: 12 }],
+  };
+  t.store.putSettings(settings);
+  const r1 = await orderAndReadBack(
+    t,
+    [{ id: "bagara_chicken_fry", qty: 1, pack: "single", asked_for: "Bagara rice and chicken fry weekend offer" }],
+    FRI_6PM,
+    "1 Bagara rice and chicken fry weekend offer, Friday 6pm",
+  );
+  assert.match(r1.replies[0]!, /1 x Bagara Rice and Chicken Fry combo: \$12/);
+  assert.match(t.llm.prompts[0]!, /ACTIVE WEEKEND SPECIAL/);
+  assert.match(t.llm.prompts[0]!, /promotional_single_price_cad/);
+  await t.say("yes");
+  const order = t.store.getOrder(1)!;
+  assert.equal(order.items[0]!.amt, 12);
+});
+
 test("weekday menu context lets 'order this' select the $18 single-day Full Meal", async () => {
   const t = setup({ judge: (ctx) => {
     if (/what is today's weekday order/i.test(ctx.message)) return { intent: { label: "question", prob: 0.98, confidence: 0.95 } };
