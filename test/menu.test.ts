@@ -103,6 +103,19 @@ test("option numbers: a bare '5' counts only right after a numbered list", () =>
 
 import { upgradeMenu, extrasMenu } from "../src/menu.js";
 
+test("version 6 removes generic Sunday-special aliases from an existing stored menu", () => {
+  const stored = defaultMenu().map((x) => ({ ...x, aliases: [...x.aliases] }));
+  const sun = stored.find((x) => x.id === "sunday_bogo_special")!;
+  sun.name = "Sunday special: Fry Piece Pulao + free Chicken Kheema Pulao";
+  sun.aliases = ["sunday special", "sunday offer", "sunday bogo", "buy 1 fry piece pulao get chicken keema pulao free"];
+
+  const up = upgradeMenu(stored, 5);
+  const migrated = up.find((x) => x.id === "sunday_bogo_special")!;
+  assert.equal(migrated.name, "Fry Piece Pulao BOGO + free Chicken Kheema Pulao");
+  assert.ok(!migrated.aliases.some((a) => /^(?:sunday special|sunday offer|sunday bogo)$/i.test(a)));
+  assert.ok(migrated.aliases.includes("sunday fry piece bogo"));
+});
+
 test("extras: on the default menu with the owner's prices", () => {
   const m = new Map(defaultMenu().map((x) => [x.id, x]));
   assert.deepEqual(["extra_chicken_fry", "extra_chicken_kheema", "extra_kheema_fry", "extra_salan", "extra_raita", "extra_onion_lemon"].map((id) => m.get(id)!.single), [8, 8, 10, 1, 1, 1]);
