@@ -1090,12 +1090,24 @@
       var seg = h("div", { class: "seg menu-seg", role: "tablist", "aria-label": "Menu sections" });
       var sectionLabel = h("div", { class: "menu-section-label" }, h("span", {}, "MENU SECTION"), h("b", { id: "menuSectionName" }, ""));
       var holder = h("div", { class: "panels" });
+      var menuFooter = h("p", { class: "tiny" });
       var tabs = [];
       var select = function (i, focus) {
         tabs.forEach(function (t, k) { t.setAttribute("aria-selected", k === i ? "true" : "false"); t.tabIndex = k === i ? 0 : -1; });
         sectionLabel.querySelector("#menuSectionName").textContent = panels[i][0];
         holder.replaceChildren(panels[i][1]);
-        if (preferred) $("sheetTitle").textContent = panels[i][0];
+        var section = panels[i][0];
+        var kitchen = m.address || "our kitchen";
+        if (section === "Weekend Special" && m.weekendOffer) {
+          menuFooter.textContent = "Weekend Special valid " + m.weekendOffer.startDate + " to " + m.weekendOffer.endDate + ". Regular Weekend Combos stay at normal prices. Everything is cooked fresh at " + kitchen + ".";
+        } else if (section === "Weekend Combos") {
+          menuFooter.textContent = "Regular Weekend Combos use the pickup availability shown on each item. Everything is cooked fresh at " + kitchen + ".";
+        } else if (section === "Extras") {
+          menuFooter.textContent = "Extras follow the pickup day of the main order. Everything is cooked fresh at " + kitchen + ".";
+        } else {
+          menuFooter.textContent = "Plan pickup " + (m.pickupDays || []).join(", ") + ". Everything is cooked fresh at " + kitchen + ".";
+        }
+        if (preferred) $("sheetTitle").textContent = section;
         if (focus) tabs[i].focus();
       };
       panels.forEach(function (p, i) {
@@ -1108,8 +1120,7 @@
       });
       var live = (m.items || []).some(function (x) { return x.kind === "combo" && x.live; });
       if (panels.length > 1) body.append(seg);
-      body.append(sectionLabel, holder);
-      body.append(h("p", { class: "tiny" }, "Plan pickup " + (m.pickupDays || []).join(", ") + ". Everything is cooked fresh at " + (m.address || "our kitchen") + "."));
+      body.append(sectionLabel, holder, menuFooter);
       if ($("chat").hidden && !blocksAllNewOrders()) body.append(h("button", { class: "btn", type: "button", onclick: function () {
         closeSheet();
         if (token) openChat();
