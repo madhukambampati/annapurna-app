@@ -181,7 +181,7 @@ export function defaultSettings(): Settings {
     // until the owner deliberately sets dates and activates it.
     weekendOffer: {
       active: false,
-      title: "Weekend Specials",
+      title: "Weekend Special",
       label: "Only this weekend",
       startDate: "",
       endDate: "",
