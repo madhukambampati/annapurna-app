@@ -205,9 +205,15 @@ export function activeWeekendOffer(s: Settings, now: number) {
 }
 
 /** Menu used for customer quotes/orders. Promotional prices override only the configured single price. */
-export function effectiveMenu(menu: MenuItem[], s: Settings, now: number): MenuItem[] {
+export function effectiveMenu(menu: MenuItem[], s: Settings, now: number, pickupLocal?: string | null): MenuItem[] {
   const offer = activeWeekendOffer(s, now);
   if (!offer) return menu;
+  // "Only this weekend" is a pickup-date promotion. Once a pickup day is known, a later
+  // non-offer pickup immediately falls back to the normal menu price.
+  if (pickupLocal && /^\d{4}-\d{2}-\d{2}T/.test(pickupLocal)) {
+    const pickupDate = pickupLocal.slice(0, 10);
+    if (pickupDate < offer.startDate || pickupDate > offer.endDate) return menu;
+  }
   const prices = new Map(offer.items.map((x) => [x.menuId, x.price]));
   return menu.map((m) => prices.has(m.id) ? { ...m, single: prices.get(m.id)! } : m);
 }
