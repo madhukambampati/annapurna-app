@@ -305,3 +305,33 @@ html body.customer-mode .review-show-all:hover{background:var(--p-cream)}
 html body.customer-mode .contact-kind{display:inline-flex;gap:4px;padding:3px;margin:0 0 6px;border-radius:11px;background:#efe6d3;border:1px solid #e2d6bb;width:max-content}
 html body.customer-mode .contact-kind button{min-height:34px;padding:5px 14px;border:0;border-radius:8px;background:transparent;font:600 13.5px inherit;color:#3d4a41;cursor:pointer}
 html body.customer-mode .contact-kind button[aria-pressed=true]{background:var(--p-leaf);color:#fff}
+
+
+/* ---------- weekend offers: visible only when the API reports an active dated promotion ---------- */
+html body.customer-mode .home-weekend-offer{
+  margin:16px 0 0;padding:18px;border:1px solid #d4b254;border-radius:20px;
+  background:linear-gradient(135deg,#0f4a35,#176246);color:#fff;
+  box-shadow:0 16px 34px -22px rgba(15,74,53,.7);overflow:hidden;position:relative;
+}
+html body.customer-mode .home-weekend-offer::after{content:"";position:absolute;right:-60px;top:-70px;width:180px;height:180px;border-radius:50%;background:rgba(241,168,36,.12);pointer-events:none}
+html body.customer-mode .weekend-offer-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:14px;position:relative;z-index:1}
+html body.customer-mode .weekend-offer-head h3{margin:4px 0 0;font:700 29px/1.05 var(--p-display);color:#fff}
+html body.customer-mode .weekend-offer-label{display:inline-flex;padding:5px 10px;border-radius:999px;background:#f5c75b;color:#493100;font-size:11px;font-weight:900;letter-spacing:.04em;text-transform:uppercase}
+html body.customer-mode .weekend-offer-view{border:1px solid rgba(255,255,255,.38);background:rgba(255,255,255,.1);color:#fff;border-radius:11px;padding:9px 12px;font-weight:800;white-space:nowrap}
+html body.customer-mode .weekend-offer-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;position:relative;z-index:1}
+html body.customer-mode .weekend-offer-card{min-width:0;text-align:left;border:1px solid rgba(255,255,255,.22);background:#fffdf8;color:var(--p-ink);border-radius:14px;padding:13px;display:grid;gap:4px;transition:transform .15s,box-shadow .15s}
+html body.customer-mode .weekend-offer-card:hover{transform:translateY(-2px);box-shadow:0 12px 24px -18px rgba(0,0,0,.6)}
+html body.customer-mode .weekend-offer-name{font-weight:750;line-height:1.25}
+html body.customer-mode .weekend-offer-card strong{font:800 24px/1 var(--p-display);color:#a46b00}
+html body.customer-mode .weekend-offer-card small{color:var(--p-leaf);font-weight:750}
+html body.customer-mode .weekend-offer-panel .dish{border-color:#dfc16b!important}
+@media(max-width:759px){
+  html body.customer-mode .home-weekend-offer{padding:15px 13px}
+  html body.customer-mode .weekend-offer-head{align-items:flex-start}
+  html body.customer-mode .weekend-offer-head h3{font-size:25px}
+  html body.customer-mode .weekend-offer-view{font-size:12px;padding:8px 9px}
+  html body.customer-mode .weekend-offer-grid{grid-template-columns:1fr}
+  html body.customer-mode .weekend-offer-card{grid-template-columns:minmax(0,1fr) auto;align-items:center}
+  html body.customer-mode .weekend-offer-card strong{grid-column:2;grid-row:1 / span 2}
+  html body.customer-mode .weekend-offer-card small{grid-column:1}
+}
