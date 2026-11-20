@@ -148,6 +148,53 @@ test("Weekend Special is refused for a pickup outside its offer dates instead of
 });
 
 
+test("unknown dish gets a clear menu reply and does not replay the old read-back", async () => {
+  const t = setup({ judge: yesJudge });
+  t.llm.push(modelReply({
+    reply: "Here is your order.",
+    items: [{ id: "chicken_pulao_salan", qty: 1, pack: "single", asked_for: "Chicken Pulao with Mirchi Ka Salan and Raitha" }],
+    pickup: FRI_6PM,
+    stage: "awaiting_confirmation",
+  }));
+  const first = await t.say("1 Chicken Pulao with Mirchi Ka Salan and Raitha, Friday 6pm");
+  assert.match(first.replies[0]!, /Please check your order/);
+
+  const prompts = t.llm.prompts.length;
+  const unknown = await t.say("I want Mutton Biryani");
+  assert.equal(t.llm.prompts.length, prompts, "clearly unknown dish should be handled by code");
+  assert.match(unknown.replies[0]!, /Mutton Biryani isn't on our current menu/i);
+  assert.doesNotMatch(unknown.replies[0]!, /Please check your order/i);
+  assert.equal(t.store.getDraft("+15198043658")!.items[0]!.id, "chicken_pulao_salan", "existing draft stays unchanged");
+});
+
+test("explicit customer notes survive edits and reach the placed order", async () => {
+  const t = setup({ judge: yesJudge });
+  t.llm.push(modelReply({
+    reply: "Okay.",
+    items: [{ id: "chicken_pulao_salan", qty: 1, pack: "single", asked_for: "Chicken Pulao with Mirchi Ka Salan and Raitha" }],
+    pickup: FRI_6PM,
+    stage: "awaiting_confirmation",
+  }));
+  const first = await t.say("1 Chicken Pulao with Mirchi Ka Salan and Raitha, spicy, note TEST ORDER - DO NOT COOK, Friday 6pm");
+  assert.match(first.replies[0]!, /Note: .*TEST ORDER - DO NOT COOK/i);
+  assert.match(first.replies[0]!, /Spicy/i);
+
+  t.llm.push(modelReply({
+    reply: "Updated.",
+    items: [{ id: "chicken_pulao_salan", qty: 2, pack: "single", asked_for: "Chicken Pulao with Mirchi Ka Salan and Raitha" }],
+    pickup: FRI_6PM,
+    stage: "awaiting_confirmation",
+  }));
+  const edited = await t.say("Make it quantity 2");
+  assert.match(edited.replies[0]!, /Note: .*TEST ORDER - DO NOT COOK/i);
+  assert.match(edited.replies[0]!, /Spicy/i);
+
+  await t.say("yes");
+  const order = t.store.getOrder(1)!;
+  assert.match(order.notes, /TEST ORDER - DO NOT COOK/i);
+  assert.match(order.notes, /Spicy/i);
+});
+
 test("weekday menu context lets 'order this' select the $18 single-day Full Meal", async () => {
   const t = setup({ judge: (ctx) => {
     if (/what is today's weekday order/i.test(ctx.message)) return { intent: { label: "question", prob: 0.98, confidence: 0.95 } };
