@@ -1234,7 +1234,7 @@
     var bar = h("div", { class: "customer-actions", id: "customerActions", "aria-label": "Quick actions" });
     var actions = [
       ["bowl", "Order food", true, function () { fillComposer("I'd like to order "); $("text").focus(); }],
-      ["sun", "Combos", false, function () { if (!busy) send("What weekend combos are running?"); }],
+      ["sun", "Weekend Combos", false, function () { if (!busy) send("What regular weekend combos are running?"); }],
       ["clock", "Weekly plans", false, function () { if (!busy) send("Tell me about the weekly plans"); }],
       ["bag", "My orders", false, function (e) { showOrders({ currentTarget: e.currentTarget }); }]
     ];
@@ -1281,7 +1281,7 @@
   $("startMenu").addEventListener("click", showMenu);
   $("homeOrder").addEventListener("click", function () { if (blocksAllNewOrders()) return; openChat(); });
   $("homeContinue").addEventListener("click", function () { openChat(); });
-  $("homeCombos").addEventListener("click", function (e) { showMenu(e, "Combos"); });
+  $("homeCombos").addEventListener("click", function (e) { showMenu(e, "Weekend Combos"); });
   $("homePlans").addEventListener("click", function (e) { showMenu(e, "Weekly plans"); });
   $("homeOrders").addEventListener("click", function (e) { showOrders(e); });
   $("homeMenu").addEventListener("click", showMenu);
