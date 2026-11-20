@@ -209,7 +209,7 @@ function deterministicFreshDraft(text: string, menu: MenuItem[], now: number, se
     items: [orderItem],
     pickup_local: pickup,
     customer_name: customerName,
-    notes: "",
+    notes: explicitCustomerNotes(text).join(". ").slice(0, 300),
     readback_hash: null,
     stage: "awaiting_confirmation",
   };
@@ -226,6 +226,66 @@ function deterministicCustomItems(text: string, menu: MenuItem[]): Draft["items"
   }).sort((a, b) => b.name.length - a.name.length);
   const m = matches[0];
   return m ? [{ id: m.id, name: m.name, qty, pack: "single", amt: null }] : [];
+}
+
+/** Customer instructions that must survive model omissions and later order edits. */
+function explicitCustomerNotes(text: string): string[] {
+  const out: string[] = [];
+  const add = (v: string) => {
+    const x = v.replace(/\s+/g, " ").replace(/^[\s,:;-]+|[\s,;.-]+$/g, "").trim();
+    if (x && !out.some((n) => n.toLowerCase() === x.toLowerCase())) out.push(x.slice(0, 180));
+  };
+
+  const labelled = /\b(?:note|notes|special\s+instructions?)\s*[:=-]?\s*(.+?)(?=\s*(?:,|;)?\s*(?:pickup|for\s+pickup|on\s+(?:sun(?:day)?|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?)|at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)\b)|$)/i.exec(text);
+  if (labelled?.[1]) add(labelled[1]);
+
+  const test = /\bTEST\s+ORDER\s*[-–—:]?\s*DO\s+NOT\s+COOK\b/i.exec(text);
+  if (test) add("TEST ORDER - DO NOT COOK");
+
+  const spice = /\b(extra\s+spicy|less\s+spicy|no\s+spice|mild|medium(?:\s+spice)?|spicy)\b/i.exec(text);
+  if (spice?.[1]) {
+    const v = spice[1].toLowerCase();
+    add(v === "spicy" ? "Spicy" : v.split(/\s+/).map((w) => w[0]!.toUpperCase() + w.slice(1)).join(" "));
+  }
+
+  if (/\bno\s+extras\b/i.test(text)) add("No extras");
+  return out;
+}
+
+function mergedCustomerNotes(previous: string, modelValue: unknown, text: string): string {
+  if (/\b(?:remove|clear|delete)\s+(?:the\s+)?(?:note|notes|instructions)\b|\bno\s+(?:note|notes)\b/i.test(text)) return "";
+  const parts: string[] = [];
+  const add = (v: string) => {
+    const x = v.replace(/\s+/g, " ").trim();
+    if (x && !parts.some((n) => n.toLowerCase() === x.toLowerCase())) parts.push(x);
+  };
+  add(previous);
+  if (typeof modelValue === "string") add(modelValue.slice(0, 300));
+  for (const n of explicitCustomerNotes(text)) add(n);
+  return parts.join(". ").slice(0, 300);
+}
+
+/** A clearly named food that has no menu match should not resurrect/repeat an old draft. */
+function explicitUnknownDish(text: string, menu: MenuItem[]): string | null {
+  const foodWord = /\b(?:biryani|pulao|pulav|rice|chicken|mutton|lamb|goat|paneer|dosa|idli|vada|punugulu|curry|fry|kheema|keema|sambar|dal|roti|naan|upma|meal|combo)\b/i;
+  if (!foodWord.test(text)) return null;
+
+  let candidate = text.trim();
+  const order = /\b(?:i\s+would\s+like(?:\s+to\s+order)?|i\s+want|i\s+need|order|give\s+me|get\s+me|take)\s+(?:\d{1,2}\s+)?(.+)/i.exec(candidate);
+  if (order?.[1]) candidate = order[1];
+
+  candidate = candidate
+    .replace(/\b(?:pickup|pick\s*up)\b[\s\S]*$/i, "")
+    .replace(/\b(?:this|next)?\s*(?:sun(?:day)?|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?)\b[\s\S]*$/i, "")
+    .replace(/\b(?:today|tomorrow)\b[\s\S]*$/i, "")
+    .replace(/\b(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)\b[\s\S]*$/i, "")
+    .replace(/\b(?:weekend\s+specials?|weekend\s+offers?|regular|single|bogo|buy\s*1\s*get\s*1)\b/gi, " ")
+    .replace(/^[\s,;:-]+|[\s,;:-]+$/g, "")
+    .trim();
+
+  if (!candidate || /^(?:it|this|that|same|one|another)(?:\s+one)?$/i.test(candidate)) return null;
+  const res = resolveItem(candidate, "", menu);
+  return !res.ok && res.reason === "unknown" ? candidate.slice(0, 100) : null;
 }
 
 /** If a reset message also contains a replacement order, return only that fresh-order part. */
@@ -473,6 +533,15 @@ export class Agent {
       out.issues.push("stale_custom_cleared_for_normal_order");
     }
 
+    const unknownDish = explicitUnknownDish(text, menu);
+    if (!draft?.custom && unknownDish) {
+      out.route = "unknown_dish";
+      out.issues.push("unknown_dish");
+      out.replies.push(`Sorry, ${unknownDish} isn't on our current menu. I haven't changed your existing order. Please choose an item from the menu, or ask me what's available.`);
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
+    }
+
     // Large explicit quantities and custom-recipe requests are captured before Claude. A fresh
     // catering/headcount request immediately after an already-placed order is also forced down this
     // path so it cannot be mistaken for a change/cancel request for that earlier order.
@@ -483,7 +552,7 @@ export class Agent {
         items: deterministicCustomItems(text, menu),
         pickup_local: parsedPickup,
         customer_name: customer.name || msg.name || null,
-        notes: "",
+        notes: explicitCustomerNotes(text).join(". ").slice(0, 300),
         readback_hash: null,
         stage: "collecting",
         custom: { request: text.slice(0, 300), price: null, approved: false },
@@ -789,7 +858,7 @@ export class Agent {
           issues.push(...s.issues.filter((i) => i.kind === "not_live" || i.kind === "weekday_mismatch"));
         }
         if (typeof rd.pickup_local === "string" && isLocalIso(rd.pickup_local)) pickup = rd.pickup_local;
-        if (typeof rd.notes === "string" && rd.notes.trim()) notes = rd.notes.slice(0, 300);
+        notes = mergedCustomerNotes(notes, rd.notes, text);
         if (typeof rd.customer_name === "string" && rd.customer_name.trim()) custName = rd.customer_name.trim().slice(0, 60);
       } else {
         const sanitized = sanitizeItems(proposedItems, menu, weekendSpecialIds);
@@ -801,7 +870,7 @@ export class Agent {
         });
         issues.push(...sanitized.issues);
         pickup = typeof rd.pickup_local === "string" && isLocalIso(rd.pickup_local) ? rd.pickup_local : null;
-        notes = typeof rd.notes === "string" ? rd.notes.slice(0, 300) : "";
+        notes = mergedCustomerNotes(notes, rd.notes, text);
         custName = typeof rd.customer_name === "string" && rd.customer_name.trim() ? rd.customer_name.trim().slice(0, 60) : null;
       }
       if (ADD_MORE.test(text)) again = true;
