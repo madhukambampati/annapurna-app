@@ -147,6 +147,11 @@ function requestedSwitchedOffCombo(text: string, menu: MenuItem[]): MenuItem | n
 
   for (const item of menu) {
     if (item.kind !== "combo") continue;
+    // This legacy item is specifically a BOGO. Its alias "fry piece pulao bogo" tokenizes
+    // to the same food words as the live Gongura Fry Piece Pulao, so never let it match a
+    // normal order just because the customer also says Sunday.
+    if (item.id === "sunday_bogo_special" &&
+        !/\b(?:bogo|buy\s*1\s*get\s*1|buy\s+one\s+get\s+one|free)\b/i.test(text)) continue;
     let bestForItem = 0;
     for (const label of [item.name, ...item.aliases]) {
       const want = tokens(label);
@@ -504,24 +509,6 @@ export class Agent {
       return out;
     }
 
-    // A specifically requested combo that is switched off is handled by code before Claude.
-    // This guarantees a clear customer answer and an owner alert even if the model would omit the item.
-    const switchedOffCombo = requestedSwitchedOffCombo(text, menu);
-    if (switchedOffCombo) {
-      out.route = "not_live";
-      out.issues.push("not_live");
-      out.replies.push(`Sorry, ${switchedOffCombo.name} isn't running right now, so I can't take that one. I've let Annapurna Home Foods know.`);
-      await this.raise(
-        msg.from,
-        customer.name || msg.name || "Customer",
-        `Asked for ${switchedOffCombo.name}, which is switched off right now.`,
-        null,
-        out,
-      );
-      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
-      return out;
-    }
-
     // For an explicit fresh-order reset, exact one-item menu orders with a clear pickup
     // are rebuilt entirely in code. This path must never wait on Claude just to forget old draft state.
     if (freshResetContext) {
@@ -547,6 +534,24 @@ export class Agent {
       }
       draft = null;
       out.issues.push("stale_custom_cleared_for_normal_order");
+    }
+
+    // Only after live-menu reset/cleanup gets first priority do we reject a genuinely
+    // requested switched-off combo.
+    const switchedOffCombo = requestedSwitchedOffCombo(text, menu);
+    if (switchedOffCombo) {
+      out.route = "not_live";
+      out.issues.push("not_live");
+      out.replies.push(`Sorry, ${switchedOffCombo.name} isn't running right now, so I can't take that one. I've let Annapurna Home Foods know.`);
+      await this.raise(
+        msg.from,
+        customer.name || msg.name || "Customer",
+        `Asked for ${switchedOffCombo.name}, which is switched off right now.`,
+        null,
+        out,
+      );
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
     }
 
     const unknownDish = explicitUnknownDish(text, menu);
