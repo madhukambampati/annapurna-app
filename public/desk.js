@@ -8,6 +8,7 @@ let tab = "dashboard";
 let cook = null;
 let chat = { waId: "", messages: [], customer: null };
 let sim = { from: "+15195550101", name: "", msgs: [] };
+let offerDraft = null;
 let token = "";
 let orderQuery = "", orderStatusFilter = "all", chatQuery = "";
 
@@ -607,6 +608,104 @@ function renderMenu() {
   ];
 }
 
+/* ---------- weekend offers ---------- */
+function freshOfferDraft() {
+  const src = state.settings && state.settings.weekendOffer;
+  return JSON.parse(JSON.stringify(src || {
+    active: false, title: "Weekend Specials", label: "Only this weekend", startDate: "", endDate: "", items: []
+  }));
+}
+function openWeekendOffers() {
+  offerDraft = freshOfferDraft();
+  tab = "offers";
+  render();
+}
+function renderWeekendOffers() {
+  if (!offerDraft) offerDraft = freshOfferDraft();
+  const d = offerDraft;
+  const combos = (state.menu || []).filter((m) => m.kind === "combo");
+  const used = new Set((d.items || []).map((x) => x.menuId));
+  const title = h("input", { type: "text", maxlength: "60", value: d.title || "Weekend Specials", "aria-label": "Weekend offer title",
+    oninput: (e) => { d.title = e.target.value; } });
+  const promo = h("input", { type: "text", maxlength: "60", value: d.label || "Only this weekend", "aria-label": "Weekend offer label",
+    oninput: (e) => { d.label = e.target.value; } });
+  const start = h("input", { type: "date", value: d.startDate || "", "aria-label": "Weekend offer start date",
+    onchange: (e) => { d.startDate = e.target.value; render(); } });
+  const end = h("input", { type: "date", value: d.endDate || "", "aria-label": "Weekend offer end date",
+    onchange: (e) => { d.endDate = e.target.value; render(); } });
+  const active = h("input", { type: "checkbox", checked: !!d.active, "aria-label": "Show weekend offer on website",
+    onchange: (e) => { d.active = e.target.checked; render(); } });
+
+  const rows = (d.items || []).map((row, idx) => {
+    const item = combos.find((m) => m.id === row.menuId);
+    const price = h("input", { type: "number", min: "0.01", max: "500", step: "0.5", value: row.price,
+      "aria-label": "Offer price for " + (item ? item.name : row.menuId),
+      onchange: (e) => { row.price = Number(e.target.value); } });
+    return h("div", { class: "offer-owner-row" },
+      h("div", { class: "offer-owner-name" },
+        h("b", {}, item ? item.name : row.menuId),
+        item ? h("small", {}, "Regular single: " + money(item.single)) : h("small", {}, "Menu item unavailable")),
+      h("label", { class: "offer-price" }, h("span", {}, "Offer price"), price),
+      h("button", { class: "ghost danger", type: "button", onclick: () => { d.items.splice(idx, 1); render(); } }, "Remove"));
+  });
+
+  const available = combos.filter((m) => !used.has(m.id));
+  const select = h("select", { "aria-label": "Combo to add" },
+    h("option", { value: "" }, available.length ? "Choose a combo" : "All combos added"),
+    available.map((m) => h("option", { value: m.id }, m.name)));
+  const addPrice = h("input", { type: "number", min: "0.01", max: "500", step: "0.5", value: "12", "aria-label": "New offer price" });
+  const add = h("button", { class: "ghost", type: "button", disabled: !available.length, onclick: () => {
+    if (!select.value) return;
+    const price = Number(addPrice.value);
+    if (!(price > 0)) { showErr(new Error("Enter a valid offer price.")); return; }
+    d.items.push({ menuId: select.value, price });
+    render();
+  } }, "+ Add combo");
+
+  const today = localDateKey(Date.now(), state.settings.tz);
+  const inRange = !!d.startDate && !!d.endDate && today >= d.startDate && today <= d.endDate;
+  const live = !!d.active && inRange && (d.items || []).length > 0;
+  const saveMsg = h("span", { class: "ok" });
+  const save = async () => {
+    try {
+      const j = await api("/api/settings", { method: "PUT", body: JSON.stringify({ weekendOffer: d }) });
+      state.settings = j.settings;
+      offerDraft = freshOfferDraft();
+      saveMsg.textContent = "Saved.";
+      showErr(null);
+      render();
+    } catch (e) {
+      saveMsg.textContent = "";
+      showErr(e);
+    }
+  };
+
+  return [
+    h("div", { class: "owner-page-title" },
+      h("div", {},
+        h("button", { class: "owner-back", onclick: () => { offerDraft = null; tab = "more"; render(); } }, "← More"),
+        h("h2", {}, "Weekend Offers"),
+        h("p", { class: "sub" }, "Create a dated promotion. When it is not live, the customer website stays exactly as usual.")),
+      h("span", { class: "offer-live-pill " + (live ? "live" : "") }, live ? "Live on website" : d.active ? "Scheduled / outside dates" : "Off")),
+    h("div", { class: "card offer-owner-settings" },
+      h("div", { class: "grid2" },
+        h("label", {}, "Offer title", title),
+        h("label", {}, "Promo label", promo),
+        h("label", {}, "Start date", start),
+        h("label", {}, "End date", end)),
+      h("label", { class: "offer-toggle" }, active, h("span", {}, h("b", {}, "Active"), h("small", {}, "Show automatically only inside the date range")))),
+    h("div", { class: "owner-section-head" },
+      h("div", {}, h("h3", {}, "Offer items"), h("p", { class: "sub" }, "Vindhu and the website use these promotional single prices while the offer is live."))),
+    h("div", { class: "card offer-owner-list" },
+      ...(rows.length ? rows : [h("p", { class: "empty" }, "No combos in this offer yet.")]),
+      h("div", { class: "offer-add-row" }, select, addPrice, add)),
+    h("div", { class: "offer-save-row" },
+      h("button", { class: "pri", type: "button", onclick: save }, "Save weekend offer"),
+      saveMsg,
+      h("small", { class: "sub" }, d.startDate && d.endDate ? "Valid " + d.startDate + " to " + d.endDate + " · kitchen local dates" : "Set dates before switching it on."))
+  ];
+}
+
 /* ---------- rules ---------- */
 function renderRules() {
   const s = state.settings;
@@ -839,6 +938,9 @@ function renderMore() {
     h("button", { class: "more-card", onclick: () => { tab = "menu"; render(); } },
       h("span", { class: "more-icon" }, ico("menu")),
       h("span", {}, h("b", {}, "Menu management"), h("small", {}, "Prices, availability and ingredients"))),
+    h("button", { class: "more-card", onclick: openWeekendOffers },
+      h("span", { class: "more-icon" }, ico("menu")),
+      h("span", {}, h("b", {}, "Weekend offers"), h("small", {}, "Dates, promo prices and website banner"))),
     h("button", { class: "more-card", onclick: () => { tab = "rules"; render(); } },
       h("span", { class: "more-icon" }, ico("rules")),
       h("span", {}, h("b", {}, "Business rules"), h("small", {}, "Pickup days, notice, address and contact")))
@@ -892,13 +994,13 @@ function renderSim() {
 function renderTabs() {
   const need = state.orders.filter((o) => o.status === "hold").length + state.alerts.filter((a) => !a.done).length;
   const tabs = [["dashboard", "Dashboard"], ["orders", "Orders"], ["cook", "Kitchen"], ["chats", "Chats"], ["more", "More"]];
-  const selected = (k) => k === tab || (k === "more" && ["menu", "rules", "sim", "reviews"].includes(tab));
+  const selected = (k) => k === tab || (k === "more" && ["menu", "offers", "rules", "sim", "reviews"].includes(tab));
   $("tabs").replaceChildren(...tabs.map(([k, t]) => h("button", { role: "tab", "aria-selected": String(selected(k)), onclick: () => { tab = k; cook = null; if (k === "chats") chat = { waId: "", messages: [], customer: null }; render(); } }, ico(k), h("span", { class: "tab-label" }, t), k === "orders" && need ? h("span", { class: "badge", "aria-label": need + " need you" }, need) : null)));
 }
 function render() {
   document.body.classList.toggle("chat-open-mobile", tab === "chats" && !!chat.waId);
   renderTabs();
-  const body = tab === "dashboard" ? renderDashboard() : tab === "orders" ? renderOrders() : tab === "chats" ? renderChats() : tab === "cook" ? renderCook() : tab === "menu" ? renderMenu() : tab === "rules" ? renderRules() : tab === "reviews" ? renderReviews() : tab === "more" ? renderMore() : renderSim();
+  const body = tab === "dashboard" ? renderDashboard() : tab === "orders" ? renderOrders() : tab === "chats" ? renderChats() : tab === "cook" ? renderCook() : tab === "menu" ? renderMenu() : tab === "offers" ? renderWeekendOffers() : tab === "rules" ? renderRules() : tab === "reviews" ? renderReviews() : tab === "more" ? renderMore() : renderSim();
   $("panel").replaceChildren(...[body].flat());
   const box = $("thread");
   if (box) box.scrollTop = box.scrollHeight;
