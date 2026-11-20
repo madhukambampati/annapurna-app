@@ -3,7 +3,7 @@ import { clearCustomQuote, customQuoteIsCurrent, customTermsKey } from "./custom
 import { checkFlags, checkWeekday, draftHash, extrasOnly, friendlyName, mainOrderFor, sanitizeItems, tokens, type Issue } from "./guards.js";
 import { HeuristicJudge, type Judge, type Judgment } from "./judge.js";
 import { LlmError, type Llm } from "./llm.js";
-import { DAILY_ORDER_CUTOFF_LABEL, DAILY_ORDER_OPEN_LABEL, beforeDailyOpening, findItem, outsideOrderingHours, itemLabel, lineAmt, money, optionPicks, pickupDayClosed, pickupIsFutureDay, storeManualOpenNow, total } from "./menu.js";
+import { DAILY_ORDER_CUTOFF_LABEL, DAILY_ORDER_OPEN_LABEL, beforeDailyOpening, effectiveMenu, findItem, outsideOrderingHours, itemLabel, lineAmt, money, optionPicks, pickupDayClosed, pickupIsFutureDay, storeManualOpenNow, total } from "./menu.js";
 import type { Notifier } from "./notify.js";
 import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
 import { route as decideRoute, type Route } from "./router.js";
@@ -347,7 +347,7 @@ export class Agent {
 
     const now = this.now();
     const settings = store.getSettings();
-    const menu = store.getMenu();
+    const menu = effectiveMenu(store.getMenu(), settings, now);
     let customer = store.upsertCustomer(msg.from, msg.name);
     const before = store.getMessages(msg.from, 40);
     const lastShop = [...before].reverse().find((m) => m.who === "agent" || m.who === "owner")?.text ?? null;
@@ -654,7 +654,7 @@ export class Agent {
       if (THANKS.test(text) || (BARE_OK.test(text) && open.length > 0 && idle)) r = { kind: "normal", freeze: true };
     }
     // "option 5" or just "5" after a numbered list: code looks the number up, so it is a real pick, not small talk.
-    const picks = optionPicks(text, store.getMenu(), lastShop);
+    const picks = optionPicks(text, menu, lastShop);
     let pickHint: string | undefined;
     if (picks.length) {
       const generic = r.kind === "clarify" && /^It is not clear/.test(r.hint);
@@ -700,7 +700,7 @@ export class Agent {
   ): Promise<void> {
     const { store } = this.d;
     const now = this.now();
-    const menu = store.getMenu();
+    const menu = effectiveMenu(store.getMenu(), settings, now);
     // A clarify turn, or a customer who only asked a question, must not start or change the order.
     const frozen = r.kind === "clarify" || (r.kind === "normal" && r.freeze === true);
     const hint = r.kind === "clarify" ? r.hint : frozen ? "The customer is only asking a question or chatting. Answer it. Do not start or change the order, and keep stage as it is." : r.kind === "owner_topic" ? "This is a topic only Maddy can settle (payment, delivery, refund, allergy, custom or complaint). Do not answer it yourself. Say warmly that Annapurna Home Foods will reach out to them here in this chat. Never name Maddy to the customer." : undefined;
@@ -912,7 +912,7 @@ export class Agent {
 
   /** The read-back is built here, not by the model, so the total, dates and items are always right. */
   readBack(d: Draft, s: Settings, now: number, open: Order[] = []): string {
-    const menu = this.d.store.getMenu();
+    const menu = effectiveMenu(this.d.store.getMenu(), s, now);
     const lines = d.items.map((it) => `- ${itemLabel(it)}: ${it.amt == null ? "price to be confirmed" : money(it.amt)}`);
     const t = total(d.items);
     const flags = checkFlags(d.items, d.pickup_local, s, now, menu, open);
@@ -977,7 +977,7 @@ export class Agent {
       return;
     }
 
-    const people = customHeadcount(custom.request) ?? bulkMenuQuantity(custom.request, store.getMenu());
+    const people = customHeadcount(custom.request) ?? bulkMenuQuantity(custom.request, effectiveMenu(store.getMenu(), s, now));
     const menuNames = [...new Set(draft.items.map((it) => it.name))];
     const requestName = custom.request
       .replace(/^\s*(?:hi\s+)?(?:i\s+(?:would\s+like|want|need)\s+to\s+order\s*)/i, "")
@@ -1041,7 +1041,7 @@ export class Agent {
       out.replies.push(outsideHoursReply(s, now, true));
       return;
     }
-    const menu = store.getMenu();
+    const menu = effectiveMenu(store.getMenu(), s, now);
     // The menu may have changed between the read-back and the yes. Never charge a price the
     // customer did not see, and never place a combo that was switched off in the meantime.
     const off = draft.items.filter((it) => {
