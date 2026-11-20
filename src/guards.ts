@@ -89,20 +89,22 @@ export interface RawItem {
   qty?: unknown;
   pack?: unknown;
   asked_for?: unknown;
+  promotion?: unknown;
 }
 
 export type Issue =
   | { kind: "unclear_item"; askedFor: string; candidates: string[] }
   | { kind: "not_live"; name: string }
   | { kind: "corrected_item"; from: string; to: string }
-  | { kind: "weekday_mismatch"; said: string; suggestion: string };
+  | { kind: "weekday_mismatch"; said: string; suggestion: string }
+  | { kind: "weekend_special_unavailable"; name: string; startDate: string; endDate: string };
 
 export interface Sanitized {
   items: OrderItem[];
   issues: Issue[];
 }
 
-export function sanitizeItems(raw: unknown, menu: MenuItem[]): Sanitized {
+export function sanitizeItems(raw: unknown, menu: MenuItem[], weekendSpecialIds: ReadonlySet<string> = new Set()): Sanitized {
   const items: OrderItem[] = [];
   const issues: Issue[] = [];
   if (!Array.isArray(raw)) return { items, issues };
@@ -134,13 +136,16 @@ export function sanitizeItems(raw: unknown, menu: MenuItem[]): Sanitized {
       continue;
     }
     const pack: Pack = m.kind === "plan" ? "plan" : m.kind === "combo" && r.pack === "bogo" ? "bogo" : "single";
-    const existing = items.find((x) => x.id === m.id && x.pack === pack);
+    const askedForSpecial = /\bweekend\s+(?:special|offer)\b|\bonly\s+this\s+weekend\b/i.test(asked);
+    const promotion = pack === "single" && weekendSpecialIds.has(m.id) &&
+      (r.promotion === "weekend_special" || askedForSpecial) ? "weekend_special" as const : undefined;
+    const existing = items.find((x) => x.id === m.id && x.pack === pack && x.promotion === promotion);
     if (existing) {
       existing.qty += qty;
       existing.amt = lineAmt(menu, existing);
       continue;
     }
-    items.push({ id: m.id, name: m.name, qty, pack, amt: lineAmt(menu, { id: m.id, qty, pack }) });
+    items.push({ id: m.id, name: m.name, qty, pack, ...(promotion ? { promotion } : {}), amt: lineAmt(menu, { id: m.id, qty, pack }) });
   }
   return { items, issues };
 }
@@ -224,7 +229,7 @@ export function checkFlags(items: OrderItem[], pickupLocal: string | null, s: Se
 
 export function draftHash(d: Pick<Draft, "items" | "pickup_local" | "notes">): string {
   const canon = JSON.stringify({
-    i: d.items.map((x) => [x.id, x.qty, x.pack]).sort(),
+    i: d.items.map((x) => [x.id, x.qty, x.pack, x.promotion ?? ""]).sort(),
     p: d.pickup_local,
     n: d.notes.trim(),
   });
