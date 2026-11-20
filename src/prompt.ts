@@ -1,5 +1,5 @@
 import { DAYN, dateTable, epochToLocal } from "./time.js";
-import { itemDays } from "./menu.js";
+import { activeWeekendOffer, itemDays } from "./menu.js";
 import { friendlyName } from "./guards.js";
 import type { Customer, Draft, MenuItem, Msg, Settings } from "./types.js";
 
@@ -10,7 +10,7 @@ export function rulesList(s: Settings): string[] {
     "Take orders only for items on the menu. Never invent dishes, prices or timings.",
     "Match what the customer asks for to the menu names exactly. If they ask for a dish that is not on the menu, never swap in a similar item and never add an item they did not ask for. Say it is not on the ordering menu and flag it for Maddy.",
     "You cannot cancel, change or refund an order once it is placed. Never say an order is cancelled or changed. The one exception is adding extras, see the extras rule.",
-    "Two kinds of offers exist. Weekly plans cover the Monday to Friday weekly menu. Weekend combos and Buy 1 Get 1 deals run only every other weekend. Take an order for a combo only when available_now is true. Otherwise say it is not running right now and flag Maddy.",
+    "Weekly plans cover the Monday to Friday weekly menu. Weekend combos and Buy 1 Get 1 deals follow their normal availability. A separate date-based Weekend Special may temporarily override the single price of selected menu items. When ACTIVE WEEKEND SPECIAL is present, quote those promotional single prices and list those items when the customer asks about weekend offers. When it is absent, do not claim a special promotion is running. Take an order for a combo only when available_now is true.",
     "Only put an item in the order when the customer clearly asked for it. If it is unclear which item they mean, ask one short question first.",
     "The Full Meal Plan may also be ordered for just one weekday using menu item full_meal_day (Single-day Full Meal) at its configured single price. It includes that weekday's breakfast + lunch + dinner with rice from the weekly menu. If a customer asks for today's weekday order, one day only, today's full meal, or says they want 'this' after discussing today's weekday menu, use full_meal_day with pack single; do not force the weekly plan and do not flag Annapurna just for pricing. Mention the configured single-day price when helpful. Other unpriced individual weekday components are not sold separately unless they are listed as menu items.",
     `Every order needs at least ${s.noticeHrs} hours notice before pickup.`,
@@ -64,6 +64,17 @@ export function buildPrompt(p: PromptInput): string {
     pickup_days: m.kind === "addon" ? "same day as the main dish" : itemDays(m, s).map((d) => DAYN[d]),
     available_now: m.kind === "combo" ? m.live : true,
   }));
+  const liveOffer = activeWeekendOffer(s, p.now);
+  const offerForPrompt = liveOffer ? {
+    title: liveOffer.title,
+    label: liveOffer.label,
+    valid_from: liveOffer.startDate,
+    valid_to: liveOffer.endDate,
+    items: liveOffer.items.map((x) => {
+      const item = p.menu.find((m) => m.id === x.menuId);
+      return item ? { id: item.id, name: item.name, promotional_single_price_cad: x.price } : null;
+    }).filter(Boolean),
+  } : null;
   const transcript = p.history.slice(-24).map((m) => `${m.who === "cust" ? "Customer" : m.who === "owner" ? "Maddy (the owner)" : "You"}: ${m.text}`).join("\n");
   const draft = p.draft
     ? { items: p.draft.items.map((i) => ({ id: i.id, qty: i.qty, pack: i.pack })), pickup_local: p.draft.pickup_local, customer_name: p.draft.customer_name, notes: p.draft.notes }
@@ -84,6 +95,9 @@ export function buildPrompt(p: PromptInput): string {
     "",
     "MENU (JSON)",
     JSON.stringify(menu),
+    "",
+    "ACTIVE WEEKEND SPECIAL (JSON; null means there is no promotion running)",
+    JSON.stringify(offerForPrompt),
     "",
     `MENU NOTES FROM MADDY: ${s.notes}`,
     "",
