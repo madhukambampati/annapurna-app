@@ -6,7 +6,7 @@ import type { Config } from "./config.js";
 import { customTermsKey } from "./custom.js";
 import { cookSummary } from "./cook.js";
 import { RateLimiter } from "./limiter.js";
-import { DAILY_ORDER_CUTOFF_HOUR, DAILY_ORDER_CUTOFF_LABEL, DAILY_ORDER_OPEN_HOUR, DAILY_ORDER_OPEN_LABEL, activeWeekendOffer, beforeDailyOpening, dayRange, effectiveMenu, outsideOrderingHours, itemDays, itemLabel, money, storeOpenOn, total } from "./menu.js";
+import { DAILY_ORDER_CUTOFF_HOUR, DAILY_ORDER_CUTOFF_LABEL, DAILY_ORDER_OPEN_HOUR, DAILY_ORDER_OPEN_LABEL, activeWeekendOffer, beforeDailyOpening, dayRange, outsideOrderingHours, itemDays, itemLabel, money, storeOpenOn, total } from "./menu.js";
 import { friendlyName } from "./guards.js";
 import type { ReviewInvite, Store } from "./store.js";
 import { DAYN, dayLabel, formatWhen, nextDateForDow, pad, zonedParts } from "./time.js";
@@ -488,9 +488,8 @@ export function createServer(d: ServerDeps): Server {
           const s = store.getSettings();
           const at = now();
           const rawMenu = store.getMenu();
-          const effective = effectiveMenu(rawMenu, s, at);
           const liveOffer = activeWeekendOffer(s, at);
-          const items = effective.map((x, i) => {
+          const items = rawMenu.map((x, i) => {
             const live = x.kind === "combo" ? x.live : true;
             const days = itemDays(x, s);
             // One availability status per dish. A single-day offer also shows its next date.
@@ -510,7 +509,7 @@ export function createServer(d: ServerDeps): Server {
             startDate: liveOffer.startDate,
             endDate: liveOffer.endDate,
             items: liveOffer.items.map((o) => {
-              const it = effective.find((x) => x.id === o.menuId);
+              const it = rawMenu.find((x) => x.id === o.menuId);
               return it && (it.kind !== "combo" || it.live) ? { id: it.id, name: it.name, price: o.price } : null;
             }).filter(Boolean),
           } : null;
