@@ -927,6 +927,11 @@ export class Agent {
         out.issues.push("false_confirmation_blocked");
       }
     }
+    // Keep the two weekend paths unmistakable in chat. A limited Weekend Special never replaces
+    // the regular Weekend Combos menu, and customers should always know where to find the latter.
+    if (liveWeekendOffer && WEEKEND_SPECIAL.test(text) && !/regular Weekend Combos/i.test(reply)) {
+      reply += "\nIf you want our regular Weekend Combos instead, please order from the Weekend Combos section at normal prices.";
+    }
     out.replies.push(reply);
 
     const ownerNote = typeof raw.owner_note === "string" ? raw.owner_note.trim() : "";
