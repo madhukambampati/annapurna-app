@@ -695,6 +695,7 @@ export class Agent {
     const hint = r.kind === "clarify" ? r.hint : frozen ? "The customer is only asking a question or chatting. Answer it. Do not start or change the order, and keep stage as it is." : r.kind === "owner_topic" ? "This is a topic only Maddy can settle (payment, delivery, refund, allergy, custom or complaint). Do not answer it yourself. Say warmly that Annapurna Home Foods will reach out to them here in this chat. Never name Maddy to the customer." : undefined;
 
     const promptHistory = store.getMessages(msg.from, 40);
+    const lastShop = [...promptHistory].reverse().find((m) => m.who === "agent" || m.who === "owner")?.text ?? null;
     // A real reset means "forget everything before this" for model context too. Keep the complete
     // transcript in storage for the customer/owner, but never send pre-reset chat back to Claude.
     const newest = promptHistory.at(-1);
