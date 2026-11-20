@@ -620,52 +620,35 @@ function openWeekendOffers() {
   tab = "offers";
   render();
 }
+function weekendPreviewArtClass(id) {
+  if (id === "kobbari_annam_fry") return "art-kobbari";
+  if (id === "bagara_chicken_fry") return "art-bagara";
+  if (id === "chicken_kheema_pulao") return "art-kheema";
+  return "art-generic";
+}
+
 function renderWeekendOffers() {
   if (!offerDraft) offerDraft = freshOfferDraft();
   const d = offerDraft;
   const combos = (state.menu || []).filter((m) => m.kind === "combo");
   const used = new Set((d.items || []).map((x) => x.menuId));
+
   const title = h("input", { type: "text", maxlength: "60", value: d.title || "Weekend Special", "aria-label": "Weekend offer title",
-    oninput: (e) => { d.title = e.target.value; } });
+    oninput: (e) => { d.title = e.target.value; render(); } });
   const promo = h("input", { type: "text", maxlength: "60", value: d.label || "Only this weekend", "aria-label": "Weekend offer label",
-    oninput: (e) => { d.label = e.target.value; } });
-  const start = h("input", { type: "date", value: d.startDate || "", "aria-label": "Weekend offer start date",
+    oninput: (e) => { d.label = e.target.value; render(); } });
+  const startDate = h("input", { type: "date", value: d.startDate || "", "aria-label": "Weekend offer start date",
     onchange: (e) => { d.startDate = e.target.value; render(); } });
-  const end = h("input", { type: "date", value: d.endDate || "", "aria-label": "Weekend offer end date",
+  const endDate = h("input", { type: "date", value: d.endDate || "", "aria-label": "Weekend offer end date",
     onchange: (e) => { d.endDate = e.target.value; render(); } });
   const active = h("input", { type: "checkbox", checked: !!d.active, "aria-label": "Show weekend offer on website",
     onchange: (e) => { d.active = e.target.checked; render(); } });
-
-  const rows = (d.items || []).map((row, idx) => {
-    const item = combos.find((m) => m.id === row.menuId);
-    const price = h("input", { type: "number", min: "0.01", max: "500", step: "0.5", value: row.price,
-      "aria-label": "Offer price for " + (item ? item.name : row.menuId),
-      onchange: (e) => { row.price = Number(e.target.value); } });
-    return h("div", { class: "offer-owner-row" },
-      h("div", { class: "offer-owner-name" },
-        h("b", {}, item ? item.name : row.menuId),
-        item ? h("small", {}, "Regular single: " + money(item.single)) : h("small", {}, "Menu item unavailable")),
-      h("label", { class: "offer-price" }, h("span", {}, "Special price"), price),
-      h("button", { class: "ghost danger", type: "button", onclick: () => { d.items.splice(idx, 1); render(); } }, "Remove"));
-  });
-
-  const available = combos.filter((m) => !used.has(m.id));
-  const select = h("select", { "aria-label": "Combo to add" },
-    h("option", { value: "" }, available.length ? "Choose a combo" : "All combos added"),
-    available.map((m) => h("option", { value: m.id }, m.name)));
-  const addPrice = h("input", { type: "number", min: "0.01", max: "500", step: "0.5", value: "12", "aria-label": "New offer price" });
-  const add = h("button", { class: "ghost", type: "button", disabled: !available.length, onclick: () => {
-    if (!select.value) return;
-    const price = Number(addPrice.value);
-    if (!(price > 0)) { showErr(new Error("Enter a valid offer price.")); return; }
-    d.items.push({ menuId: select.value, price });
-    render();
-  } }, "+ Add combo");
 
   const today = localDateKey(Date.now(), state.settings.tz);
   const inRange = !!d.startDate && !!d.endDate && today >= d.startDate && today <= d.endDate;
   const live = !!d.active && inRange && (d.items || []).length > 0;
   const saveMsg = h("span", { class: "ok" });
+
   const save = async () => {
     try {
       const j = await api("/api/settings", { method: "PUT", body: JSON.stringify({ weekendOffer: d }) });
@@ -680,29 +663,101 @@ function renderWeekendOffers() {
     }
   };
 
+  const discard = () => {
+    offerDraft = freshOfferDraft();
+    showErr(null);
+    render();
+  };
+
+  const rows = (d.items || []).map((row, idx) => {
+    const item = combos.find((m) => m.id === row.menuId);
+    const price = h("input", { type: "number", min: "0.01", max: "500", step: "0.5", value: row.price,
+      "aria-label": "Special price for " + (item ? item.name : row.menuId),
+      onchange: (e) => { row.price = Number(e.target.value); render(); } });
+    return h("div", { class: "offer-owner-row" },
+      h("span", { class: "offer-owner-thumb " + weekendPreviewArtClass(row.menuId), "aria-hidden": "true" }),
+      h("div", { class: "offer-owner-name" },
+        h("b", {}, item ? item.name : row.menuId),
+        item ? h("small", {}, "Regular single: " + money(item.single) + " · Weekend Special only: " + money(row.price)) : h("small", {}, "Menu item unavailable")),
+      h("label", { class: "offer-price" }, h("span", {}, "Special price"), price),
+      h("button", { class: "ghost danger", type: "button", onclick: () => { d.items.splice(idx, 1); render(); } }, "Remove"));
+  });
+
+  const available = combos.filter((m) => !used.has(m.id));
+  const select = h("select", { "aria-label": "Combo to add" },
+    h("option", { value: "" }, available.length ? "Choose a Weekend Combo" : "All Weekend Combos added"),
+    available.map((m) => h("option", { value: m.id }, m.name)));
+  const addPrice = h("input", { type: "number", min: "0.01", max: "500", step: "0.5", value: "12", "aria-label": "New special price" });
+  const add = h("button", { class: "ghost offer-add-btn", type: "button", disabled: !available.length, onclick: () => {
+    if (!select.value) return;
+    const price = Number(addPrice.value);
+    if (!(price > 0)) { showErr(new Error("Enter a valid special price.")); return; }
+    d.items.push({ menuId: select.value, price });
+    render();
+  } }, "+ Add offer card");
+
+  const previewItems = (d.items || []).map((row) => {
+    const item = combos.find((m) => m.id === row.menuId);
+    return h("div", { class: "offer-preview-card" },
+      h("span", { class: "offer-preview-thumb " + weekendPreviewArtClass(row.menuId), "aria-hidden": "true" }),
+      h("div", { class: "offer-preview-copy" },
+        h("b", {}, item ? item.name : row.menuId),
+        h("small", {}, "Weekend Special"),
+        h("strong", {}, money(row.price))));
+  });
+
+  const preview = h("aside", { class: "offer-owner-preview card" },
+    h("div", { class: "offer-preview-heading" },
+      h("span", { class: "offer-preview-eye" }, "◉"),
+      h("div", {}, h("h3", {}, "Homepage Preview"), h("p", { class: "sub" }, "How the Weekend Special will look to customers."))),
+    h("div", { class: "offer-preview-shell" },
+      h("img", { class: "offer-preview-logo", src: "/assets/annapurna-logo.webp", alt: "Annapurna Authentic Home Foods" }),
+      h("div", { class: "offer-preview-title" },
+        h("h3", {}, d.title || "Weekend Special"),
+        h("span", {}, d.label || "Only this weekend")),
+      h("div", { class: "offer-preview-list" }, ...(previewItems.length ? previewItems : [h("p", { class: "empty" }, "Add a combo to preview it here.")])),
+      h("div", { class: "offer-preview-note" },
+        h("b", {}, "Regular Weekend Combos?"),
+        h("span", {}, "Use the Weekend Combos section at normal prices."))),
+    h("div", { class: "offer-preview-status " + (live ? "live" : "") }, live ? "Live now" : d.active ? "Scheduled / outside dates" : "Preview only · offer is off"));
+
+  const settingsCard = h("section", { class: "card offer-owner-settings" },
+    h("div", { class: "offer-owner-card-title" },
+      h("div", {}, h("h3", {}, "Offer Settings"), h("p", { class: "sub" }, "Set the title, dates and visibility for this separate Weekend Special.")),
+      h("span", { class: "offer-live-pill " + (live ? "live" : "") }, live ? "Live on website" : d.active ? "Scheduled" : "Off")),
+    h("div", { class: "grid2" },
+      h("label", {}, "Offer title", title),
+      h("label", {}, "Promo label", promo),
+      h("label", {}, "Start date", startDate),
+      h("label", {}, "End date", endDate)),
+    h("label", { class: "offer-toggle" }, active, h("span", {}, h("b", {}, "Active"), h("small", {}, "Show automatically only inside the date range"))));
+
+  const itemsCard = h("section", { class: "card offer-owner-list" },
+    h("div", { class: "offer-owner-card-title" },
+      h("div", {}, h("h3", {}, "Offer Cards (" + (d.items || []).length + ")"),
+        h("p", { class: "sub" }, "These special prices never replace the regular Weekend Combo prices.")),
+      add),
+    ...(rows.length ? rows : [h("p", { class: "empty" }, "No Weekend Special cards yet.")]),
+    h("div", { class: "offer-add-row" }, select, addPrice, h("span", { class: "sub" }, "Choose a regular Weekend Combo and give it a separate special price.")));
+
   return [
-    h("div", { class: "owner-page-title" },
+    h("div", { class: "owner-page-title offer-owner-page-title" },
       h("div", {},
         h("button", { class: "owner-back", onclick: () => { offerDraft = null; tab = "more"; render(); } }, "← More"),
-        h("h2", {}, "Weekend Special"),
-        h("p", { class: "sub" }, "Create a separate dated Weekend Special. Regular Weekend Combo prices stay unchanged.")),
-      h("span", { class: "offer-live-pill " + (live ? "live" : "") }, live ? "Live on website" : d.active ? "Scheduled / outside dates" : "Off")),
-    h("div", { class: "card offer-owner-settings" },
-      h("div", { class: "grid2" },
-        h("label", {}, "Offer title", title),
-        h("label", {}, "Promo label", promo),
-        h("label", {}, "Start date", start),
-        h("label", {}, "End date", end)),
-      h("label", { class: "offer-toggle" }, active, h("span", {}, h("b", {}, "Active"), h("small", {}, "Show automatically only inside the date range")))),
-    h("div", { class: "owner-section-head" },
-      h("div", {}, h("h3", {}, "Special items"), h("p", { class: "sub" }, "These prices apply only when the customer chooses the Weekend Special. Regular Weekend Combos keep their normal prices."))),
-    h("div", { class: "card offer-owner-list" },
-      ...(rows.length ? rows : [h("p", { class: "empty" }, "No combos in this offer yet.")]),
-      h("div", { class: "offer-add-row" }, select, addPrice, add)),
-    h("div", { class: "offer-save-row" },
-      h("button", { class: "pri", type: "button", onclick: save }, "Save Weekend Special"),
-      saveMsg,
-      h("small", { class: "sub" }, d.startDate && d.endDate ? "Valid " + d.startDate + " to " + d.endDate + " · kitchen local dates" : "Set dates before switching it on."))
+        h("h2", {}, "Weekend Special Manager"),
+        h("p", { class: "sub" }, "Create limited-time specials for the website. Regular Weekend Combos remain available separately at normal prices.")),
+      h("div", { class: "offer-owner-top-actions" },
+        h("button", { class: "ghost", type: "button", onclick: () => window.open("/", "_blank", "noopener") }, "View on Website"),
+        h("button", { class: "ghost", type: "button", onclick: discard }, "Discard Changes"),
+        h("button", { class: "pri", type: "button", onclick: save }, "Save Changes"))),
+    h("div", { class: "owner-note offer-owner-note" },
+      h("b", {}, "Important: "),
+      "The $12 prices are only for the Weekend Special. If a customer wants the regular Weekend Combos, they should order from the Weekend Combos section at normal prices."),
+    h("div", { class: "offer-manager-layout" },
+      h("div", { class: "offer-manager-main" }, settingsCard, itemsCard,
+        h("div", { class: "offer-save-row" }, saveMsg,
+          h("small", { class: "sub" }, d.startDate && d.endDate ? "Valid " + d.startDate + " to " + d.endDate + " · kitchen local dates" : "Set dates before switching it on."))),
+      preview)
   ];
 }
 
