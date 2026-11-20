@@ -3,7 +3,7 @@ import { clearCustomQuote, customQuoteIsCurrent, customTermsKey } from "./custom
 import { checkFlags, checkWeekday, draftHash, extrasOnly, friendlyName, mainOrderFor, sanitizeItems, tokens, type Issue } from "./guards.js";
 import { HeuristicJudge, type Judge, type Judgment } from "./judge.js";
 import { LlmError, type Llm } from "./llm.js";
-import { DAILY_ORDER_CUTOFF_LABEL, DAILY_ORDER_OPEN_LABEL, beforeDailyOpening, effectiveMenu, findItem, outsideOrderingHours, itemLabel, lineAmt, money, optionPicks, pickupDayClosed, pickupIsFutureDay, storeManualOpenNow, total } from "./menu.js";
+import { DAILY_ORDER_CUTOFF_LABEL, DAILY_ORDER_OPEN_LABEL, activeWeekendOffer, beforeDailyOpening, findItem, outsideOrderingHours, itemLabel, lineAmt, money, optionPicks, orderLineAmt, pickupDayClosed, pickupIsFutureDay, storeManualOpenNow, total, weekendOfferPrice } from "./menu.js";
 import type { Notifier } from "./notify.js";
 import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
 import { route as decideRoute, type Route } from "./router.js";
@@ -50,6 +50,7 @@ export interface Outcome {
 const MAX_TEXT = 1000;
 
 const ADD_MORE = /\b(another|again|second|one more|extra|also|additional|add|more)\b/i;
+const WEEKEND_SPECIAL = /\bweekend\s+(?:special|offer)\b|\bonly\s+this\s+weekend\b/i;
 
 /** Thanks and short acknowledgements never change an order. */
 const THANKS = /^(thanks|thank you|thank u|thankyou|thx|ty|tq|many thanks|thanks a lot|thank you so much|great|perfect|awesome|cool|nice|noted|got it|super|superb|ok thanks|okay thanks|ok thank you|okay thank you)[\s!.]*$/i;
@@ -308,8 +309,8 @@ function outsideHoursReply(s: Settings, now: number, atConfirm: boolean): string
 }
 
 /** Identity of an order for duplicate checks: what is ordered and when it is picked up. */
-function orderKey(items: Array<{ id: string; qty: number; pack: string }>, pickup: string | null): string {
-  return JSON.stringify(items.map((i) => `${i.id}:${i.pack}:${i.qty}`).sort()) + "|" + (pickup ?? "");
+function orderKey(items: Array<{ id: string; qty: number; pack: string; promotion?: string }>, pickup: string | null): string {
+  return JSON.stringify(items.map((i) => `${i.id}:${i.pack}:${i.promotion ?? ""}:${i.qty}`).sort()) + "|" + (pickup ?? "");
 }
 
 /** Single-day Full Meal orders use known menu pricing and can enter the kitchen without an owner approval click. */
