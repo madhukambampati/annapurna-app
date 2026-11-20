@@ -18,6 +18,10 @@ test("default menu matches the posters", () => {
   assert.deepEqual(p("chicken_kheema_pulao"), [12, 22]);
   assert.equal(m.get("sunday_bogo_special")!.live, false);
   assert.equal(m.get("plan_full")!.plan, 90);
+  assert.deepEqual(
+    [m.get("full_meal_day")!.kind, m.get("full_meal_day")!.single, m.get("full_meal_day")!.days],
+    ["item", 18, [1, 2, 3, 4, 5]],
+  );
 });
 
 test("an old stored menu is upgraded once and keeps live/recipe choices", () => {
@@ -25,7 +29,7 @@ test("an old stored menu is upgraded once and keeps live/recipe choices", () => 
   const path = join(dir, "t.db");
   const a = new Store(path);
   // pretend this is the old deployment: old prices, menu_version missing
-  const old = defaultMenu().filter((x) => x.id !== "kobbari_annam_fry");
+  const old = defaultMenu().filter((x) => x.id !== "kobbari_annam_fry" && x.id !== "full_meal_day");
   const salan = old.find((x) => x.id === "chicken_pulao_salan")!;
   salan.single = 15; salan.bogo = 22; salan.live = false; salan.recipe = "my recipe";
   const sun = old.find((x) => x.id === "sunday_bogo_special")!;
@@ -42,6 +46,7 @@ test("an old stored menu is upgraded once and keeps live/recipe choices", () => 
   assert.equal(s.live, false);
   assert.equal(s.recipe, "my recipe");
   assert.ok(menu.find((x) => x.id === "kobbari_annam_fry"));
+  assert.equal(menu.find((x) => x.id === "full_meal_day")!.single, 18, "version 5 adds the priced one-day Full Meal");
   assert.deepEqual(menu.find((x) => x.id === "sunday_bogo_special")!.days, [0], "the Sunday special is Sunday-only after the upgrade");
   assert.doesNotMatch(menu.find((x) => x.id === "sunday_bogo_special")!.desc, /only this Sunday/i);
 
