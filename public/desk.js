@@ -612,7 +612,7 @@ function renderMenu() {
 function freshOfferDraft() {
   const src = state.settings && state.settings.weekendOffer;
   return JSON.parse(JSON.stringify(src || {
-    active: false, title: "Weekend Specials", label: "Only this weekend", startDate: "", endDate: "", items: []
+    active: false, title: "Weekend Special", label: "Only this weekend", startDate: "", endDate: "", items: []
   }));
 }
 function openWeekendOffers() {
@@ -625,7 +625,7 @@ function renderWeekendOffers() {
   const d = offerDraft;
   const combos = (state.menu || []).filter((m) => m.kind === "combo");
   const used = new Set((d.items || []).map((x) => x.menuId));
-  const title = h("input", { type: "text", maxlength: "60", value: d.title || "Weekend Specials", "aria-label": "Weekend offer title",
+  const title = h("input", { type: "text", maxlength: "60", value: d.title || "Weekend Special", "aria-label": "Weekend offer title",
     oninput: (e) => { d.title = e.target.value; } });
   const promo = h("input", { type: "text", maxlength: "60", value: d.label || "Only this weekend", "aria-label": "Weekend offer label",
     oninput: (e) => { d.label = e.target.value; } });
@@ -645,7 +645,7 @@ function renderWeekendOffers() {
       h("div", { class: "offer-owner-name" },
         h("b", {}, item ? item.name : row.menuId),
         item ? h("small", {}, "Regular single: " + money(item.single)) : h("small", {}, "Menu item unavailable")),
-      h("label", { class: "offer-price" }, h("span", {}, "Offer price"), price),
+      h("label", { class: "offer-price" }, h("span", {}, "Special price"), price),
       h("button", { class: "ghost danger", type: "button", onclick: () => { d.items.splice(idx, 1); render(); } }, "Remove"));
   });
 
@@ -684,8 +684,8 @@ function renderWeekendOffers() {
     h("div", { class: "owner-page-title" },
       h("div", {},
         h("button", { class: "owner-back", onclick: () => { offerDraft = null; tab = "more"; render(); } }, "← More"),
-        h("h2", {}, "Weekend Offers"),
-        h("p", { class: "sub" }, "Create a dated promotion. When it is not live, the customer website stays exactly as usual.")),
+        h("h2", {}, "Weekend Special"),
+        h("p", { class: "sub" }, "Create a separate dated Weekend Special. Regular Weekend Combo prices stay unchanged.")),
       h("span", { class: "offer-live-pill " + (live ? "live" : "") }, live ? "Live on website" : d.active ? "Scheduled / outside dates" : "Off")),
     h("div", { class: "card offer-owner-settings" },
       h("div", { class: "grid2" },
@@ -695,12 +695,12 @@ function renderWeekendOffers() {
         h("label", {}, "End date", end)),
       h("label", { class: "offer-toggle" }, active, h("span", {}, h("b", {}, "Active"), h("small", {}, "Show automatically only inside the date range")))),
     h("div", { class: "owner-section-head" },
-      h("div", {}, h("h3", {}, "Offer items"), h("p", { class: "sub" }, "Vindhu and the website use these promotional single prices while the offer is live."))),
+      h("div", {}, h("h3", {}, "Special items"), h("p", { class: "sub" }, "These prices apply only when the customer chooses the Weekend Special. Regular Weekend Combos keep their normal prices."))),
     h("div", { class: "card offer-owner-list" },
       ...(rows.length ? rows : [h("p", { class: "empty" }, "No combos in this offer yet.")]),
       h("div", { class: "offer-add-row" }, select, addPrice, add)),
     h("div", { class: "offer-save-row" },
-      h("button", { class: "pri", type: "button", onclick: save }, "Save weekend offer"),
+      h("button", { class: "pri", type: "button", onclick: save }, "Save Weekend Special"),
       saveMsg,
       h("small", { class: "sub" }, d.startDate && d.endDate ? "Valid " + d.startDate + " to " + d.endDate + " · kitchen local dates" : "Set dates before switching it on."))
   ];
@@ -940,7 +940,7 @@ function renderMore() {
       h("span", {}, h("b", {}, "Menu management"), h("small", {}, "Prices, availability and ingredients"))),
     h("button", { class: "more-card", onclick: openWeekendOffers },
       h("span", { class: "more-icon" }, ico("menu")),
-      h("span", {}, h("b", {}, "Weekend offers"), h("small", {}, "Dates, promo prices and website banner"))),
+      h("span", {}, h("b", {}, "Weekend Special"), h("small", {}, "Separate dated special prices and website banner"))),
     h("button", { class: "more-card", onclick: () => { tab = "rules"; render(); } },
       h("span", { class: "more-icon" }, ico("rules")),
       h("span", {}, h("b", {}, "Business rules"), h("small", {}, "Pickup days, notice, address and contact")))
