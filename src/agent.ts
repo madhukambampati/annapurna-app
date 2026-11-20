@@ -729,6 +729,25 @@ export class Agent {
     const modelReply = typeof raw.reply === "string" ? raw.reply.trim() : "";
     const rd = (raw.draft && typeof raw.draft === "object" ? raw.draft : {}) as Record<string, unknown>;
 
+    // In a weekday-menu conversation, customers naturally say "I want this" instead of repeating
+    // the dish name. Keep the safety checker strict for every other item, but allow that pronoun only
+    // when the model chose full_meal_day and the immediately previous shop message clearly described
+    // a weekday meal. This makes the exact "what is today's order?" -> "order this" flow reliable.
+    let proposedItems: unknown = rd.items;
+    const refersToThis = /\b(?:order|want|take|get|would\s+like)\b[\s\S]{0,40}\b(?:this|it|that)\b/i.test(text);
+    const weekdayMenuContext = /\b(?:Monday|Tuesday|Wednesday|Thursday|Friday)\b[\s\S]{0,500}\b(?:breakfast|lunch|dinner|healthy\s+combo|weekday)\b/i.test(lastShop ?? "");
+    if (refersToThis && weekdayMenuContext && Array.isArray(proposedItems)) {
+      proposedItems = proposedItems.map((item) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+        const row = item as Record<string, unknown>;
+        const asked = typeof row.asked_for === "string" ? row.asked_for.trim() : "";
+        if (row.id === "full_meal_day" && /^(?:this|it|that|this one|that one)$/i.test(asked)) {
+          return { ...row, asked_for: "today's weekday order" };
+        }
+        return item;
+      });
+    }
+
     // On a frozen turn the draft must not change, whatever the model sent.
     let items = draft?.items ?? [];
     let pickup = draft?.pickup_local ?? null;
@@ -745,7 +764,7 @@ export class Agent {
         // run normal menu-item ambiguity checks on phrases such as "15-person medium tray".
         custom = custom ?? { request: text.slice(0, 300), price: null, approved: false };
         if (Array.isArray(rd.items) && rd.items.length) {
-          const s = sanitizeItems(rd.items, menu);
+          const s = sanitizeItems(proposedItems, menu);
           // Keep any clearly resolved menu items for a useful label, but ambiguity must not block catering.
           if (s.items.length) items = s.items;
           issues.push(...s.issues.filter((i) => i.kind === "not_live" || i.kind === "weekday_mismatch"));
@@ -754,7 +773,7 @@ export class Agent {
         if (typeof rd.notes === "string" && rd.notes.trim()) notes = rd.notes.slice(0, 300);
         if (typeof rd.customer_name === "string" && rd.customer_name.trim()) custName = rd.customer_name.trim().slice(0, 60);
       } else {
-        const s = sanitizeItems(rd.items, menu);
+        const s = sanitizeItems(proposedItems, menu);
         items = s.items;
         issues.push(...s.issues);
         pickup = typeof rd.pickup_local === "string" && isLocalIso(rd.pickup_local) ? rd.pickup_local : null;
