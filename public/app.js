@@ -321,8 +321,8 @@
       box.replaceChildren(
         h("div", { class: "weekend-offer-head" },
           h("div", {}, h("span", { class: "weekend-offer-label" }, offer.label || "Only this weekend"),
-            h("h3", {}, offer.title || "Weekend Specials")),
-          h("button", { class: "weekend-offer-view", type: "button", onclick: function (e) { showMenu(e, "Weekend Offers"); } }, "View offers →")),
+            h("h3", {}, offer.title || "Weekend Special")),
+          h("button", { class: "weekend-offer-view", type: "button", onclick: function (e) { showMenu(e, "Weekend Special"); } }, "View special →")),
         h("div", { class: "weekend-offer-grid" }, cards)
       );
     });
@@ -1028,7 +1028,7 @@
           availability: m.weekendOffer.label || "Only this weekend"
         }) : null;
       }).filter(Boolean);
-      if (offerItems.length) panels.push(["Weekend Offers", h("div", { class: "panel weekend-offer-panel" },
+      if (offerItems.length) panels.push(["Weekend Special", h("div", { class: "panel weekend-offer-panel" },
         h("p", { class: "lead" }, (m.weekendOffer.label || "Only this weekend") + " · These are separate Weekend Special prices. Regular Weekend Combos keep their normal prices."),
         offerItems.map(dish))]);
     }
