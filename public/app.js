@@ -981,7 +981,9 @@
     }
     if (!off && !noPrice && !storeClosed && !cutoffOnly) {
       price.append(h("button", { class: "btn sm", type: "button", onclick: function () {
-        var choice = "I'd like to order the " + x.name + " ";
+        var choice = x.weekendSpecial
+          ? "I'd like to order the " + x.name + " Weekend Special."
+          : "I'd like to order the " + x.name + " ";
         closeSheet();
         if (token) { openChat(choice); return; }
         pendingOrderText = choice;
@@ -991,7 +993,9 @@
       } }, "Add to order"));
     } else if (!off && !noPrice && cutoffOnly) {
       price.append(h("button", { class: "btn sm", type: "button", onclick: function () {
-        var choice = "I'd like to order the " + x.name + " for a future pickup. Please ask me for the day and time.";
+        var choice = x.weekendSpecial
+          ? "I'd like to order the " + x.name + " Weekend Special. Please ask me for the pickup day and time."
+          : "I'd like to order the " + x.name + " for a future pickup. Please ask me for the day and time.";
         closeSheet();
         if (token) { openChat(choice); return; }
         pendingOrderText = choice;
@@ -1017,10 +1021,15 @@
     if (m.weekendOffer && m.weekendOffer.items && m.weekendOffer.items.length) {
       var offerItems = m.weekendOffer.items.map(function (o) {
         var item = (m.items || []).find(function (x) { return x.id === o.id; });
-        return item ? Object.assign({}, item, { bogo: null }) : null;
+        return item ? Object.assign({}, item, {
+          single: o.price,
+          bogo: null,
+          weekendSpecial: true,
+          availability: m.weekendOffer.label || "Only this weekend"
+        }) : null;
       }).filter(Boolean);
       if (offerItems.length) panels.push(["Weekend Offers", h("div", { class: "panel weekend-offer-panel" },
-        h("p", { class: "lead" }, (m.weekendOffer.label || "Only this weekend") + " · Promotional prices shown below."),
+        h("p", { class: "lead" }, (m.weekendOffer.label || "Only this weekend") + " · These are separate Weekend Special prices. Regular Weekend Combos keep their normal prices."),
         offerItems.map(dish))]);
     }
     if (combos.length) panels.push(["Combos", h("div", { class: "panel" },
