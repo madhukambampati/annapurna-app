@@ -3,12 +3,20 @@ import { test } from "node:test";
 import { FRI_6PM, judgment, modelReply, setup, TZ } from "./helpers.js";
 import { localToEpoch } from "../src/time.js";
 
-const KHEEMA_BOGO = { id: "kheema_fry", qty: 2, pack: "bogo", asked_for: "chicken kheema fry combos" };
+type ProposedTestItem = {
+  id: string;
+  qty: number;
+  pack: string;
+  asked_for: string;
+  promotion?: "weekend_special";
+};
+
+const KHEEMA_BOGO: ProposedTestItem = { id: "kheema_fry", qty: 2, pack: "bogo", asked_for: "chicken kheema fry combos" };
 const yesJudge = (ctx: { message: string; awaitingConfirmation: boolean }) =>
   ctx.awaitingConfirmation && /^yes/i.test(ctx.message) ? { agrees: 0.97 } : {};
 
 /** Runs the usual first turn: customer orders, model proposes, code reads back. */
-async function orderAndReadBack(t: ReturnType<typeof setup>, items = [KHEEMA_BOGO], pickup: string | null = FRI_6PM, said = "2 chicken kheema fry combos buy 1 get 1, friday 6pm") {
+async function orderAndReadBack(t: ReturnType<typeof setup>, items: ProposedTestItem[] = [KHEEMA_BOGO], pickup: string | null = FRI_6PM, said = "2 chicken kheema fry combos buy 1 get 1, friday 6pm") {
   t.llm.push(modelReply({ reply: "Sure, noted!", items, pickup, name: "Asha", stage: "awaiting_confirmation" }));
   return t.say(said);
 }
