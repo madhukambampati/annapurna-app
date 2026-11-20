@@ -41,7 +41,7 @@ test("happy path: model proposes, CODE reads back, customer says yes, CODE place
   assert.match(t.store.getCustomer("+15198043658")!.profile, /Last order/);
 });
 
-test("active weekend offer price is used in Vindhu read-back and stored order", async () => {
+test("explicit Weekend Special uses $12 while the regular combo stays at its normal price", async () => {
   const t = setup({ judge: yesJudge });
   const settings = t.store.getSettings();
   settings.weekendOffer = {
@@ -50,21 +50,34 @@ test("active weekend offer price is used in Vindhu read-back and stored order", 
     items: [{ menuId: "bagara_chicken_fry", price: 12 }],
   };
   t.store.putSettings(settings);
-  const r1 = await orderAndReadBack(
+
+  const special = await orderAndReadBack(
     t,
-    [{ id: "bagara_chicken_fry", qty: 1, pack: "single", asked_for: "Bagara rice and chicken fry weekend offer" }],
+    [{ id: "bagara_chicken_fry", qty: 1, pack: "single", promotion: "weekend_special", asked_for: "Bagara rice and chicken fry Weekend Special" }],
     FRI_6PM,
-    "1 Bagara rice and chicken fry weekend offer, Friday 6pm",
+    "1 Bagara rice and chicken fry Weekend Special, Friday 6pm",
   );
-  assert.match(r1.replies[0]!, /1 x Bagara Rice and Chicken Fry combo: \$12/);
+  assert.match(special.replies[0]!, /Weekend Special\): \$12/);
   assert.match(t.llm.prompts[0]!, /ACTIVE WEEKEND SPECIAL/);
-  assert.match(t.llm.prompts[0]!, /promotional_single_price_cad/);
   await t.say("yes");
-  const order = t.store.getOrder(1)!;
-  assert.equal(order.items[0]!.amt, 12);
+  const specialOrder = t.store.getOrder(1)!;
+  assert.deepEqual([specialOrder.items[0]!.amt, specialOrder.items[0]!.promotion], [12, "weekend_special"]);
+
+  const t2 = setup({ judge: yesJudge });
+  const settings2 = t2.store.getSettings();
+  settings2.weekendOffer = settings.weekendOffer;
+  t2.store.putSettings(settings2);
+  const regular = await orderAndReadBack(
+    t2,
+    [{ id: "bagara_chicken_fry", qty: 1, pack: "single", asked_for: "Bagara rice and chicken fry combo" }],
+    FRI_6PM,
+    "1 regular Bagara rice and chicken fry combo, Friday 6pm",
+  );
+  assert.match(regular.replies[0]!, /1 x Bagara Rice and Chicken Fry combo: \$15/);
+  assert.doesNotMatch(regular.replies[0]!, /Weekend Special|\$12/);
 });
 
-test("weekend offer price falls back to regular price for pickup outside the offer dates", async () => {
+test("Weekend Special is refused for a pickup outside its offer dates instead of silently using the regular price", async () => {
   const t = setup({ judge: yesJudge });
   const settings = t.store.getSettings();
   settings.weekendOffer = {
@@ -75,13 +88,14 @@ test("weekend offer price falls back to regular price for pickup outside the off
   t.store.putSettings(settings);
   const r = await orderAndReadBack(
     t,
-    [{ id: "bagara_chicken_fry", qty: 1, pack: "single", asked_for: "Bagara rice and chicken fry" }],
+    [{ id: "bagara_chicken_fry", qty: 1, pack: "single", promotion: "weekend_special", asked_for: "Bagara rice and chicken fry Weekend Special" }],
     "2026-09-28T18:00",
-    "1 Bagara rice and chicken fry, Monday 6pm",
+    "1 Bagara rice and chicken fry Weekend Special, Monday 6pm",
   );
-  assert.match(r.replies[0]!, /1 x Bagara Rice and Chicken Fry combo: \$15/);
-  assert.doesNotMatch(r.replies[0]!, /\$12/);
+  assert.ok(r.replies.some((x) => /only available for the offer pickup dates/i.test(x)));
+  assert.doesNotMatch(r.replies.join("\n"), /Please check your order/);
 });
+
 
 test("weekday menu context lets 'order this' select the $18 single-day Full Meal", async () => {
   const t = setup({ judge: (ctx) => {
