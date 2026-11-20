@@ -301,6 +301,9 @@
 
   function renderWeekendOffer() {
     var offer = menuData && menuData.weekendOffer;
+    var hasOffer = !!(offer && offer.items && offer.items.length);
+    var onboard = $("onboard");
+    if (onboard) onboard.classList.toggle("has-weekend-offer", hasOffer);
     ["homeWeekendOffer", "onboardWeekendOffer"].forEach(function (id) {
       var box = $(id);
       if (!box) return;
