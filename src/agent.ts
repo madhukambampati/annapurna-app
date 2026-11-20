@@ -300,6 +300,12 @@ function orderKey(items: Array<{ id: string; qty: number; pack: string }>, picku
   return JSON.stringify(items.map((i) => `${i.id}:${i.pack}:${i.qty}`).sort()) + "|" + (pickup ?? "");
 }
 
+/** Single-day Full Meal orders use known menu pricing and can enter the kitchen without an owner approval click. */
+function autoConfirmSingleDayFullMeal(items: Array<{ id: string }>, menu: MenuItem[]): boolean {
+  const mains = items.filter((it) => findItem(menu, it.id)?.kind !== "addon");
+  return mains.length === 1 && mains[0]!.id === "full_meal_day";
+}
+
 export class Agent {
   private readonly locks = new Map<string, Promise<unknown>>();
   private readonly heuristic = new HeuristicJudge();
@@ -888,7 +894,10 @@ export class Agent {
     ];
     if (d.notes) out.push(`Note: ${d.notes}`);
     if (flags.length) out.push(`Annapurna Home Foods needs to confirm this order first (${flags.join("; ").toLowerCase()}).`);
-    out.push("Reply YES to submit this order for Annapurna confirmation, or tell me what to change.");
+    const autoConfirm = !flags.length && autoConfirmSingleDayFullMeal(d.items, menu);
+    out.push(autoConfirm
+      ? "Reply YES to confirm this order, or tell me what to change."
+      : "Reply YES to submit this order for Annapurna confirmation, or tell me what to change.");
     return out.join("\n");
   }
 
@@ -1033,16 +1042,17 @@ export class Agent {
     }
     const openNow = store.openOrdersFor(waId);
     const flags = checkFlags(items, draft.pickup_local, s, now, menu, openNow);
+    // The explicit $18 one-day Full Meal is safe to auto-confirm when there are no review flags.
+    // Anything unusual (short notice, wrong pickup day, missing price, etc.) still waits for Annapurna.
+    const autoConfirm = !flags.length && autoConfirmSingleDayFullMeal(items, menu);
     // Extras on their own ride along with the customer's order for the same day.
     const main = extrasOnly(items, menu) ? mainOrderFor(draft.pickup_local, openNow) : undefined;
     const notes = main ? [`Extras for order #${main.id}`, draft.notes].filter(Boolean).join(". ") : draft.notes;
     const customer = store.getCustomer(waId)!;
     const name = customer.name || draft.customer_name || "Customer";
-    // Every normal website order is reviewed by Annapurna before it enters the kitchen.
-    // Existing safety flags remain visible; ordinary orders get an explicit approval flag.
-    const approvalFlags = flags.length ? flags : ["Awaiting owner approval"];
+    const approvalFlags = flags.length ? flags : autoConfirm ? [] : ["Awaiting owner approval"];
     const order = store.insertOrder({
-      waId, name, items, pickup: draft.pickup_local, flags: approvalFlags, status: "hold", notes, createdAt: now,
+      waId, name, items, pickup: draft.pickup_local, flags: approvalFlags, status: autoConfirm ? "cook" : "hold", notes, createdAt: now,
     });
     store.clearDraft(waId);
     if (!customer.name && draft.customer_name) store.updateCustomer(waId, { name: draft.customer_name });
@@ -1052,6 +1062,17 @@ export class Agent {
     const t = total(items);
     const who = friendlyName(customer.name || draft.customer_name);
     const listing = items.map((it) => `- ${itemLabel(it)}`).join("\n");
+    if (autoConfirm) {
+      out.replies.push(
+        `Thank you${who ? ` ${who}` : ""}! Order #${order.id} is confirmed:\n${listing}\nTotal: ${money(t)}\nPickup: ${formatWhen(draft.pickup_local)} at ${s.address}`
+      );
+      await this.d.notifier.notify(
+        `Order #${order.id} confirmed`,
+        `${name}: ${items.map(itemLabel).join(", ")}. Pickup ${formatWhen(draft.pickup_local)}. ${money(t)}`,
+      );
+      return;
+    }
+
     const reviewNote = flags.length ? ` Review needed: ${flags.join("; ").toLowerCase()}.` : "";
     out.replies.push(
       `Thank you${who ? ` ${who}` : ""}! Order #${order.id}${main ? ` (extras for order #${main.id})` : ""} has been submitted for Annapurna confirmation:\n${listing}\nTotal: ${money(t)}\nPickup: ${formatWhen(draft.pickup_local)} at ${s.address}\nWe'll confirm it here before we start cooking.${reviewNote}`
