@@ -1,6 +1,6 @@
 import type { Config } from "./config.js";
 import { clearCustomQuote, customQuoteIsCurrent, customTermsKey } from "./custom.js";
-import { checkFlags, checkWeekday, draftHash, extrasOnly, friendlyName, mainOrderFor, sanitizeItems, tokens, type Issue } from "./guards.js";
+import { checkFlags, checkWeekday, draftHash, extrasOnly, friendlyName, mainOrderFor, resolveItem, sanitizeItems, tokens, type Issue } from "./guards.js";
 import { HeuristicJudge, type Judge, type Judgment } from "./judge.js";
 import { LlmError, type Llm } from "./llm.js";
 import { DAILY_ORDER_CUTOFF_LABEL, DAILY_ORDER_OPEN_LABEL, activeWeekendOffer, beforeDailyOpening, findItem, outsideOrderingHours, itemLabel, lineAmt, money, optionPicks, orderLineAmt, pickupDayClosed, pickupIsFutureDay, storeManualOpenNow, total, weekendOfferPrice } from "./menu.js";
