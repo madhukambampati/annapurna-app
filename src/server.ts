@@ -892,7 +892,7 @@ export function createServer(d: ServerDeps): Server {
           if (b.weekendOffer && typeof b.weekendOffer === "object" && !Array.isArray(b.weekendOffer)) {
             const w = b.weekendOffer as Record<string, unknown>;
             const active = w.active === true;
-            const title = cleanText(w.title, 60) || "Weekend Specials";
+            const title = cleanText(w.title, 60) || "Weekend Special";
             const label = cleanText(w.label, 60) || "Only this weekend";
             const startDate = typeof w.startDate === "string" ? w.startDate.trim() : "";
             const endDate = typeof w.endDate === "string" ? w.endDate.trim() : "";
@@ -910,7 +910,7 @@ export function createServer(d: ServerDeps): Server {
               const menuId = typeof row.menuId === "string" ? row.menuId.trim() : "";
               const item = menu.find((x) => x.id === menuId);
               const price = Number(row.price);
-              if (!item || item.kind !== "combo") throw new HttpError(400, "Weekend offers can use only existing combo items.");
+              if (!item || item.kind !== "combo") throw new HttpError(400, "Weekend Special can use only existing combo items.");
               if (!Number.isFinite(price) || price <= 0 || price > 500) throw new HttpError(400, "Weekend offer prices must be between $0.01 and $500.");
               if (seen.has(menuId)) continue;
               seen.add(menuId);
