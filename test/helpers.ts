@@ -52,7 +52,7 @@ export class ScriptedLlm implements Llm {
 
 export interface ModelReplyOpts {
   reply?: string;
-  items?: Array<{ id: string; qty: number; pack?: string; asked_for?: string }>;
+  items?: Array<{ id: string; qty: number; pack?: string; promotion?: "weekend_special"; asked_for?: string }>;
   pickup?: string | null;
   name?: string | null;
   notes?: string;
