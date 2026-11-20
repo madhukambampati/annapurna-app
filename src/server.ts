@@ -122,6 +122,7 @@ const ASSETS: Record<string, { file: string; type: string }> = {
   "/assets/combos_photo.png": { file: "assets/combos_photo.png", type: "image/png" },
   "/assets/weekly_plans_photo.png": { file: "assets/weekly_plans_photo.png", type: "image/png" },
   "/assets/food_platter.png": { file: "assets/food_platter.png", type: "image/png" },
+  "/assets/weekend-special-foods.webp": { file: "assets/weekend-special-foods.webp", type: "image/webp" },
   "/assets/garland_left.png": { file: "assets/garland_left.png", type: "image/png" },
   "/assets/icon_orders.png": { file: "assets/icon_orders.png", type: "image/png" },
   "/assets/icon_weekly.png": { file: "assets/icon_weekly.png", type: "image/png" },
