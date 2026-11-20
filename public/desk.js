@@ -91,7 +91,11 @@ function showErr(e) {
 
 const ico = (name) => h("span", { class: "ico ico-" + name, "aria-hidden": "true" });
 const money = (n) => (n == null ? "Price TBC" : "$" + Math.round(n * 100) / 100);
-const label = (it) => it.pack === "bogo" ? `${it.qty} x ${it.name} (Buy 1 Get 1)` : it.pack === "plan" ? `${it.qty} x ${it.name} (${it.qty} ${it.qty > 1 ? "people" : "person"})` : `${it.qty} x ${it.name}`;
+const label = (it) => it.promotion === "weekend_special"
+  ? `${it.qty} x ${it.name} (Weekend Special)`
+  : it.pack === "bogo" ? `${it.qty} x ${it.name} (Buy 1 Get 1)`
+  : it.pack === "plan" ? `${it.qty} x ${it.name} (${it.qty} ${it.qty > 1 ? "people" : "person"})`
+  : `${it.qty} x ${it.name}`;
 const totalOf = (items) => items.some((i) => i.amt == null) ? null : items.reduce((a, i) => a + i.amt, 0);
 function when(p) {
   if (!p) return "No pickup time";
