@@ -6,7 +6,7 @@ import type { Config } from "./config.js";
 import { customTermsKey } from "./custom.js";
 import { cookSummary } from "./cook.js";
 import { RateLimiter } from "./limiter.js";
-import { DAILY_ORDER_CUTOFF_HOUR, DAILY_ORDER_CUTOFF_LABEL, DAILY_ORDER_OPEN_HOUR, DAILY_ORDER_OPEN_LABEL, beforeDailyOpening, dayRange, outsideOrderingHours, itemDays, itemLabel, money, storeOpenOn, total } from "./menu.js";
+import { DAILY_ORDER_CUTOFF_HOUR, DAILY_ORDER_CUTOFF_LABEL, DAILY_ORDER_OPEN_HOUR, DAILY_ORDER_OPEN_LABEL, activeWeekendOffer, beforeDailyOpening, dayRange, effectiveMenu, outsideOrderingHours, itemDays, itemLabel, money, storeOpenOn, total } from "./menu.js";
 import { friendlyName } from "./guards.js";
 import type { ReviewInvite, Store } from "./store.js";
 import { DAYN, dayLabel, formatWhen, nextDateForDow, pad, zonedParts } from "./time.js";
@@ -486,12 +486,16 @@ export function createServer(d: ServerDeps): Server {
         if (m === "GET" && path === "/web/menu") {
           limit(`menu:${ip}`, 60, 60_000);
           const s = store.getSettings();
-          const items = store.getMenu().map((x, i) => {
+          const at = now();
+          const rawMenu = store.getMenu();
+          const effective = effectiveMenu(rawMenu, s, at);
+          const liveOffer = activeWeekendOffer(s, at);
+          const items = effective.map((x, i) => {
             const live = x.kind === "combo" ? x.live : true;
             const days = itemDays(x, s);
             // One availability status per dish. A single-day offer also shows its next date.
             let label = days.length === 1 ? dayRange(days) : `Pickup ${dayRange(days)}`;
-            if (days.length === 1) label += ` · ${dayLabel(nextDateForDow(now(), s.tz, days[0]!)).replace(/^\w+, /, "")}`;
+            if (days.length === 1) label += ` · ${dayLabel(nextDateForDow(at, s.tz, days[0]!)).replace(/^\w+, /, "")}`;
             if (!live) label = "Not running right now";
             if (x.kind === "addon") label = "Add to any order";
             return {
@@ -500,10 +504,20 @@ export function createServer(d: ServerDeps): Server {
               live, availability: label,
             };
           });
+          const weekendOffer = liveOffer ? {
+            title: liveOffer.title,
+            label: liveOffer.label,
+            startDate: liveOffer.startDate,
+            endDate: liveOffer.endDate,
+            items: liveOffer.items.map((o) => {
+              const it = effective.find((x) => x.id === o.menuId);
+              return it && (it.kind !== "combo" || it.live) ? { id: it.id, name: it.name, price: o.price } : null;
+            }).filter(Boolean),
+          } : null;
           return send(req, res, 200, {
             items, weekly: s.weeklyMenu.split("\n").map((l) => l.trim()).filter(Boolean), pickupDays: s.days.map((n) => DAYN[n]), noticeHrs: s.noticeHrs,
             address: s.address, contact: { instagram: s.contactInstagram, phone: s.contactPhone },
-            storeStatus: businessStatus(s, now()),
+            storeStatus: businessStatus(s, at), weekendOffer: weekendOffer && weekendOffer.items.length ? weekendOffer : null,
           });
         }
 
@@ -876,6 +890,36 @@ export function createServer(d: ServerDeps): Server {
           if (Array.isArray(b.comboDays)) s.comboDays = [...new Set(b.comboDays.map(Number).filter((x) => Number.isInteger(x) && x >= 0 && x <= 6))].sort();
           if (typeof b.contactInstagram === "string") s.contactInstagram = b.contactInstagram.trim().replace(/^@/, "").replace(/[^\w.]/g, "").slice(0, 40);
           if (typeof b.contactPhone === "string") s.contactPhone = b.contactPhone.replace(/[^\d+()\-\s.]/g, "").trim().slice(0, 30);
+          if (b.weekendOffer && typeof b.weekendOffer === "object" && !Array.isArray(b.weekendOffer)) {
+            const w = b.weekendOffer as Record<string, unknown>;
+            const active = w.active === true;
+            const title = cleanText(w.title, 60) || "Weekend Specials";
+            const label = cleanText(w.label, 60) || "Only this weekend";
+            const startDate = typeof w.startDate === "string" ? w.startDate.trim() : "";
+            const endDate = typeof w.endDate === "string" ? w.endDate.trim() : "";
+            if (startDate && !validDateKey(startDate)) throw new HttpError(400, "Weekend offer start date must be YYYY-MM-DD.");
+            if (endDate && !validDateKey(endDate)) throw new HttpError(400, "Weekend offer end date must be YYYY-MM-DD.");
+            if (startDate && endDate && startDate > endDate) throw new HttpError(400, "Weekend offer end date must be on or after the start date.");
+            if (active && (!startDate || !endDate)) throw new HttpError(400, "Set start and end dates before turning the weekend offer on.");
+            if (!Array.isArray(w.items)) throw new HttpError(400, "Weekend offer items are required.");
+            const menu = store.getMenu();
+            const seen = new Set<string>();
+            const offerItems = [];
+            for (const raw of w.items.slice(0, 8)) {
+              if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+              const row = raw as Record<string, unknown>;
+              const menuId = typeof row.menuId === "string" ? row.menuId.trim() : "";
+              const item = menu.find((x) => x.id === menuId);
+              const price = Number(row.price);
+              if (!item || item.kind !== "combo") throw new HttpError(400, "Weekend offers can use only existing combo items.");
+              if (!Number.isFinite(price) || price <= 0 || price > 500) throw new HttpError(400, "Weekend offer prices must be between $0.01 and $500.");
+              if (seen.has(menuId)) continue;
+              seen.add(menuId);
+              offerItems.push({ menuId, price: Math.round(price * 100) / 100 });
+            }
+            if (active && !offerItems.length) throw new HttpError(400, "Add at least one combo before turning the weekend offer on.");
+            s.weekendOffer = { active, title, label, startDate, endDate, items: offerItems };
+          }
           store.putSettings(s);
           return send(req, res, 200, { settings: s });
         }
