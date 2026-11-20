@@ -299,6 +299,13 @@
     if ($("fName")) $("fName").focus();
   }
 
+  function weekendOfferArtClass(id) {
+    if (id === "kobbari_annam_fry") return "art-kobbari";
+    if (id === "bagara_chicken_fry") return "art-bagara";
+    if (id === "chicken_kheema_pulao") return "art-kheema";
+    return "art-generic";
+  }
+
   function renderWeekendOffer() {
     var offer = menuData && menuData.weekendOffer;
     var hasOffer = !!(offer && offer.items && offer.items.length);
@@ -307,7 +314,7 @@
     ["homeWeekendOffer", "onboardWeekendOffer"].forEach(function (id) {
       var box = $(id);
       if (!box) return;
-      if (!offer || !offer.items || !offer.items.length) {
+      if (!hasOffer) {
         box.hidden = true;
         box.replaceChildren();
         return;
@@ -315,18 +322,26 @@
       box.hidden = false;
       var cards = offer.items.map(function (it) {
         return h("button", { class: "weekend-offer-card", type: "button", onclick: function () {
-          beginWeekendOffer("I'd like to order the " + it.name + " weekend offer.");
+          beginWeekendOffer("I'd like to order the " + it.name + " Weekend Special.");
         } },
-          h("span", { class: "weekend-offer-name" }, it.name),
-          h("strong", {}, money(it.price)),
-          h("small", {}, "Order with Vindhu →"));
+          h("span", { class: "weekend-offer-art " + weekendOfferArtClass(it.id), "aria-hidden": "true" }),
+          h("span", { class: "weekend-offer-card-copy" },
+            h("span", { class: "weekend-offer-name" }, it.name),
+            h("strong", {}, money(it.price)),
+            h("small", {}, "Weekend Special · Order with Vindhu →")));
       });
       box.replaceChildren(
         h("div", { class: "weekend-offer-head" },
-          h("div", {}, h("span", { class: "weekend-offer-label" }, offer.label || "Only this weekend"),
-            h("h3", {}, offer.title || "Weekend Special")),
-          h("button", { class: "weekend-offer-view", type: "button", onclick: function (e) { showMenu(e, "Weekend Special"); } }, "View special →")),
-        h("div", { class: "weekend-offer-grid" }, cards)
+          h("span", { class: "weekend-offer-label" }, offer.label || "Only this weekend"),
+          h("h3", {}, offer.title || "Weekend Special"),
+          h("p", {}, "Three special meals at this weekend-only price.")),
+        h("div", { class: "weekend-offer-grid" }, cards),
+        h("div", { class: "weekend-offer-note" },
+          h("b", {}, "Want the regular Weekend Combos instead? "),
+          h("span", {}, "Order them from the Weekend Combos section at their normal prices.")),
+        h("div", { class: "weekend-offer-actions" },
+          h("button", { class: "weekend-offer-view primary", type: "button", onclick: function (e) { showMenu(e, "Weekend Special"); } }, "View Weekend Special →"),
+          h("button", { class: "weekend-offer-view secondary", type: "button", onclick: function (e) { showMenu(e, "Weekend Combos"); } }, "Regular Weekend Combos →"))
       );
     });
   }
@@ -1032,11 +1047,11 @@
         }) : null;
       }).filter(Boolean);
       if (offerItems.length) panels.push(["Weekend Special", h("div", { class: "panel weekend-offer-panel" },
-        h("p", { class: "lead" }, (m.weekendOffer.label || "Only this weekend") + " · These are separate Weekend Special prices. Regular Weekend Combos keep their normal prices."),
+        h("p", { class: "lead" }, (m.weekendOffer.label || "Only this weekend") + " · These prices apply only to the Weekend Special. Want the regular choices? Use the Weekend Combos tab at normal prices."),
         offerItems.map(dish))]);
     }
-    if (combos.length) panels.push(["Combos", h("div", { class: "panel" },
-      h("p", { class: "lead" }, "Cooked fresh for weekend pickup. Order at least " + m.noticeHrs + " hours ahead."),
+    if (combos.length) panels.push(["Weekend Combos", h("div", { class: "panel" },
+      h("p", { class: "lead" }, "Regular Weekend Combos at normal menu prices. These are separate from any limited Weekend Special. Order at least " + m.noticeHrs + " hours ahead."),
       combos.map(dish))]);
     if (plans.length || other.length) panels.push(["Weekly plans", h("div", { class: "panel" },
       h("p", { class: "lead" }, "Weekly plans plus a one-day Full Meal option. Prices in CAD."),
