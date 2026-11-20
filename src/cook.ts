@@ -46,8 +46,9 @@ export function cookSummary(orders: Order[], menu: MenuItem[], date?: string): C
     const by = new Map<string, { name: string; qty: number; plan: boolean; who: string[] }>();
     for (const o of byDay.get(k)!) {
       for (const it of o.items) {
-        const key = it.id;
-        const e = by.get(key) ?? { name: it.name, qty: 0, plan: it.pack === "plan", who: [] };
+        const special = it.promotion === "weekend_special";
+        const key = `${it.id}|${special ? "weekend_special" : "regular"}`;
+        const e = by.get(key) ?? { name: it.name + (special ? " (Weekend Special)" : ""), qty: 0, plan: it.pack === "plan", who: [] };
         e.qty += portions(it);
         if (!e.who.includes(o.name)) e.who.push(o.name);
         by.set(key, e);
