@@ -90,6 +90,7 @@ export class Store {
       const ids = (w.items ?? []).map((x) => x.menuId).join(",");
       const prices = (w.items ?? []).map((x) => x.price).join(",");
       if (ids === "kobbari_annam_fry,bagara_chicken_fry,kheema_fry" && prices === "12,12,12") {
+        w.title = "Weekend Special";
         w.items = [
           { menuId: "kobbari_annam_fry", price: 12 },
           { menuId: "bagara_chicken_fry", price: 12 },
