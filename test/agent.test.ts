@@ -41,6 +41,33 @@ test("happy path: model proposes, CODE reads back, customer says yes, CODE place
   assert.match(t.store.getCustomer("+15198043658")!.profile, /Last order/);
 });
 
+test("weekday menu context lets 'order this' select the $18 single-day Full Meal", async () => {
+  const t = setup({ judge: (ctx) => {
+    if (/what is today's weekday order/i.test(ctx.message)) return { intent: { label: "question", prob: 0.98, confidence: 0.95 } };
+    return {};
+  } });
+
+  t.llm.push(modelReply({
+    reply: "Friday is our healthy combo day. Breakfast: 1 thatte idli. Lunch & dinner: today's Friday Full Meal menu.",
+    stage: "browsing",
+  }));
+  const info = await t.say("What is today's weekday order?");
+  assert.match(info.replies[0]!, /Friday is our healthy combo day/);
+
+  t.llm.push(modelReply({
+    reply: "Sure — the single-day Full Meal is $18. What pickup time would you like?",
+    items: [{ id: "full_meal_day", qty: 1, pack: "single", asked_for: "this" }],
+    pickup: null,
+    stage: "collecting",
+  }));
+  const pick = await t.say("Would like to order this");
+  assert.equal(pick.issues.length, 0);
+  const draft = t.store.getDraft("+15198043658")!;
+  assert.deepEqual([draft.items[0]!.id, draft.items[0]!.amt], ["full_meal_day", 18]);
+  assert.match(pick.replies[0]!, /\$18/);
+  assert.doesNotMatch(pick.replies[0]!, /price.*confirm|flagged|reach out/i);
+});
+
 test("single-day Full Meal is $18 and confirms without an owner approval step", async () => {
   const t = setup({ judge: yesJudge });
   const r1 = await orderAndReadBack(
