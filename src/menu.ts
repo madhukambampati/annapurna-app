@@ -61,8 +61,39 @@ export function extrasMenu(): MenuItem[] {
   ];
 }
 
+/** Explicit one-day version of the $90 Full Meal Plan. This is a business price, not an AI calculation. */
+export function singleDayFullMeal(): MenuItem {
+  return {
+    id: "full_meal_day",
+    name: "Single-day Full Meal",
+    kind: "item",
+    single: 18,
+    bogo: null,
+    plan: null,
+    unit: "per person per day",
+    verify: false,
+    live: true,
+    recipe: "",
+    days: [1, 2, 3, 4, 5],
+    desc: "One weekday from the Full Meal Plan: that day's breakfast + lunch + dinner, with rice.",
+    aliases: [
+      "single day full meal",
+      "single-day full meal",
+      "one day full meal",
+      "today's full meal",
+      "todays full meal",
+      "today's weekday order",
+      "todays weekday order",
+      "weekday full meal",
+      "weekday meal",
+      "friday healthy combo",
+      "healthy combo day",
+    ],
+  };
+}
+
 /** Bump when the poster prices or combos change. Existing databases get the update once. */
-export const MENU_VERSION = 4;
+export const MENU_VERSION = 5;
 
 /**
  * Brings a stored menu up to the poster version. Only names, prices, descriptions and aliases of combos
@@ -80,6 +111,8 @@ export function upgradeMenu(stored: MenuItem[], fromVersion = 0): MenuItem[] {
     Object.assign(cur, { name: p.name, single: p.single, bogo: p.bogo, desc: p.desc, aliases: p.aliases, verify: false });
     if (p.days) cur.days = p.days;
   }
+  // Version 5 adds an explicit $18 one-day Full Meal Plan option. Once added, owner edits survive future starts.
+  if (fromVersion < 5 && !out.some((m) => m.id === "full_meal_day")) out.push(singleDayFullMeal());
   // Extras are only added when missing, so prices Maddy changed on the desk are kept.
   for (const x of extrasMenu()) if (!out.some((m) => m.id === x.id)) out.push(x);
   return out;
@@ -109,6 +142,7 @@ export function defaultMenu(): MenuItem[] {
       desc: "5 days of breakfast.",
       aliases: ["only breakfast plan", "breakfast plan", "breakfast only"],
     },
+    singleDayFullMeal(),
     ...extrasMenu(),
   ];
 }
@@ -121,7 +155,7 @@ export const DEFAULT_NOTES =
   "Thursday, breakfast 2 uttapam. Lunch and dinner: rice 24oz box (600 g), veg curry or sambar 24oz box (450 to 500 g), papad.\n" +
   "Friday, healthy combo, breakfast 1 thatte idli. Lunch and dinner alternate by week. Week 1: rice 16oz box (300 g), 1 ragi mudha, chicken curry 24oz box (450 to 500 g). Week 2: coconut rice 24oz box (600 g) and chicken curry 24oz box (450 to 500 g).\n" +
   "Chicken is served 2 days a week. Everything is fresh homemade with no preservatives.\n" +
-  "Single weekday boxes have no prices set here, so never quote a price for them. Annapurna Home Foods confirms those.";
+  "A single weekday of the Full Meal Plan is available for $18 per person. It includes that weekday's breakfast + lunch + dinner with rice. Other unpriced individual weekday components are not sold separately unless they are listed as menu items.";
 
 export const DEFAULT_WEEKLY =
   "Monday: Breakfast 4 idli. Lunch and dinner alternate by week: chicken pulav with Mirchi Ka Salan and raita, or Bagara rice with Kodi Vepudu and raita.\n" +
