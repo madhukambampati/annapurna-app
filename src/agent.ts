@@ -200,8 +200,11 @@ function deterministicFreshDraft(text: string, menu: MenuItem[], now: number, se
   const wantsBogo = /\b(?:bogo|buy\s*1\s*get\s*1|buy\s+one\s+get\s+one)\b/i.test(text);
   const pack = item.kind === "plan" ? "plan" : item.kind === "combo" && wantsBogo ? "bogo" : "single";
   if (pack === "bogo" && item.bogo == null) return null;
-  const priceMenu = effectiveMenu(menu, settings, now, pickup);
-  const orderItem = { id: item.id, name: item.name, qty, pack, amt: lineAmt(priceMenu, { id: item.id, qty, pack }) } as Draft["items"][number];
+  const liveOffer = activeWeekendOffer(settings, now);
+  const promotion = pack === "single" && WEEKEND_SPECIAL.test(text) &&
+    !!liveOffer?.items.some((x) => x.menuId === item.id) ? "weekend_special" as const : undefined;
+  const draftLine = { id: item.id, name: item.name, qty, pack, ...(promotion ? { promotion } : {}) } as Omit<Draft["items"][number], "amt">;
+  const orderItem = { ...draftLine, amt: orderLineAmt(menu, draftLine, settings, now, pickup) } as Draft["items"][number];
   const draft: Draft = {
     items: [orderItem],
     pickup_local: pickup,
@@ -349,7 +352,7 @@ export class Agent {
 
     const now = this.now();
     const settings = store.getSettings();
-    const menu = effectiveMenu(store.getMenu(), settings, now);
+    const menu = store.getMenu();
     let customer = store.upsertCustomer(msg.from, msg.name);
     const before = store.getMessages(msg.from, 40);
     const lastShop = [...before].reverse().find((m) => m.who === "agent" || m.who === "owner")?.text ?? null;
@@ -702,7 +705,7 @@ export class Agent {
   ): Promise<void> {
     const { store } = this.d;
     const now = this.now();
-    const menu = effectiveMenu(store.getMenu(), settings, now);
+    const menu = store.getMenu();
     // A clarify turn, or a customer who only asked a question, must not start or change the order.
     const frozen = r.kind === "clarify" || (r.kind === "normal" && r.freeze === true);
     const hint = r.kind === "clarify" ? r.hint : frozen ? "The customer is only asking a question or chatting. Answer it. Do not start or change the order, and keep stage as it is." : r.kind === "owner_topic" ? "This is a topic only Maddy can settle (payment, delivery, refund, allergy, custom or complaint). Do not answer it yourself. Say warmly that Annapurna Home Foods will reach out to them here in this chat. Never name Maddy to the customer." : undefined;
@@ -920,7 +923,7 @@ export class Agent {
 
   /** The read-back is built here, not by the model, so the total, dates and items are always right. */
   readBack(d: Draft, s: Settings, now: number, open: Order[] = []): string {
-    const menu = effectiveMenu(this.d.store.getMenu(), s, now, d.pickup_local);
+    const menu = this.d.store.getMenu();
     const lines = d.items.map((it) => `- ${itemLabel(it)}: ${it.amt == null ? "price to be confirmed" : money(it.amt)}`);
     const t = total(d.items);
     const flags = checkFlags(d.items, d.pickup_local, s, now, menu, open);
@@ -985,7 +988,7 @@ export class Agent {
       return;
     }
 
-    const people = customHeadcount(custom.request) ?? bulkMenuQuantity(custom.request, effectiveMenu(store.getMenu(), s, now));
+    const people = customHeadcount(custom.request) ?? bulkMenuQuantity(custom.request, store.getMenu());
     const menuNames = [...new Set(draft.items.map((it) => it.name))];
     const requestName = custom.request
       .replace(/^\s*(?:hi\s+)?(?:i\s+(?:would\s+like|want|need)\s+to\s+order\s*)/i, "")
@@ -1049,7 +1052,7 @@ export class Agent {
       out.replies.push(outsideHoursReply(s, now, true));
       return;
     }
-    const menu = effectiveMenu(store.getMenu(), s, now, draft.pickup_local);
+    const menu = store.getMenu();
     // The menu may have changed between the read-back and the yes. Never charge a price the
     // customer did not see, and never place a combo that was switched off in the meantime.
     const off = draft.items.filter((it) => {
