@@ -634,9 +634,9 @@ function renderWeekendOffers() {
   const used = new Set((d.items || []).map((x) => x.menuId));
 
   const title = h("input", { type: "text", maxlength: "60", value: d.title || "Weekend Special", "aria-label": "Weekend offer title",
-    oninput: (e) => { d.title = e.target.value; render(); } });
+    onchange: (e) => { d.title = e.target.value; render(); } });
   const promo = h("input", { type: "text", maxlength: "60", value: d.label || "Only this weekend", "aria-label": "Weekend offer label",
-    oninput: (e) => { d.label = e.target.value; render(); } });
+    onchange: (e) => { d.label = e.target.value; render(); } });
   const startDate = h("input", { type: "date", value: d.startDate || "", "aria-label": "Weekend offer start date",
     onchange: (e) => { d.startDate = e.target.value; render(); } });
   const endDate = h("input", { type: "date", value: d.endDate || "", "aria-label": "Weekend offer end date",
