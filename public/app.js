@@ -300,30 +300,32 @@
   }
 
   function renderWeekendOffer() {
-    var box = $("homeWeekendOffer");
-    if (!box) return;
     var offer = menuData && menuData.weekendOffer;
-    if (!offer || !offer.items || !offer.items.length) {
-      box.hidden = true;
-      box.replaceChildren();
-      return;
-    }
-    box.hidden = false;
-    var cards = offer.items.map(function (it) {
-      return h("button", { class: "weekend-offer-card", type: "button", onclick: function () {
-        beginWeekendOffer("I'd like to order the " + it.name + " weekend offer.");
-      } },
-        h("span", { class: "weekend-offer-name" }, it.name),
-        h("strong", {}, money(it.price)),
-        h("small", {}, "Order with Vindhu →"));
+    ["homeWeekendOffer", "onboardWeekendOffer"].forEach(function (id) {
+      var box = $(id);
+      if (!box) return;
+      if (!offer || !offer.items || !offer.items.length) {
+        box.hidden = true;
+        box.replaceChildren();
+        return;
+      }
+      box.hidden = false;
+      var cards = offer.items.map(function (it) {
+        return h("button", { class: "weekend-offer-card", type: "button", onclick: function () {
+          beginWeekendOffer("I'd like to order the " + it.name + " weekend offer.");
+        } },
+          h("span", { class: "weekend-offer-name" }, it.name),
+          h("strong", {}, money(it.price)),
+          h("small", {}, "Order with Vindhu →"));
+      });
+      box.replaceChildren(
+        h("div", { class: "weekend-offer-head" },
+          h("div", {}, h("span", { class: "weekend-offer-label" }, offer.label || "Only this weekend"),
+            h("h3", {}, offer.title || "Weekend Specials")),
+          h("button", { class: "weekend-offer-view", type: "button", onclick: function (e) { showMenu(e, "Weekend Offers"); } }, "View offers →")),
+        h("div", { class: "weekend-offer-grid" }, cards)
+      );
     });
-    box.replaceChildren(
-      h("div", { class: "weekend-offer-head" },
-        h("div", {}, h("span", { class: "weekend-offer-label" }, offer.label || "Only this weekend"),
-          h("h3", {}, offer.title || "Weekend Specials")),
-        h("button", { class: "weekend-offer-view", type: "button", onclick: function (e) { showMenu(e, "Weekend Offers"); } }, "View offers →")),
-      h("div", { class: "weekend-offer-grid" }, cards)
-    );
   }
 
   function renderHomeActive() {
