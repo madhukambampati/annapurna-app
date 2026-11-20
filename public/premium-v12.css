@@ -345,13 +345,13 @@ html body.customer-mode .weekend-offer-card{
 }
 html body.customer-mode .weekend-offer-card:hover{transform:translateY(-2px);box-shadow:0 14px 26px -18px rgba(0,0,0,.65);border-color:#f0cf64}
 html body.customer-mode .weekend-offer-art{
-  min-height:132px;background-image:url('/assets/combos_photo.png?v=1');background-size:330% auto;background-repeat:no-repeat;
+  min-height:132px;background-image:url('/assets/weekend-special-foods.webp?v=1');background-size:300% 100%;background-repeat:no-repeat;
   border-right:1px solid #e4d4a6
 }
-html body.customer-mode .weekend-offer-art.art-kobbari{background-position:4% center}
-html body.customer-mode .weekend-offer-art.art-bagara{background-position:49% center}
-html body.customer-mode .weekend-offer-art.art-kheema{background-image:url('/assets/food_platter.png?v=1');background-size:cover;background-position:center}
-html body.customer-mode .weekend-offer-art.art-generic{background-size:cover;background-position:center}
+html body.customer-mode .weekend-offer-art.art-kobbari{background-position:left center}
+html body.customer-mode .weekend-offer-art.art-bagara{background-position:center center}
+html body.customer-mode .weekend-offer-art.art-kheema{background-position:right center}
+html body.customer-mode .weekend-offer-art.art-generic{background-position:left center}
 html body.customer-mode .weekend-offer-card-copy{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:5px;padding:13px}
 html body.customer-mode .weekend-offer-name{font-weight:800;line-height:1.18;font-size:15px;color:#123e2d}
 html body.customer-mode .weekend-offer-card strong{font:800 27px/1 var(--p-display);color:#a76d00}
