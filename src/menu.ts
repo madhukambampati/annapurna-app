@@ -177,7 +177,39 @@ export function defaultSettings(): Settings {
     contactInstagram: "annapurna_hometaste",
     contactPhone: "",
     dayOpen: {},
+    // Seed the manager with common dishes/prices, but keep it OFF so the live site is unchanged
+    // until the owner deliberately sets dates and activates it.
+    weekendOffer: {
+      active: false,
+      title: "Weekend Specials",
+      label: "Only this weekend",
+      startDate: "",
+      endDate: "",
+      items: [
+        { menuId: "kobbari_annam_fry", price: 12 },
+        { menuId: "bagara_chicken_fry", price: 12 },
+        { menuId: "kheema_fry", price: 12 },
+      ],
+    },
   };
+}
+
+/** Returns the configured weekend promotion only while its inclusive date range is live. */
+export function activeWeekendOffer(s: Settings, now: number) {
+  const offer = s.weekendOffer;
+  if (!offer?.active || !offer.startDate || !offer.endDate || offer.startDate > offer.endDate) return null;
+  const today = epochToLocal(now, s.tz).slice(0, 10);
+  if (today < offer.startDate || today > offer.endDate) return null;
+  const items = (offer.items ?? []).filter((x) => x && typeof x.menuId === "string" && Number.isFinite(x.price) && x.price > 0);
+  return items.length ? { ...offer, items } : null;
+}
+
+/** Menu used for customer quotes/orders. Promotional prices override only the configured single price. */
+export function effectiveMenu(menu: MenuItem[], s: Settings, now: number): MenuItem[] {
+  const offer = activeWeekendOffer(s, now);
+  if (!offer) return menu;
+  const prices = new Map(offer.items.map((x) => [x.menuId, x.price]));
+  return menu.map((m) => prices.has(m.id) ? { ...m, single: prices.get(m.id)! } : m);
 }
 
 /** Daily business switch. Missing dates intentionally default open so an old closure never carries into tomorrow. */
