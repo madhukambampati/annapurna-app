@@ -75,8 +75,30 @@ export class Store {
     this.migrateReviewsForInvites();
     this.migrateGroupReviewLinks();
     this.migrateMenu();
+    this.migrateWeekendSpecialSeed();
     this.seedOct2026WeekendClosure();
     this.initializeFreshVindhuOwnerChat();
+  }
+
+  /** Correct the first Weekend Special seed only if it is still exactly the old untouched draft. */
+  private migrateWeekendSpecialSeed(): void {
+    const key = "weekend_special_seed_v2";
+    if (this.db.prepare("SELECT 1 FROM kv WHERE key = ?").get(key)) return;
+    const s = this.getSettings();
+    const w = s.weekendOffer;
+    if (w && !w.active && w.title === "Weekend Specials" && w.label === "Only this weekend") {
+      const ids = (w.items ?? []).map((x) => x.menuId).join(",");
+      const prices = (w.items ?? []).map((x) => x.price).join(",");
+      if (ids === "kobbari_annam_fry,bagara_chicken_fry,kheema_fry" && prices === "12,12,12") {
+        w.items = [
+          { menuId: "kobbari_annam_fry", price: 12 },
+          { menuId: "bagara_chicken_fry", price: 12 },
+          { menuId: "chicken_kheema_pulao", price: 12 },
+        ];
+        this.putSettings(s);
+      }
+    }
+    this.kvPut(key, { at: Date.now() });
   }
 
   /**
