@@ -49,6 +49,25 @@ test("happy path: model proposes, CODE reads back, customer says yes, CODE place
   assert.match(t.store.getCustomer("+15198043658")!.profile, /Last order/);
 });
 
+test("Weekend Special chat always points customers to regular Weekend Combos separately", async () => {
+  const t = setup();
+  const settings = t.store.getSettings();
+  settings.weekendOffer = {
+    active: true, title: "Weekend Special", label: "Only this weekend",
+    startDate: "2026-09-23", endDate: "2026-09-27",
+    items: [{ menuId: "bagara_chicken_fry", price: 12 }],
+  };
+  t.store.putSettings(settings);
+  t.llm.push(modelReply({
+    reply: "Our Weekend Special includes Bagara Rice and Chicken Fry for $12.",
+    stage: "browsing",
+  }));
+  const r = await t.say("What weekend offers are running?");
+  assert.match(r.replies[0]!, /Weekend Special/i);
+  assert.match(r.replies[0]!, /regular Weekend Combos/i);
+  assert.match(r.replies[0]!, /Weekend Combos section at normal prices/i);
+});
+
 test("explicit Weekend Special uses $12 while the regular combo stays at its normal price", async () => {
   const t = setup({ judge: yesJudge });
   const settings = t.store.getSettings();
