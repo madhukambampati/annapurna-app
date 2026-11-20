@@ -136,7 +136,7 @@ export function sanitizeItems(raw: unknown, menu: MenuItem[], weekendSpecialIds:
       continue;
     }
     const pack: Pack = m.kind === "plan" ? "plan" : m.kind === "combo" && r.pack === "bogo" ? "bogo" : "single";
-    const askedForSpecial = /\bweekend\s+(?:special|offer)\b|\bonly\s+this\s+weekend\b/i.test(asked);
+    const askedForSpecial = /\bweekend\s+(?:specials?|offers?)\b|\bonly\s+this\s+weekend\b/i.test(asked);
     const promotion = pack === "single" && weekendSpecialIds.has(m.id) &&
       (r.promotion === "weekend_special" || askedForSpecial) ? "weekend_special" as const : undefined;
     const existing = items.find((x) => x.id === m.id && x.pack === pack && x.promotion === promotion);
