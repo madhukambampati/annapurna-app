@@ -303,11 +303,16 @@ function ticket(o) {
     return act(`/api/orders/${o.id}/status`, { status: to });
   } }, txt);
   const isCustom = o.items.some((i) => String(i.id || "").startsWith("custom:"));
+  const isWeekendSpecial = o.items.some((i) => i.promotion === "weekend_special");
+  const cancelAlert = state.alerts.find((a) => !a.done && a.orderId === o.id && /^Cancellation requested/i.test(a.note || ""));
   const statusLabel = { hold: "Needs approval", cook: "To cook", ready: "Ready for pickup", done: "Picked up", cancelled: "Cancelled" }[o.status] || o.status;
-  return h("article", { class: "ticket" + (isCustom ? " custom-ticket" : ""), "data-status": o.status },
+  return h("article", { class: "ticket" + (isCustom ? " custom-ticket" : "") + (cancelAlert ? " cancellation-ticket" : ""), "data-status": o.status },
     h("div", { class: "ticket-band" }, h("span", { class: "ticket-status" }, statusLabel), h("span", { class: "ticket-no" }, "#" + o.id)),
     h("div", { class: "when" }, when(o.pickup)),
-    h("div", { class: "ticket-title" }, h("b", {}, o.name), isCustom ? h("span", { class: "flag custom-flag" }, "Custom") : null,
+    h("div", { class: "ticket-title" }, h("b", {}, o.name),
+      isCustom ? h("span", { class: "flag custom-flag" }, "Custom") : null,
+      isWeekendSpecial ? h("span", { class: "flag" }, "Weekend Special") : null,
+      cancelAlert ? h("span", { class: "flag" }, "Cancellation requested") : null,
       isWeb(o.waId) ? h("button", { class: "ghost ticket-chat", onclick: () => openChat(o.waId), "aria-label": "Open chat with " + o.name }, "Chat") : null),
     o.contact ? h("div", { class: "contact" }, o.contact) : null,
     h("ul", {}, o.items.map((i) => h("li", {}, label(i))), o.notes ? h("li", { class: "ticket-note" }, "Note: " + o.notes) : null),
