@@ -266,7 +266,7 @@ function explicitCustomerNotes(text: string): string[] {
   const spice = /\b(extra\s+spicy|less\s+spicy|no\s+spice|mild|medium(?:\s+spice)?|spicy)\b/i.exec(text);
   if (spice?.[1]) {
     const v = spice[1].toLowerCase();
-    add(v === "spicy" ? "Spicy" : v.split(/\s+/).map((w) => w[0]!.toUpperCase() + w.slice(1)).join(" "));
+    add(v.charAt(0).toUpperCase() + v.slice(1));
   }
 
   if (/\bno\s+extras\b/i.test(text)) add("No extras");
@@ -312,6 +312,7 @@ function explicitUnknownDish(text: string, menu: MenuItem[]): string | null {
   if (order?.[1]) candidate = order[1];
 
   candidate = candidate
+    .replace(/^\s*\d{1,3}\s*(?:x\s+)?/i, "")
     .replace(/\b(?:pickup|pick\s*up)\b[\s\S]*$/i, "")
     .replace(/\b(?:this|next)?\s*(?:sun(?:day)?|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?)\b[\s\S]*$/i, "")
     .replace(/\b(?:today|tomorrow)\b[\s\S]*$/i, "")
@@ -549,7 +550,7 @@ export class Agent {
         out.issues.push("weekend_special_unavailable");
         out.replies.push(
           `The Weekend Special is only valid for pickups from ${dayLabel(offerCfg.startDate)} through ${dayLabel(offerCfg.endDate)}. ` +
-          `It isn't available for ${dayLabel(pickupDate)}, so I won't use the special price or submit it for owner approval. ` +
+          `It isn't available for ${dayLabel(pickupDate)}, so I won't use the special price or create a special order for that date. ` +
           (item ? `If you want the regular ${item.name}${regular}, tell me you want the regular Weekend Combo.` : "You can choose a regular Weekend Combo at its normal price instead.")
         );
         for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
