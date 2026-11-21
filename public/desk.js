@@ -332,7 +332,12 @@ function ticket(o) {
       cancelAlert ? h("span", { class: "flag" }, "Cancellation requested") : null,
       isWeb(o.waId) ? h("button", { class: "ghost ticket-chat", onclick: () => openChat(o.waId), "aria-label": "Open chat with " + o.name }, "Chat") : null),
     o.contact ? h("div", { class: "contact" }, o.contact) : null,
-    h("ul", {}, o.items.map((i) => h("li", {}, label(i, o))), o.notes ? h("li", { class: "ticket-note" }, "Note: " + o.notes) : null),
+    h("ul", {}, o.items.map((i) => {
+      const special = weekendSpecialLine(i, o);
+      return h("li", { class: special ? "ticket-special-line" : "" },
+        h("span", {}, label(i, o)),
+        special ? h("span", { class: "flag ticket-special-flag" }, "Weekend Special") : null);
+    }), o.notes ? h("li", { class: "ticket-note" }, "Note: " + o.notes) : null),
     h("div", { class: "row ticket-total" }, h("b", {}, money(totalOf(o.items))), o.flags.map((f) => h("span", { class: "flag" }, f))),
     h("div", { class: "row ticket-actions" },
       o.status === "hold" ? [b("cook", "Accept"), b("cancelled", "Decline", true)] : null,
