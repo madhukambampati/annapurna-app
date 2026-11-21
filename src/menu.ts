@@ -268,7 +268,8 @@ export const PICKUP_CLOSE_LABEL = "7:00 PM";
 
 export function pickupOutsideHours(pickupLocal: string | null | undefined): boolean {
   if (!pickupLocal || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(pickupLocal)) return false;
-  const [hh, mm] = pickupLocal.slice(11, 16).split(":").map(Number);
+  const hh = Number(pickupLocal.slice(11, 13));
+  const mm = Number(pickupLocal.slice(14, 16));
   const mins = hh * 60 + mm;
   return mins < PICKUP_OPEN_HOUR * 60 || mins > PICKUP_CLOSE_HOUR * 60;
 }
