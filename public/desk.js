@@ -91,7 +91,24 @@ function showErr(e) {
 
 const ico = (name) => h("span", { class: "ico ico-" + name, "aria-hidden": "true" });
 const money = (n) => (n == null ? "Price TBC" : "$" + Math.round(n * 100) / 100);
-const label = (it) => it.promotion === "weekend_special"
+function weekendSpecialLine(it, order) {
+  if (it.promotion === "weekend_special") return true;
+  const offer = state.settings && state.settings.weekendOffer;
+  if (!offer || !order || !order.pickup || it.pack !== "single" || it.amt == null) return false;
+  const day = String(order.pickup).slice(0, 10);
+  if (!offer.startDate || !offer.endDate || day < offer.startDate || day > offer.endDate) return false;
+  const promo = (offer.items || []).find((x) => x.menuId === it.id);
+  if (!promo) return false;
+
+  // Fallback only when the promotional price is genuinely different from the regular price.
+  // This avoids falsely labelling Chicken Kheema Pulao, whose regular and promo prices are both $12.
+  const menuItem = (state.menu || []).find((x) => x.id === it.id);
+  const expected = Number(promo.price) * Number(it.qty || 0);
+  const regular = menuItem && menuItem.single != null ? Number(menuItem.single) * Number(it.qty || 0) : null;
+  return Number.isFinite(expected) && Math.abs(Number(it.amt) - expected) < 0.001 &&
+    (regular == null || Math.abs(expected - regular) > 0.001);
+}
+const label = (it, order) => weekendSpecialLine(it, order)
   ? `${it.qty} x ${it.name} (Weekend Special)`
   : it.pack === "bogo" ? `${it.qty} x ${it.name} (Buy 1 Get 1)`
   : it.pack === "plan" ? `${it.qty} x ${it.name} (${it.qty} ${it.qty > 1 ? "people" : "person"})`
@@ -303,7 +320,7 @@ function ticket(o) {
     return act(`/api/orders/${o.id}/status`, { status: to });
   } }, txt);
   const isCustom = o.items.some((i) => String(i.id || "").startsWith("custom:"));
-  const isWeekendSpecial = o.items.some((i) => i.promotion === "weekend_special");
+  const isWeekendSpecial = o.items.some((i) => weekendSpecialLine(i, o));
   const cancelAlert = state.alerts.find((a) => !a.done && a.orderId === o.id && /^Cancellation requested/i.test(a.note || ""));
   const statusLabel = { hold: "Needs approval", cook: "To cook", ready: "Ready for pickup", done: "Picked up", cancelled: "Cancelled" }[o.status] || o.status;
   return h("article", { class: "ticket" + (isCustom ? " custom-ticket" : "") + (cancelAlert ? " cancellation-ticket" : ""), "data-status": o.status },
@@ -315,7 +332,7 @@ function ticket(o) {
       cancelAlert ? h("span", { class: "flag" }, "Cancellation requested") : null,
       isWeb(o.waId) ? h("button", { class: "ghost ticket-chat", onclick: () => openChat(o.waId), "aria-label": "Open chat with " + o.name }, "Chat") : null),
     o.contact ? h("div", { class: "contact" }, o.contact) : null,
-    h("ul", {}, o.items.map((i) => h("li", {}, label(i))), o.notes ? h("li", { class: "ticket-note" }, "Note: " + o.notes) : null),
+    h("ul", {}, o.items.map((i) => h("li", {}, label(i, o))), o.notes ? h("li", { class: "ticket-note" }, "Note: " + o.notes) : null),
     h("div", { class: "row ticket-total" }, h("b", {}, money(totalOf(o.items))), o.flags.map((f) => h("span", { class: "flag" }, f))),
     h("div", { class: "row ticket-actions" },
       o.status === "hold" ? [b("cook", "Accept"), b("cancelled", "Decline", true)] : null,
