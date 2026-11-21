@@ -291,8 +291,14 @@ function explicitUnknownDish(text: string, menu: MenuItem[]): string | null {
   const foodWord = /\b(?:biryani|pulao|pulav|rice|chicken|mutton|lamb|goat|paneer|dosa|idli|vada|punugulu|curry|fry|kheema|keema|sambar|dal|roti|naan|upma|meal|combo)\b/i;
   if (!foodWord.test(text)) return null;
 
-  let candidate = text.trim();
-  const order = /\b(?:i\s+would\s+like(?:\s+to\s+order)?|i\s+want|i\s+need|order|give\s+me|get\s+me|take)\s+(?:\d{1,2}\s+)?(.+)/i.exec(candidate);
+  // If a clear live menu item is already present, this is an order/edit with modifiers
+  // ("spicy", "no extras", notes, pickup date), not an unknown food request.
+  if (deterministicFreshMenuItem(text, menu)) return null;
+
+  let candidate = text.trim()
+    .replace(/\bTEST\s+ORDER\s*[-–—:]?\s*DO\s+NOT\s+COOK\b/ig, " ")
+    .replace(/\b(?:note|notes|special\s+instructions?)\s*[:=-]?\s*[^,;]+/ig, " ");
+  const order = /\b(?:i\s+(?:would\s+like|would\s+like\s+to\s+order|want|need)|i['’]d\s+like|give\s+me|get\s+me|take|order)\s+(?:\d{1,2}\s+)?(.+)/i.exec(candidate);
   if (order?.[1]) candidate = order[1];
 
   candidate = candidate
@@ -558,7 +564,26 @@ export class Agent {
     if (!draft?.custom && unknownDish) {
       out.route = "unknown_dish";
       out.issues.push("unknown_dish");
-      out.replies.push(`Sorry, ${unknownDish} isn't on our current menu. I haven't changed your existing order. Please choose an item from the menu, or ask me what's available.`);
+      out.replies.push(`I don't see "${unknownDish}" on the ordering menu. ${unknownDish} isn't on our current menu. I've let Annapurna Home Foods know. Would you like something from the menu instead?`);
+      await this.raise(
+        msg.from,
+        customer.name || msg.name || "Customer",
+        `Asked for "${unknownDish}", which is not on the menu.`,
+        null,
+        out,
+      );
+      // Preserve an existing draft, but keep the historical empty-draft contract for a
+      // fresh unknown request so follow-up menu questions continue normally.
+      if (!draft) {
+        store.putDraft(msg.from, {
+          items: [],
+          pickup_local: null,
+          customer_name: customer.name || msg.name || null,
+          notes: "",
+          readback_hash: null,
+          stage: "browsing",
+        });
+      }
       for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
       return out;
     }
