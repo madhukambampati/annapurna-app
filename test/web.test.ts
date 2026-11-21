@@ -171,6 +171,29 @@ describe("web: menu and sessions", () => {
       assert.ok(r.json.weekly.every((l: string) => !/never quote a price|Annapurna Home Foods confirms those/.test(l)), "agent-only notes are not shown to customers");
     }));
 
+  test("owner state labels a discounted Weekend Special order even if stored promotion metadata is missing", () =>
+    withRig(async ({ t, call }) => {
+      const settings = t.store.getSettings();
+      settings.weekendOffer = {
+        active: true, title: "Weekend Special", label: "Only this weekend",
+        startDate: "2026-09-23", endDate: "2026-09-27",
+        items: [{ menuId: "bagara_chicken_fry", price: 12 }],
+      };
+      t.store.putSettings(settings);
+      const bagara = t.store.getMenu().find((x) => x.id === "bagara_chicken_fry")!;
+      const order = t.store.insertOrder({
+        waId: "web:test-special", name: "Weekend Tester",
+        items: [{ id: bagara.id, name: bagara.name, qty: 2, pack: "single", amt: 24 }],
+        pickup: "2026-09-26T13:00", flags: ["Awaiting owner approval"], status: "hold",
+        notes: "", createdAt: NOW,
+      });
+
+      const state = await call("GET", "/api/state", { token: "secret" });
+      assert.equal(state.status, 200, state.text);
+      const item = state.json.orders.find((o: any) => o.id === order.id).items[0];
+      assert.equal(item.promotion, "weekend_special");
+    }));
+
   test("owner can edit the weekly plan shown to customers", () =>
     withRig(async ({ call }) => {
       const put = await call("PUT", "/api/settings", { token: "secret", body: { weeklyMenu: "Monday: 4 idli\n\nTuesday: 3 dosa" } });
