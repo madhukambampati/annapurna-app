@@ -310,15 +310,16 @@ test("known notes are canonicalized and not duplicated when model and customer r
     reply: "Okay.",
     items: [{ id: "chicken_pulao_salan", qty: 1, pack: "single", asked_for: "Chicken Pulao with Mirchi Ka Salan and Raitha" }],
     pickup: FRI_6PM,
-    notes: "Medium spice. TEST ORDER - DO NOT COOK. TEST ORDER - DO NOT COOK. Medium",
+    notes: "TEST ORDER - DO NOT COOK. Medium spice. Medium. No extras",
     stage: "awaiting_confirmation",
   }));
-  const r = await t.say("1 Chicken Pulao with Mirchi Ka Salan and Raitha, medium spice, TEST ORDER - DO NOT COOK, Friday 6pm");
+  const r = await t.say("1 Chicken Pulao with Mirchi Ka Salan and Raitha, medium spice, TEST ORDER - DO NOT COOK, no extras, Friday 6pm");
   const noteLine = r.replies[0]!.split("\n").find((x) => x.startsWith("Note:")) || "";
   assert.match(noteLine, /Medium spice/);
   assert.match(noteLine, /TEST ORDER - DO NOT COOK/);
   assert.equal((noteLine.match(/TEST ORDER - DO NOT COOK/g) || []).length, 1);
   assert.equal((noteLine.match(/Medium spice/gi) || []).length, 1);
+  assert.equal((noteLine.match(/No extras/gi) || []).length, 1);
   assert.doesNotMatch(noteLine, /\. Medium(?:\.|$)/i);
 });
 
