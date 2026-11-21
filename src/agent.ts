@@ -549,7 +549,7 @@ export class Agent {
         out.route = "weekend_special_expired";
         out.issues.push("weekend_special_unavailable");
         out.replies.push(
-          `The Weekend Special is only valid for pickups from ${dayLabel(offerCfg.startDate)} through ${dayLabel(offerCfg.endDate)}. ` +
+          `The Weekend Special is only available for the offer pickup dates and is only valid for pickups from ${dayLabel(offerCfg.startDate)} through ${dayLabel(offerCfg.endDate)}. ` +
           `It isn't available for ${dayLabel(pickupDate)}, so I won't use the special price or create a special order for that date. ` +
           (item ? `If you want the regular ${item.name}${regular}, tell me you want the regular Weekend Combo.` : "You can choose a regular Weekend Combo at its normal price instead.")
         );
