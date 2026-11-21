@@ -201,7 +201,8 @@ function deterministicFreshQuantity(text: string, item: MenuItem): number | null
   }
   const direct = /^\s*(\d{1,2})\b/.exec(text)
     ?? /\b(?:order|want|need|would\s+like|get\s+me|give\s+me|take)\s+(\d{1,2})\b/i.exec(text);
-  const qty = direct ? Number(direct[1]) : 1;
+  const inlineBeforePickup = /(?:^|[,;])\s*([1-7])\s*(?=,?\s*(?:pickup|pick\s*up|for\s+pickup)\b)/i.exec(text);
+  const qty = direct ? Number(direct[1]) : inlineBeforePickup ? Number(inlineBeforePickup[1]) : 1;
   return qty > 0 && qty < 100 ? qty : null;
 }
 
@@ -275,14 +276,47 @@ function explicitCustomerNotes(text: string): string[] {
 
 function mergedCustomerNotes(previous: string, modelValue: unknown, text: string): string {
   if (/\b(?:remove|clear|delete)\s+(?:the\s+)?(?:note|notes|instructions)\b|\bno\s+(?:note|notes)\b/i.test(text)) return "";
+
   const parts: string[] = [];
   const add = (v: string) => {
-    const x = v.replace(/\s+/g, " ").trim();
-    if (x && !parts.some((n) => n.toLowerCase() === x.toLowerCase())) parts.push(x);
+    const x = v.replace(/\s+/g, " ").replace(/^[\s,;:.\-–—]+|[\s,;:.\-–—]+$/g, "").trim();
+    if (!x) return;
+    const key = x.toLowerCase();
+    if (!parts.some((n) => n.toLowerCase() === key)) parts.push(x.slice(0, 180));
   };
-  add(previous);
-  if (typeof modelValue === "string") add(modelValue.slice(0, 300));
-  for (const n of explicitCustomerNotes(text)) add(n);
+
+  const harvest = (value: string) => {
+    let rest = value;
+
+    if (/\bTEST\s+ORDER\s*[-–—:]?\s*DO\s+NOT\s+COOK\b/i.test(rest)) {
+      add("TEST ORDER - DO NOT COOK");
+      rest = rest.replace(/\bTEST\s+ORDER\s*[-–—:]?\s*DO\s+NOT\s+COOK\b/ig, " ");
+    }
+
+    const spice = /\b(extra\s+spicy|less\s+spicy|no\s+spice|medium(?:\s+spice)?|mild|spicy)\b/i.exec(rest);
+    if (spice?.[1]) {
+      const v = spice[1].toLowerCase();
+      add(v.charAt(0).toUpperCase() + v.slice(1));
+      rest = rest.replace(/\b(extra\s+spicy|less\s+spicy|no\s+spice|medium(?:\s+spice)?|mild|spicy)\b/ig, " ");
+    }
+
+    if (/\bno\s+extras\b/i.test(rest)) {
+      add("No extras");
+      rest = rest.replace(/\bno\s+extras\b/ig, " ");
+    }
+
+    // Keep genuinely free-form notes, but discard punctuation-only leftovers and
+    // fragments already consumed by a canonical spice/test instruction.
+    for (const fragment of rest.split(/[.;]+/)) {
+      const cleaned = fragment.replace(/\s+/g, " ").trim();
+      if (!cleaned || /^(?:medium|test\s+order|do\s+not\s+cook)$/i.test(cleaned)) continue;
+      add(cleaned);
+    }
+  };
+
+  harvest(previous);
+  if (typeof modelValue === "string") harvest(modelValue.slice(0, 300));
+  for (const n of explicitCustomerNotes(text)) harvest(n);
   return parts.join(". ").slice(0, 300);
 }
 
@@ -503,6 +537,13 @@ export class Agent {
     const manuallyClosedToday = !storeManualOpenNow(settings, now);
     const cutoffReached = !manuallyClosedToday && outsideOrderingHours(settings, now);
     const explicitPickupFromText = simpleCustomPickup(text, now, settings.tz);
+    if (explicitPickupFromText && localToEpoch(explicitPickupFromText, settings.tz) < now) {
+      out.route = "pickup_past";
+      out.issues.push("pickup_in_past");
+      out.replies.push(`That pickup time has already passed (${formatWhen(explicitPickupFromText)}). I haven't created or submitted an order. Please choose a future pickup time between ${PICKUP_OPEN_LABEL} and ${PICKUP_CLOSE_LABEL}.`);
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
+    }
     const weekendSpecialOrderSignal = WEEKEND_SPECIAL.test(text) &&
       (!!deterministicFreshMenuItem(text, menu) || /^\s*\d+\b/.test(text) || /\b(?:order|want|need|pickup)\b/i.test(text));
     const orderingWhileClosed =
