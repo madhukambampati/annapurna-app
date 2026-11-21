@@ -719,12 +719,34 @@ export function createServer(d: ServerDeps): Server {
             .slice(0, 100);
           const contactOf = (waId: string) => store.getCustomer(waId)?.contact ?? "";
           const settings = store.getSettings();
+          const ownerMenu = store.getMenu();
+          const ownerOrders = store.listOrders().map((o) => {
+            const offer = settings.weekendOffer;
+            const pickupDay = o.pickup ? o.pickup.slice(0, 10) : "";
+            const inOfferRange = !!offer?.startDate && !!offer?.endDate && pickupDay >= offer.startDate && pickupDay <= offer.endDate;
+            const items = o.items.map((it) => {
+              if (it.promotion === "weekend_special" || !inOfferRange || it.pack !== "single" || it.amt == null) return it;
+              const promo = offer?.items.find((x) => x.menuId === it.id);
+              if (!promo) return it;
+              const regularItem = ownerMenu.find((x) => x.id === it.id);
+              const expectedPromo = promo.price * it.qty;
+              const expectedRegular = regularItem?.single == null ? null : regularItem.single * it.qty;
+              // Recover metadata only when the saved line total proves it used a discounted
+              // Weekend Special price. Equal-price specials cannot be inferred safely.
+              if (Math.abs(it.amt - expectedPromo) < 0.001 &&
+                  (expectedRegular == null || Math.abs(expectedPromo - expectedRegular) > 0.001)) {
+                return { ...it, promotion: "weekend_special" as const };
+              }
+              return it;
+            });
+            return { ...o, items, contact: contactOf(o.waId) };
+          });
           return send(req, res, 200, {
             reviews: store.listReviews(),
             reviewLinks: store.listReviewInvites().map((i) => ({ ...i, state: inviteState(i, now()) })),
-            orders: store.listOrders().map((o) => ({ ...o, contact: contactOf(o.waId) })),
+            orders: ownerOrders,
             alerts: store.listAlerts().map((a) => ({ ...a, contact: contactOf(a.waId) })),
-            menu: store.getMenu(), settings, storeStatus: businessStatus(settings, now()), ownerLaunchAt: store.ownerFreshLaunchAt(),
+            menu: ownerMenu, settings, storeStatus: businessStatus(settings, now()), ownerLaunchAt: store.ownerFreshLaunchAt(),
             customers, features: { simulator: cfg.simulator, web: w.enabled },
           });
         }
