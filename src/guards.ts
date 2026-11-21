@@ -123,15 +123,40 @@ export function sanitizeItems(raw: unknown, menu: MenuItem[], weekendSpecialIds:
       const resolutionMenu = askedForSpecial && weekendSpecialIds.size
         ? menu.filter((m) => weekendSpecialIds.has(m.id))
         : menu;
-      const res = resolveItem(asked, claimedId, resolutionMenu);
-      if (!res.ok) {
-        issues.push({ kind: "unclear_item", askedFor: res.askedFor, candidates: res.candidates });
-        continue;
+
+      if (askedForSpecial && resolutionMenu.length) {
+        const said = tokens(asked);
+        const exactSpecials = resolutionMenu.filter((m) => {
+          const want = tokens(m.name.replace(/\s+combo$/i, ""));
+          return want.size >= 2 && [...want].every((t) => said.has(t));
+        });
+        if (exactSpecials.length === 1) {
+          id = exactSpecials[0]!.id;
+          if (id !== claimedId) {
+            issues.push({ kind: "corrected_item", from: findItem(menu, claimedId)?.name ?? claimedId, to: exactSpecials[0]!.name });
+          }
+        } else {
+          const res = resolveItem(asked, claimedId, resolutionMenu);
+          if (!res.ok) {
+            issues.push({ kind: "unclear_item", askedFor: res.askedFor, candidates: res.candidates });
+            continue;
+          }
+          if (res.corrected) {
+            issues.push({ kind: "corrected_item", from: findItem(menu, claimedId)?.name ?? claimedId, to: findItem(menu, res.id)?.name ?? res.id });
+          }
+          id = res.id;
+        }
+      } else {
+        const res = resolveItem(asked, claimedId, resolutionMenu);
+        if (!res.ok) {
+          issues.push({ kind: "unclear_item", askedFor: res.askedFor, candidates: res.candidates });
+          continue;
+        }
+        if (res.corrected) {
+          issues.push({ kind: "corrected_item", from: findItem(menu, claimedId)?.name ?? claimedId, to: findItem(menu, res.id)?.name ?? res.id });
+        }
+        id = res.id;
       }
-      if (res.corrected) {
-        issues.push({ kind: "corrected_item", from: findItem(menu, claimedId)?.name ?? claimedId, to: findItem(menu, res.id)?.name ?? res.id });
-      }
-      id = res.id;
     }
     const m = findItem(menu, id);
     if (!m) {
