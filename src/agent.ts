@@ -324,7 +324,11 @@ function mergedCustomerNotes(previous: string, modelValue: unknown, text: string
   harvest(previous);
   if (typeof modelValue === "string") harvest(modelValue.slice(0, 300));
   for (const n of explicitCustomerNotes(text)) harvest(n);
-  return parts.join(". ").slice(0, 300);
+
+  // If a specific spice note exists, a stray generic "Medium" adds no information.
+  const hasMediumSpice = parts.some((p) => /^medium spice$/i.test(p));
+  const finalParts = hasMediumSpice ? parts.filter((p) => !/^medium$/i.test(p)) : parts;
+  return finalParts.join(". ").slice(0, 300);
 }
 
 function isNoteOnlyMessage(text: string): boolean {
