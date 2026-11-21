@@ -3,7 +3,7 @@ import { clearCustomQuote, customQuoteIsCurrent, customTermsKey } from "./custom
 import { checkFlags, checkWeekday, draftHash, extrasOnly, friendlyName, mainOrderFor, resolveItem, sanitizeItems, tokens, type Issue } from "./guards.js";
 import { HeuristicJudge, type Judge, type Judgment } from "./judge.js";
 import { LlmError, type Llm } from "./llm.js";
-import { DAILY_ORDER_CUTOFF_LABEL, DAILY_ORDER_OPEN_LABEL, activeWeekendOffer, beforeDailyOpening, findItem, outsideOrderingHours, itemLabel, lineAmt, money, optionPicks, orderLineAmt, pickupDayClosed, pickupIsFutureDay, storeManualOpenNow, total, weekendOfferPrice } from "./menu.js";
+import { DAILY_ORDER_CUTOFF_LABEL, DAILY_ORDER_OPEN_LABEL, PICKUP_CLOSE_LABEL, PICKUP_OPEN_LABEL, activeWeekendOffer, beforeDailyOpening, findItem, outsideOrderingHours, itemLabel, lineAmt, money, optionPicks, orderLineAmt, pickupDayClosed, pickupIsFutureDay, pickupOutsideHours, storeManualOpenNow, total, weekendOfferPrice } from "./menu.js";
 import type { Notifier } from "./notify.js";
 import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
 import { route as decideRoute, type Route } from "./router.js";
@@ -286,6 +286,16 @@ function mergedCustomerNotes(previous: string, modelValue: unknown, text: string
   return parts.join(". ").slice(0, 300);
 }
 
+function isNoteOnlyMessage(text: string): boolean {
+  if (!explicitCustomerNotes(text).length) return false;
+  const rest = text
+    .replace(/\bTEST\s+ORDER\s*[-–—:]?\s*DO\s+NOT\s+COOK\b/ig, " ")
+    .replace(/^\s*(?:note|notes|special\s+instructions?)\s*[:=-]?\s*/i, "")
+    .replace(/\b(?:extra\s+spicy|less\s+spicy|no\s+spice|mild|medium(?:\s+spice)?|spicy|no\s+extras)\b/ig, " ")
+    .replace(/[\s,;.!:()\-–—]+/g, "");
+  return !rest;
+}
+
 /** A clearly named food that has no menu match should not resurrect/repeat an old draft. */
 function explicitUnknownDish(text: string, menu: MenuItem[]): string | null {
   const foodWord = /\b(?:biryani|pulao|pulav|rice|chicken|mutton|lamb|goat|paneer|dosa|idli|vada|punugulu|curry|fry|kheema|keema|sambar|dal|roti|naan|upma|meal|combo)\b/i;
@@ -491,8 +501,12 @@ export class Agent {
 
     const manuallyClosedToday = !storeManualOpenNow(settings, now);
     const cutoffReached = !manuallyClosedToday && outsideOrderingHours(settings, now);
+    const explicitPickupFromText = simpleCustomPickup(text, now, settings.tz);
+    const weekendSpecialOrderSignal = WEEKEND_SPECIAL.test(text) &&
+      (!!deterministicFreshMenuItem(text, menu) || /^\s*\d+\b/.test(text) || /\b(?:order|want|need|pickup)\b/i.test(text));
     const orderingWhileClosed =
       clearlyNormalMenuOrder(text, menu) ||
+      weekendSpecialOrderSignal ||
       CUSTOM_WORDS.test(text) ||
       CUSTOM_RECIPE_WORDS.test(text) ||
       CUSTOM_HEADCOUNT.test(text) ||
@@ -513,6 +527,34 @@ export class Agent {
       out.replies.push(outsideHoursReply(settings, now, false));
       for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
       return out;
+    }
+
+    // Pickup times are a hard customer rule, not an owner-review flag.
+    if (explicitPickupFromText && (orderingWhileClosed || !!draft || clearlyNormalMenuOrder(text, menu)) && pickupOutsideHours(explicitPickupFromText)) {
+      out.route = "pickup_hours";
+      out.replies.push(`Pickup is available from ${PICKUP_OPEN_LABEL} to ${PICKUP_CLOSE_LABEL}. I can't schedule ${formatWhen(explicitPickupFromText)}. Please choose a pickup time within those hours.`);
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
+    }
+
+    // An explicitly requested Weekend Special outside the configured pickup dates is rejected
+    // here, before the model can silently turn it into a price-TBC owner hold.
+    const offerCfg = settings.weekendOffer;
+    if (WEEKEND_SPECIAL.test(text) && explicitPickupFromText && offerCfg?.startDate && offerCfg?.endDate) {
+      const pickupDate = explicitPickupFromText.slice(0, 10);
+      if (pickupDate < offerCfg.startDate || pickupDate > offerCfg.endDate) {
+        const item = deterministicFreshMenuItem(text, menu);
+        const regular = item?.single != null ? ` at the regular price of ${money(item.single)}` : "";
+        out.route = "weekend_special_expired";
+        out.issues.push("weekend_special_unavailable");
+        out.replies.push(
+          `The Weekend Special is only valid for pickups from ${dayLabel(offerCfg.startDate)} through ${dayLabel(offerCfg.endDate)}. ` +
+          `It isn't available for ${dayLabel(pickupDate)}, so I won't use the special price or submit it for owner approval. ` +
+          (item ? `If you want the regular ${item.name}${regular}, tell me you want the regular Weekend Combo.` : "You can choose a regular Weekend Combo at its normal price instead.")
+        );
+        for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+        return out;
+      }
     }
 
     // For an explicit fresh-order reset, exact one-item menu orders with a clear pickup
@@ -717,6 +759,37 @@ export class Agent {
         null,
         out,
       );
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
+    }
+
+    // Notes sent on their own must update the pending order, never be interpreted as food.
+    if (draft && !draft.custom && isNoteOnlyMessage(text)) {
+      const notes = mergedCustomerNotes(draft.notes, undefined, text);
+      const next: Draft = { ...draft, notes, readback_hash: null };
+      if (next.items.length && next.pickup_local) {
+        next.stage = "awaiting_confirmation";
+        next.readback_hash = draftHash(next);
+      }
+      store.putDraft(msg.from, next);
+      out.route = "note_update";
+      out.replies.push(`Got it — I added that note to your order.\n${this.readBack(next, settings, now, open)}`);
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
+    }
+
+    // A bare number immediately after a one-line read-back means quantity, not menu option.
+    const bareQty = /^\s*([1-7])\s*$/.exec(text);
+    if (draft && !draft.custom && draft.items.length === 1 && bareQty &&
+        (draft.stage === "awaiting_confirmation" || /Please check your (?:order|extras)/i.test(lastShop ?? ""))) {
+      const qty = Number(bareQty[1]);
+      const line = { ...draft.items[0]!, qty };
+      line.amt = orderLineAmt(menu, line, settings, now, draft.pickup_local);
+      const next: Draft = { ...draft, items: [line], stage: draft.pickup_local ? "awaiting_confirmation" : "collecting", readback_hash: null };
+      if (next.stage === "awaiting_confirmation") next.readback_hash = draftHash(next);
+      store.putDraft(msg.from, next);
+      out.route = "quantity_update";
+      out.replies.push(this.readBack(next, settings, now, open));
       for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
       return out;
     }
@@ -1096,6 +1169,11 @@ export class Agent {
       out.replies.push("We're closed today, so I can't place this for today. Your details are still here; please choose a future pickup day and time.");
       return;
     }
+    if (pickupOutsideHours(draft.pickup_local)) {
+      out.route = "confirm_custom_order+pickup_hours";
+      out.replies.push(`Pickup is available from ${PICKUP_OPEN_LABEL} to ${PICKUP_CLOSE_LABEL}. Please choose a pickup time within those hours.`);
+      return;
+    }
     if (pickupDayClosed(draft.pickup_local, s)) {
       out.route = "confirm_custom_order+pickup_day_closed";
       out.replies.push(`We're closed on the pickup day you chose (${formatWhen(draft.pickup_local!)}), so I haven't placed this. Your details are still here; please choose another pickup day.`);
@@ -1183,6 +1261,11 @@ export class Agent {
     if (!storeManualOpenNow(s, now) && !pickupIsFutureDay(draft.pickup_local, s, now)) {
       out.route = "confirm_order+store_closed";
       out.replies.push("We're closed today, so I can't place this for today. Your order hasn't been placed. Please choose a future pickup day and time.");
+      return;
+    }
+    if (pickupOutsideHours(draft.pickup_local)) {
+      out.route = "confirm_order+pickup_hours";
+      out.replies.push(`Pickup is available from ${PICKUP_OPEN_LABEL} to ${PICKUP_CLOSE_LABEL}. Your order hasn't been placed. Please choose a pickup time within those hours.`);
       return;
     }
     if (pickupDayClosed(draft.pickup_local, s)) {
