@@ -194,7 +194,7 @@ function deterministicFreshMenuItem(text: string, menu: MenuItem[]): MenuItem | 
   return matches[0]!.item;
 }
 
-function deterministicFreshQuantity(text: string, item: MenuItem): number | null {
+function explicitFreshQuantity(text: string, item: MenuItem): number | null {
   if (item.kind === "plan") {
     const people = customHeadcount(text);
     if (people != null && people < 100) return people;
@@ -202,8 +202,12 @@ function deterministicFreshQuantity(text: string, item: MenuItem): number | null
   const direct = /^\s*(\d{1,2})\b/.exec(text)
     ?? /\b(?:order|want|need|would\s+like|get\s+me|give\s+me|take)\s+(\d{1,2})\b/i.exec(text);
   const inlineBeforePickup = /(?:^|[,;])\s*([1-7])\s*(?=,?\s*(?:pickup|pick\s*up|for\s+pickup)\b)/i.exec(text);
-  const qty = direct ? Number(direct[1]) : inlineBeforePickup ? Number(inlineBeforePickup[1]) : 1;
-  return qty > 0 && qty < 100 ? qty : null;
+  const qty = direct ? Number(direct[1]) : inlineBeforePickup ? Number(inlineBeforePickup[1]) : null;
+  return qty != null && qty > 0 && qty < 100 ? qty : null;
+}
+
+function deterministicFreshQuantity(text: string, item: MenuItem): number | null {
+  return explicitFreshQuantity(text, item) ?? 1;
 }
 
 function deterministicFreshDraft(text: string, menu: MenuItem[], now: number, settings: Settings, customerName: string | null): Draft | null {
@@ -1029,6 +1033,13 @@ export class Agent {
           const useSpecial = it.pack === "single" && (it.promotion === "weekend_special" || priorSpecial || (explicitWeekendSpecial && weekendSpecialIds.has(it.id)));
           return useSpecial ? { ...it, promotion: "weekend_special" as const } : it;
         });
+        if (items.length === 1) {
+          const menuItem = findItem(menu, items[0]!.id);
+          const explicitQty = menuItem ? explicitFreshQuantity(text, menuItem) : null;
+          if (explicitQty != null && explicitQty !== items[0]!.qty) {
+            items = [{ ...items[0]!, qty: explicitQty }];
+          }
+        }
         issues.push(...sanitized.issues);
         pickup = typeof rd.pickup_local === "string" && isLocalIso(rd.pickup_local) ? rd.pickup_local : null;
         notes = mergedCustomerNotes(notes, rd.notes, text);
