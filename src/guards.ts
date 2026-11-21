@@ -114,9 +114,16 @@ export function sanitizeItems(raw: unknown, menu: MenuItem[], weekendSpecialIds:
     const qty = Math.round(Number(r.qty));
     if (!(qty > 0 && qty < 100)) continue;
     const asked = typeof r.asked_for === "string" ? r.asked_for : "";
+    const askedForSpecial = /\bweekend\s+(?:specials?|offers?)\b|\bonly\s+this\s+weekend\b/i.test(asked);
     let id = claimedId;
     if (asked) {
-      const res = resolveItem(asked, claimedId, menu);
+      // When the customer explicitly says Weekend Special, resolve the food only against
+      // the configured promo items. This prevents dates/weekday words and a legacy Sunday
+      // BOGO from making an otherwise exact special request look ambiguous.
+      const resolutionMenu = askedForSpecial && weekendSpecialIds.size
+        ? menu.filter((m) => weekendSpecialIds.has(m.id))
+        : menu;
+      const res = resolveItem(asked, claimedId, resolutionMenu);
       if (!res.ok) {
         issues.push({ kind: "unclear_item", askedFor: res.askedFor, candidates: res.candidates });
         continue;
@@ -136,7 +143,6 @@ export function sanitizeItems(raw: unknown, menu: MenuItem[], weekendSpecialIds:
       continue;
     }
     const pack: Pack = m.kind === "plan" ? "plan" : m.kind === "combo" && r.pack === "bogo" ? "bogo" : "single";
-    const askedForSpecial = /\bweekend\s+(?:specials?|offers?)\b|\bonly\s+this\s+weekend\b/i.test(asked);
     const promotion = pack === "single" && weekendSpecialIds.has(m.id) &&
       (r.promotion === "weekend_special" || askedForSpecial) ? "weekend_special" as const : undefined;
     const existing = items.find((x) => x.id === m.id && x.pack === pack && x.promotion === promotion);
