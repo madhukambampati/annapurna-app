@@ -259,6 +259,20 @@ export const DAILY_ORDER_CUTOFF_HOUR = 19;
 export const DAILY_ORDER_OPEN_LABEL = "8:00 AM";
 export const DAILY_ORDER_CUTOFF_LABEL = "7:00 PM";
 
+// Pickup is available during the same customer-facing operating window.
+// Exactly 7:00 PM is allowed; later times are not.
+export const PICKUP_OPEN_HOUR = 8;
+export const PICKUP_CLOSE_HOUR = 19;
+export const PICKUP_OPEN_LABEL = "8:00 AM";
+export const PICKUP_CLOSE_LABEL = "7:00 PM";
+
+export function pickupOutsideHours(pickupLocal: string | null | undefined): boolean {
+  if (!pickupLocal || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(pickupLocal)) return false;
+  const [hh, mm] = pickupLocal.slice(11, 16).split(":").map(Number);
+  const mins = hh * 60 + mm;
+  return mins < PICKUP_OPEN_HOUR * 60 || mins > PICKUP_CLOSE_HOUR * 60;
+}
+
 export function storeManualOpenNow(s: Settings, now: number): boolean {
   return storeOpenOn(s, epochToLocal(now, s.tz).slice(0, 10));
 }
