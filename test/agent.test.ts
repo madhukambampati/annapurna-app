@@ -195,6 +195,93 @@ test("explicit customer notes survive edits and reach the placed order", async (
   assert.match(order.notes, /Spicy/i);
 });
 
+test("after 7 PM a Weekend Special for today is refused as closed, not pushed later tonight", async () => {
+  const now = localToEpoch("2026-11-20T21:25", TZ);
+  const t = setup({ judge: yesJudge, now });
+  const settings = t.store.getSettings();
+  settings.weekendOffer = {
+    active: true, title: "Weekend Special", label: "Only this weekend",
+    startDate: "2026-11-20", endDate: "2026-11-22",
+    items: [{ menuId: "kobbari_annam_fry", price: 12 }],
+  };
+  t.store.putSettings(settings);
+
+  const r = await t.say("1 Kobbari Annam with Chicken Fry combo Weekend Special, pickup today 10pm");
+  assert.equal(t.store.listOrders().length, 0);
+  assert.match(r.replies[0]!, /ordering closed at 7:00 PM/i);
+  assert.match(r.replies[0]!, /future day|tomorrow/i);
+  assert.doesNotMatch(r.replies[0]!, /11:25|later tonight|after .*tonight/i);
+});
+
+test("future pickup must be between 8 AM and 7 PM", async () => {
+  const now = localToEpoch("2026-11-20T21:25", TZ);
+  const make = () => {
+    const t = setup({ judge: yesJudge, now });
+    const settings = t.store.getSettings();
+    settings.weekendOffer = {
+      active: true, title: "Weekend Special", label: "Only this weekend",
+      startDate: "2026-11-20", endDate: "2026-11-22",
+      items: [{ menuId: "kobbari_annam_fry", price: 12 }],
+    };
+    t.store.putSettings(settings);
+    return t;
+  };
+
+  for (const time of ["6am", "11pm"]) {
+    const t = make();
+    const r = await t.say(`1 Kobbari Annam with Chicken Fry combo Weekend Special, pickup Saturday Nov 21 ${time}`);
+    assert.equal(t.store.listOrders().length, 0);
+    assert.match(r.replies[0]!, /Pickup is available from 8:00 AM to 7:00 PM/i);
+  }
+});
+
+test("Weekend Special after Nov 22 is rejected explicitly instead of becoming a price-TBC hold", async () => {
+  const now = localToEpoch("2026-11-20T18:00", TZ);
+  const t = setup({ judge: yesJudge, now });
+  const settings = t.store.getSettings();
+  settings.weekendOffer = {
+    active: true, title: "Weekend Special", label: "Only this weekend",
+    startDate: "2026-11-20", endDate: "2026-11-22",
+    items: [{ menuId: "bagara_chicken_fry", price: 12 }],
+  };
+  t.store.putSettings(settings);
+
+  const r = await t.say("1 Bagara Rice and Chicken Fry combo Weekend Special, pickup Monday Nov 23 12pm");
+  assert.equal(t.store.listOrders().length, 0);
+  assert.match(r.replies[0]!, /only valid for pickups from Friday, November 20.*Sunday, November 22/i);
+  assert.match(r.replies[0]!, /isn't available for Monday, November 23/i);
+  assert.match(r.replies[0]!, /regular price of \$15/i);
+  assert.doesNotMatch(r.replies[0]!, /price to be confirmed|owner approval|monday is not a pickup day/i);
+});
+
+test("standalone TEST ORDER note updates the draft and is never treated as a dish", async () => {
+  const t = setup({ judge: yesJudge });
+  await orderAndReadBack(
+    t,
+    [{ id: "chicken_pulao_salan", qty: 1, pack: "single", asked_for: "Chicken Pulao with Mirchi Ka Salan and Raitha" }],
+    FRI_6PM,
+    "1 Chicken Pulao with Mirchi Ka Salan and Raitha Friday 6pm",
+  );
+
+  const r = await t.say("TEST ORDER - DO NOT COOK");
+  assert.match(r.replies.join("\n"), /Note: .*TEST ORDER - DO NOT COOK/i);
+  assert.doesNotMatch(r.replies.join("\n"), /isn't on our current menu|ordering menu/i);
+  assert.match(t.store.getDraft("+15198043658")!.notes, /TEST ORDER - DO NOT COOK/i);
+});
+
+test("bare 2 after a one-line read-back changes quantity to two", async () => {
+  const t = setup({ judge: yesJudge });
+  await orderAndReadBack(
+    t,
+    [{ id: "bagara_chicken_fry", qty: 1, pack: "single", asked_for: "Bagara Rice and Chicken Fry combo" }],
+    "2026-09-26T13:00",
+    "1 Bagara Rice and Chicken Fry combo Saturday 1pm",
+  );
+  const r = await t.say("2");
+  assert.match(r.replies[0]!, /2 x Bagara Rice and Chicken Fry combo: \$30/);
+  assert.equal(t.store.getDraft("+15198043658")!.items[0]!.qty, 2);
+});
+
 test("weekday menu context lets 'order this' select the $18 single-day Full Meal", async () => {
   const t = setup({ judge: (ctx) => {
     if (/what is today's weekday order/i.test(ctx.message)) return { intent: { label: "question", prob: 0.98, confidence: 0.95 } };
