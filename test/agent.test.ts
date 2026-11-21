@@ -282,6 +282,56 @@ test("bare 2 after a one-line read-back changes quantity to two", async () => {
   assert.equal(t.store.getDraft("+15198043658")!.items[0]!.qty, 2);
 });
 
+test("inline bare quantity before pickup overrides a model qty of one", async () => {
+  const now = localToEpoch("2026-11-20T18:00", TZ);
+  const t = setup({ judge: yesJudge, now });
+  const settings = t.store.getSettings();
+  settings.weekendOffer = {
+    active: true, title: "Weekend Special", label: "Only this weekend",
+    startDate: "2026-11-20", endDate: "2026-11-22",
+    items: [{ menuId: "bagara_chicken_fry", price: 12 }],
+  };
+  t.store.putSettings(settings);
+
+  t.llm.push(modelReply({
+    reply: "Sure.",
+    items: [{ id: "bagara_chicken_fry", qty: 1, pack: "single", promotion: "weekend_special", asked_for: "Bagara Rice and Chicken Fry combo Weekend Special" }],
+    pickup: "2026-11-21T13:00",
+    stage: "awaiting_confirmation",
+  }));
+  const r = await t.say("Bagara Rice and Chicken Fry combo Weekend Special, 2, pickup Saturday Nov 21 1pm");
+  assert.match(r.replies[0]!, /2 x Bagara Rice and Chicken Fry combo \(Weekend Special\): \$24/);
+  assert.equal(t.store.getDraft("+15198043658")!.items[0]!.qty, 2);
+});
+
+test("known notes are canonicalized and not duplicated when model and customer repeat them", async () => {
+  const t = setup({ judge: yesJudge });
+  t.llm.push(modelReply({
+    reply: "Okay.",
+    items: [{ id: "chicken_pulao_salan", qty: 1, pack: "single", asked_for: "Chicken Pulao with Mirchi Ka Salan and Raitha" }],
+    pickup: FRI_6PM,
+    notes: "Medium spice. TEST ORDER - DO NOT COOK. TEST ORDER - DO NOT COOK. Medium",
+    stage: "awaiting_confirmation",
+  }));
+  const r = await t.say("1 Chicken Pulao with Mirchi Ka Salan and Raitha, medium spice, TEST ORDER - DO NOT COOK, Friday 6pm");
+  const noteLine = r.replies[0]!.split("\n").find((x) => x.startsWith("Note:")) || "";
+  assert.match(noteLine, /Medium spice/);
+  assert.match(noteLine, /TEST ORDER - DO NOT COOK/);
+  assert.equal((noteLine.match(/TEST ORDER - DO NOT COOK/g) || []).length, 1);
+  assert.equal((noteLine.match(/Medium spice/gi) || []).length, 1);
+  assert.doesNotMatch(noteLine, /\. Medium(?:\.|$)/i);
+});
+
+test("an explicit pickup time already in the past is refused instead of held for review", async () => {
+  const now = localToEpoch("2026-11-20T21:45", TZ);
+  const t = setup({ judge: yesJudge, now });
+  const r = await t.say("1 Bagara Rice and Chicken Fry combo, pickup today 5pm");
+  assert.equal(t.store.listOrders().length, 0);
+  assert.match(r.replies[0]!, /pickup time has already passed/i);
+  assert.match(r.replies[0]!, /future pickup time between 8:00 AM and 7:00 PM/i);
+  assert.doesNotMatch(r.replies[0]!, /Please check your order|pickup in the past/i);
+});
+
 test("weekday menu context lets 'order this' select the $18 single-day Full Meal", async () => {
   const t = setup({ judge: (ctx) => {
     if (/what is today's weekday order/i.test(ctx.message)) return { intent: { label: "question", prob: 0.98, confidence: 0.95 } };
