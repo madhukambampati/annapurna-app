@@ -1091,6 +1091,10 @@
       var sectionLabel = h("div", { class: "menu-section-label" }, h("span", {}, "MENU SECTION"), h("b", { id: "menuSectionName" }, ""));
       var holder = h("div", { class: "panels" });
       var menuFooter = h("p", { class: "tiny" });
+      var shortOfferDate = function (d) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(d || ""))) return String(d || "");
+        return new Date(d + "T00:00:00Z").toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" });
+      };
       var tabs = [];
       var select = function (i, focus) {
         tabs.forEach(function (t, k) { t.setAttribute("aria-selected", k === i ? "true" : "false"); t.tabIndex = k === i ? 0 : -1; });
@@ -1099,7 +1103,7 @@
         var section = panels[i][0];
         var kitchen = m.address || "our kitchen";
         if (section === "Weekend Special" && m.weekendOffer) {
-          menuFooter.textContent = "Weekend Special valid " + m.weekendOffer.startDate + " to " + m.weekendOffer.endDate + ". Regular Weekend Combos stay at normal prices. Everything is cooked fresh at " + kitchen + ".";
+          menuFooter.textContent = "Weekend Special valid " + shortOfferDate(m.weekendOffer.startDate) + " to " + shortOfferDate(m.weekendOffer.endDate) + ". Regular Weekend Combos stay at normal prices. Everything is cooked fresh at " + kitchen + ".";
         } else if (section === "Weekend Combos") {
           menuFooter.textContent = "Regular Weekend Combos use the pickup availability shown on each item. Everything is cooked fresh at " + kitchen + ".";
         } else if (section === "Extras") {
