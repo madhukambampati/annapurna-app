@@ -312,7 +312,10 @@ function mergedCustomerNotes(previous: string, modelValue: unknown, text: string
     // Keep genuinely free-form notes, but discard punctuation-only leftovers and
     // fragments already consumed by a canonical spice/test instruction.
     for (const fragment of rest.split(/[.;]+/)) {
-      const cleaned = fragment.replace(/\s+/g, " ").trim();
+      const cleaned = fragment
+        .replace(/\s+/g, " ")
+        .replace(/^[\s,;:.\-–—]+|[\s,;:.\-–—]+$/g, "")
+        .trim();
       if (!cleaned || /^(?:medium|test\s+order|do\s+not\s+cook)$/i.test(cleaned)) continue;
       add(cleaned);
     }
