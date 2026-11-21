@@ -8,7 +8,7 @@ import type { Notifier } from "./notify.js";
 import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
 import { route as decideRoute, type Route } from "./router.js";
 import type { Store } from "./store.js";
-import { dayLabel, formatWhen, isLocalIso, nextDateForDow, pad, zonedParts } from "./time.js";
+import { dayLabel, formatWhen, isLocalIso, localToEpoch, nextDateForDow, pad, zonedParts } from "./time.js";
 import type { Alert, Draft, MenuItem, Order, Settings, Stage } from "./types.js";
 
 /**
