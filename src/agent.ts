@@ -3,7 +3,7 @@ import { clearCustomQuote, customQuoteIsCurrent, customTermsKey } from "./custom
 import { checkFlags, checkWeekday, draftHash, extrasOnly, friendlyName, mainOrderFor, resolveItem, sanitizeItems, tokens, type Issue } from "./guards.js";
 import { HeuristicJudge, type Judge, type Judgment } from "./judge.js";
 import { LlmError, type Llm } from "./llm.js";
-import { DAILY_ORDER_CUTOFF_LABEL, DAILY_ORDER_OPEN_LABEL, PICKUP_CLOSE_LABEL, PICKUP_OPEN_LABEL, activeWeekendOffer, beforeDailyOpening, findItem, outsideOrderingHours, itemLabel, lineAmt, money, optionPicks, orderLineAmt, pickupDayClosed, pickupIsFutureDay, pickupOutsideHours, storeManualOpenNow, total, weekendOfferPrice } from "./menu.js";
+import { DAILY_ORDER_CUTOFF_LABEL, DAILY_ORDER_OPEN_LABEL, PICKUP_CLOSE_LABEL, PICKUP_OPEN_LABEL, activeWeekendOffer, beforeDailyOpening, findItem, outsideOrderingHours, itemLabel, lineAmt, money, optionPicks, orderLineAmt, pickupBeforeRegularHours, pickupDayClosed, pickupIsFutureDay, storeManualOpenNow, total, weekendOfferPrice } from "./menu.js";
 import type { Notifier } from "./notify.js";
 import { buildPrompt, SYSTEM_PROMPT } from "./prompt.js";
 import { route as decideRoute, type Route } from "./router.js";
@@ -444,7 +444,8 @@ function explicitFuturePickupIntent(text: string, now: number, tz: string): bool
 export const HANDOFF_NOTE = "Wants to talk to a person";
 
 const FUTURE_EXAMPLE = "for example “Bagara Rice and Chicken Fry tomorrow at 6 PM”";
-/** What to say when someone tries to order for today outside 8:00 AM–7:00 PM. */
+/** What to say when someone tries to order for today before the regular 8:00 AM opening.
+ *  After 7 PM is intentionally handled as an owner-review request instead of a rejection. */
 function outsideHoursReply(s: Settings, now: number, atConfirm: boolean): string {
   const lead = beforeDailyOpening(s, now)
     ? `We start taking today's orders at ${DAILY_ORDER_OPEN_LABEL}.`
@@ -546,12 +547,12 @@ export class Agent {
     }
 
     const manuallyClosedToday = !storeManualOpenNow(settings, now);
-    const cutoffReached = !manuallyClosedToday && outsideOrderingHours(settings, now);
+    const beforeOpenToday = !manuallyClosedToday && beforeDailyOpening(settings, now);
     const explicitPickupFromText = simpleCustomPickup(text, now, settings.tz);
     if (explicitPickupFromText && localToEpoch(explicitPickupFromText, settings.tz) < now) {
       out.route = "pickup_past";
       out.issues.push("pickup_in_past");
-      out.replies.push(`That pickup time has already passed (${formatWhen(explicitPickupFromText)}). I haven't created or submitted an order. Please choose a future pickup time between ${PICKUP_OPEN_LABEL} and ${PICKUP_CLOSE_LABEL}.`);
+      out.replies.push(`That pickup time has already passed (${formatWhen(explicitPickupFromText)}). I haven't created or submitted an order. Please choose a future pickup time.`);
       for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
       return out;
     }
@@ -575,17 +576,20 @@ export class Agent {
       for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
       return out;
     }
-    if (cutoffReached && orderingWhileClosed && !futurePickupExplicit) {
-      out.route = "daily_cutoff";
+    // Before opening, same-day orders still wait until 8 AM. After 7 PM is different:
+    // the customer may submit the request and Annapurna decides based on capacity.
+    if (beforeOpenToday && orderingWhileClosed && !futurePickupExplicit) {
+      out.route = "before_open";
       out.replies.push(outsideHoursReply(settings, now, false));
       for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
       return out;
     }
 
-    // Pickup times are a hard customer rule, not an owner-review flag.
-    if (explicitPickupFromText && (orderingWhileClosed || !!draft || clearlyNormalMenuOrder(text, menu)) && pickupOutsideHours(explicitPickupFromText)) {
-      out.route = "pickup_hours";
-      out.replies.push(`Pickup is available from ${PICKUP_OPEN_LABEL} to ${PICKUP_CLOSE_LABEL}. I can't schedule ${formatWhen(explicitPickupFromText)}. Please choose a pickup time within those hours.`);
+    // A pickup before 8 AM remains unavailable. Pickups after 7 PM are soft-review flags,
+    // so the requested time is preserved and the owner can confirm or decline it.
+    if (explicitPickupFromText && (orderingWhileClosed || !!draft || clearlyNormalMenuOrder(text, menu)) && pickupBeforeRegularHours(explicitPickupFromText)) {
+      out.route = "pickup_before_open";
+      out.replies.push(`Regular pickup starts at ${PICKUP_OPEN_LABEL}. I can't schedule ${formatWhen(explicitPickupFromText)} before then. Please choose ${PICKUP_OPEN_LABEL} or later.`);
       for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
       return out;
     }
@@ -1211,7 +1215,10 @@ export class Agent {
       `Pickup: ${formatWhen(d.pickup_local)} at ${s.address}`,
     ];
     if (d.notes) out.push(`Note: ${d.notes}`);
-    if (flags.length) out.push(`Annapurna Home Foods needs to confirm this order first (${flags.join("; ").toLowerCase()}).`);
+    const afterHoursReview = flags.some((f) => /after regular hours|same-day order after/i.test(f));
+    if (flags.length) out.push(afterHoursReview
+      ? `This is outside our regular hours. Annapurna Home Foods will get in touch here to confirm or decline the order based on capacity and confirm the pickup timing (${flags.join("; ").toLowerCase()}).`
+      : `Annapurna Home Foods needs to confirm this order first (${flags.join("; ").toLowerCase()}).`);
     const autoConfirm = !flags.length && autoConfirmSingleDayFullMeal(d.items, menu);
     out.push(autoConfirm
       ? "Reply YES to confirm this order, or tell me what to change."
@@ -1229,9 +1236,9 @@ export class Agent {
       out.replies.push("We're closed today, so I can't place this for today. Your details are still here; please choose a future pickup day and time.");
       return;
     }
-    if (pickupOutsideHours(draft.pickup_local)) {
-      out.route = "confirm_custom_order+pickup_hours";
-      out.replies.push(`Pickup is available from ${PICKUP_OPEN_LABEL} to ${PICKUP_CLOSE_LABEL}. Please choose a pickup time within those hours.`);
+    if (pickupBeforeRegularHours(draft.pickup_local)) {
+      out.route = "confirm_custom_order+pickup_before_open";
+      out.replies.push(`Regular pickup starts at ${PICKUP_OPEN_LABEL}. Please choose ${PICKUP_OPEN_LABEL} or later.`);
       return;
     }
     if (pickupDayClosed(draft.pickup_local, s)) {
@@ -1239,8 +1246,8 @@ export class Agent {
       out.replies.push(`We're closed on the pickup day you chose (${formatWhen(draft.pickup_local!)}), so I haven't placed this. Your details are still here; please choose another pickup day.`);
       return;
     }
-    if (outsideOrderingHours(s, now) && !pickupIsFutureDay(draft.pickup_local, s, now)) {
-      out.route = "confirm_custom_order+daily_cutoff";
+    if (beforeDailyOpening(s, now) && !pickupIsFutureDay(draft.pickup_local, s, now)) {
+      out.route = "confirm_custom_order+before_open";
       out.replies.push(outsideHoursReply(s, now, true));
       return;
     }
@@ -1323,9 +1330,9 @@ export class Agent {
       out.replies.push("We're closed today, so I can't place this for today. Your order hasn't been placed. Please choose a future pickup day and time.");
       return;
     }
-    if (pickupOutsideHours(draft.pickup_local)) {
-      out.route = "confirm_order+pickup_hours";
-      out.replies.push(`Pickup is available from ${PICKUP_OPEN_LABEL} to ${PICKUP_CLOSE_LABEL}. Your order hasn't been placed. Please choose a pickup time within those hours.`);
+    if (pickupBeforeRegularHours(draft.pickup_local)) {
+      out.route = "confirm_order+pickup_before_open";
+      out.replies.push(`Regular pickup starts at ${PICKUP_OPEN_LABEL}. Your order hasn't been placed. Please choose ${PICKUP_OPEN_LABEL} or later.`);
       return;
     }
     if (pickupDayClosed(draft.pickup_local, s)) {
@@ -1333,8 +1340,8 @@ export class Agent {
       out.replies.push(`We're closed on the pickup day you chose (${formatWhen(draft.pickup_local!)}), so your order hasn't been placed. Please choose another pickup day.`);
       return;
     }
-    if (outsideOrderingHours(s, now) && !pickupIsFutureDay(draft.pickup_local, s, now)) {
-      out.route = "confirm_order+daily_cutoff";
+    if (beforeDailyOpening(s, now) && !pickupIsFutureDay(draft.pickup_local, s, now)) {
+      out.route = "confirm_order+before_open";
       out.replies.push(outsideHoursReply(s, now, true));
       return;
     }
@@ -1415,8 +1422,12 @@ export class Agent {
     }
 
     const reviewNote = flags.length ? ` Review needed: ${flags.join("; ").toLowerCase()}.` : "";
+    const afterHoursReview = approvalFlags.some((f) => /after regular hours|same-day order after/i.test(f));
+    const confirmationLine = afterHoursReview
+      ? "This is an after-hours request. Annapurna Home Foods will get in touch here to confirm or decline it based on capacity and confirm the pickup timing."
+      : "We'll confirm it here before we start cooking.";
     out.replies.push(
-      `Thank you${who ? ` ${who}` : ""}! Order #${order.id}${main ? ` (extras for order #${main.id})` : ""} has been submitted for Annapurna confirmation:\n${listing}\nTotal: ${money(t)}\nPickup: ${formatWhen(draft.pickup_local)} at ${s.address}\nWe'll confirm it here before we start cooking.${reviewNote}`
+      `Thank you${who ? ` ${who}` : ""}! Order #${order.id}${main ? ` (extras for order #${main.id})` : ""} has been submitted for Annapurna confirmation:\n${listing}\nTotal: ${money(t)}\nPickup: ${formatWhen(draft.pickup_local)} at ${s.address}\n${confirmationLine}${reviewNote}`
     );
     await this.d.notifier.notify(
       flags.length ? `Order #${order.id} needs you` : `Order #${order.id} needs approval`,
