@@ -222,11 +222,12 @@
   /* Closed only because of the time of day: before 8 AM or after 7 PM. */
   function isCutoffClosed() { return !!storeStatus && (storeStatus.closedReason === "cutoff" || storeStatus.closedReason === "before_open"); }
   function isBeforeOpen() { return !!storeStatus && storeStatus.closedReason === "before_open"; }
+  function afterHoursReviewAllowed() { return !!storeStatus && storeStatus.afterHoursReviewAllowed === true; }
   var openAt = function () { return (storeStatus && storeStatus.openLabel) || "8:00 AM"; };
   var closeAt = function () { return (storeStatus && storeStatus.cutoffLabel) || "7:00 PM"; };
   function blocksAllNewOrders() { return isStoreClosed() && !storeStatus.futureOrdersAllowed; }
-  /* Closed for today (by the owner or outside ordering hours) but later days can still be ordered. */
-  function futureOrdersOnly() { return isStoreClosed() && !!storeStatus.futureOrdersAllowed; }
+  /* Before opening / manual closure can be future-only. After 7 PM still accepts same-day requests for review. */
+  function futureOrdersOnly() { return isStoreClosed() && !!storeStatus.futureOrdersAllowed && !afterHoursReviewAllowed(); }
 
   function renderStoreStatus() {
     if (!storeStatus) return;
@@ -236,7 +237,8 @@
     document.body.classList.toggle("store-closed", closed);
     document.body.classList.toggle("store-cutoff", cutoff);
     var early = isBeforeOpen();
-    var title = early ? "Opening at " + openAt() : cutoff ? "Closed for Today" : closed ? "Closed Today" : "Open Today";
+    var afterHours = afterHoursReviewAllowed();
+    var title = early ? "Opening at " + openAt() : afterHours ? "After-hours requests" : cutoff ? "Closed for Today" : closed ? "Closed Today" : "Open Today";
     var upcomingClosed = (storeStatus.week || []).filter(function (d) {
       return !d.open && !d.today && (!storeStatus.today || d.date >= storeStatus.today);
     }).slice(0, 3);
@@ -244,6 +246,8 @@
     var alsoClosed = closedNames.length ? " Also closed " + closedNames.join(" & ") + "." : "";
     var copy = early
       ? "We start taking today's orders at " + openAt() + ". You can already place an order for a future day." + alsoClosed
+      : afterHours
+      ? "Regular hours ended at " + closeAt() + ". You can still submit a same-day request. Annapurna Home Foods will confirm or decline it based on capacity and confirm the pickup timing." + alsoClosed
       : cutoff
       ? "Today's ordering closed at " + closeAt() + ". We open again tomorrow at " + openAt() + ". You can still place an order for a future day." + alsoClosed
       : closed
@@ -260,7 +264,7 @@
     var onboardDays = $("onboardStatusDays");
     if (onboardDays) {
       onboardDays.replaceChildren();
-      var todayLabel = closed ? "Today · Closed" : "Today · Open";
+      var todayLabel = afterHours ? "Today · After-hours review" : closed ? "Today · Closed" : "Today · Open";
       onboardDays.append(h("span", {}, todayLabel));
       upcomingClosed.forEach(function (d) {
         onboardDays.append(h("span", {}, String(d.day || "").slice(0, 3) + " " + (d.label || d.date) + " · Closed"));
@@ -273,13 +277,13 @@
     if (start) {
       start.disabled = blockedAll;
       var b = start.querySelector("b"), sm = start.querySelector("small");
-      if (b) b.textContent = futureOrdersOnly() ? "Plan a future order" : blockedAll ? "Closed today" : "Start an order";
-      if (sm) sm.textContent = early ? "Today opens at " + openAt() : cutoff ? "Today closed after " + closeAt() : closed ? (blockedAll ? "Browse menu or plan ahead" : "Closed today") : "Chat with Vindhu";
+      if (b) b.textContent = afterHours ? "Request an order" : futureOrdersOnly() ? "Plan a future order" : blockedAll ? "Closed today" : "Start an order";
+      if (sm) sm.textContent = early ? "Today opens at " + openAt() : afterHours ? "Annapurna confirms based on capacity" : cutoff ? "Today closed after " + closeAt() : closed ? (blockedAll ? "Browse menu or plan ahead" : "Closed today") : "Chat with Vindhu";
     }
     var startBtn = $("startBtn");
-    if (startBtn && !startBtn.disabled) startBtn.textContent = futureOrdersOnly() ? "Plan a future order with Vindhu" : closed ? "Continue with Vindhu" : "Start ordering with Vindhu";
+    if (startBtn && !startBtn.disabled) startBtn.textContent = afterHours ? "Request an order with Vindhu" : futureOrdersOnly() ? "Plan a future order with Vindhu" : closed ? "Continue with Vindhu" : "Start ordering with Vindhu";
     var text = $("text");
-    if (text) text.placeholder = futureOrdersOnly() ? "Tell Vindhu a future pickup day and time" : closed ? "Ask about the menu or weekly plan" : "Type your order or a question";
+    if (text) text.placeholder = afterHours ? "Tell Vindhu what you'd like and your pickup time" : futureOrdersOnly() ? "Tell Vindhu a future pickup day and time" : closed ? "Ask about the menu or weekly plan" : "Type your order or a question";
   }
 
   function initHome() {
