@@ -83,6 +83,8 @@ function businessStatus(s: Settings, epoch: number) {
     closedReason: !manualOpen ? "manual" : cutoffReached ? hoursReason : null,
     // Closing today (by hand or outside ordering hours) never blocks orders for a later open day.
     futureOrdersAllowed: !manualOpen || cutoffReached,
+    // After the 7 PM regular cutoff, same-day requests may still be submitted for capacity review.
+    afterHoursReviewAllowed: manualOpen && cutoffReached && hoursReason === "cutoff",
     openHour: DAILY_ORDER_OPEN_HOUR,
     openLabel: DAILY_ORDER_OPEN_LABEL,
     cutoffHour: DAILY_ORDER_CUTOFF_HOUR,
