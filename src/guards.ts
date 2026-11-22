@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { DAYN, dowOfLocal, isLocalIso, localToEpoch, nextDateForDow } from "./time.js";
-import { findItem, itemDays, lineAmt } from "./menu.js";
+import { DAILY_ORDER_CUTOFF_LABEL, PICKUP_CLOSE_LABEL, afterDailyCutoff, findItem, itemDays, lineAmt, pickupAfterRegularHours, pickupIsFutureDay } from "./menu.js";
 import type { Draft, MenuItem, OrderItem, Pack, Settings } from "./types.js";
 
 /* ---------- item matching: the model may not swap dishes ---------- */
@@ -247,6 +247,8 @@ export function checkFlags(items: OrderItem[], pickupLocal: string | null, s: Se
   }
   const mins = (localToEpoch(pickupLocal, s.tz) - now) / 60000;
   if (mins < s.noticeHrs * 60) f.push(mins < 0 ? "Pickup in the past" : `Under ${s.noticeHrs}h notice`);
+  if (pickupAfterRegularHours(pickupLocal)) f.push(`Pickup after regular hours (${PICKUP_CLOSE_LABEL})`);
+  if (afterDailyCutoff(s, now) && !pickupIsFutureDay(pickupLocal, s, now)) f.push(`Same-day order after ${DAILY_ORDER_CUTOFF_LABEL}`);
   const dow = dowOfLocal(pickupLocal);
   const bad = items.filter((it) => !itemDays(findItem(menu, it.id), s).includes(dow));
   if (bad.length) f.push(`${DAYN[dow]} is not a pickup day for ${bad.map((b) => b.name).join(", ")}`);
