@@ -112,12 +112,16 @@ test("checkFlags: notice, past, non-pickup day, missing price, missing time", ()
   assert.deepEqual(checkFlags(ok, "2026-09-23T14:00", s, NOW), []);
 });
 
-test("checkFlags uses the kitchen timezone, not the server's", () => {
+test("checkFlags uses the kitchen timezone and flags after-hours capacity review", () => {
   const s = defaultSettings();
   const ok = [{ id: "a", name: "A", qty: 1, pack: "single" as const, amt: 10 }];
-  // Friday 23:30 Toronto is already Saturday in UTC. It must still count as Friday.
+  // Friday 23:30 Toronto is already Saturday in UTC. It must still count as Friday,
+  // while the Toronto after-hours rules still apply.
   const late = localToEpoch("2026-09-25T20:00", TZ);
-  assert.deepEqual(checkFlags(ok, "2026-09-25T23:30", s, late), []);
+  assert.deepEqual(checkFlags(ok, "2026-09-25T23:30", s, late), [
+    "Pickup after regular hours (7:00 PM)",
+    "Same-day order after 7:00 PM",
+  ]);
 });
 
 test("draftHash changes when items, time or notes change, not when item order changes", () => {
