@@ -252,26 +252,39 @@ export function storeOpenOn(s: Settings, dateIso: string): boolean {
   return s.dayOpen?.[dateIso] !== false;
 }
 
-/** Orders for today are taken from 8:00 AM until 7:00 PM in the kitchen timezone. Outside those hours
- *  customers can still order for a later day. */
+/** 8:00 AM–7:00 PM is the regular ordering window. Before 8 AM, same-day orders stay blocked.
+ *  After 7 PM, same-day requests are allowed but must wait for Annapurna capacity approval. */
 export const DAILY_ORDER_OPEN_HOUR = 8;
 export const DAILY_ORDER_CUTOFF_HOUR = 19;
 export const DAILY_ORDER_OPEN_LABEL = "8:00 AM";
 export const DAILY_ORDER_CUTOFF_LABEL = "7:00 PM";
 
-// Pickup is available during the same customer-facing operating window.
-// Exactly 7:00 PM is allowed; later times are not.
+// 8:00 AM–7:00 PM is the regular pickup window. A pickup after 7 PM is not rejected;
+// it is treated as an after-hours request for Annapurna to approve or decline.
 export const PICKUP_OPEN_HOUR = 8;
 export const PICKUP_CLOSE_HOUR = 19;
 export const PICKUP_OPEN_LABEL = "8:00 AM";
 export const PICKUP_CLOSE_LABEL = "7:00 PM";
 
-export function pickupOutsideHours(pickupLocal: string | null | undefined): boolean {
-  if (!pickupLocal || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(pickupLocal)) return false;
+function pickupMinutes(pickupLocal: string | null | undefined): number | null {
+  if (!pickupLocal || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(pickupLocal)) return null;
   const hh = Number(pickupLocal.slice(11, 13));
   const mm = Number(pickupLocal.slice(14, 16));
-  const mins = hh * 60 + mm;
-  return mins < PICKUP_OPEN_HOUR * 60 || mins > PICKUP_CLOSE_HOUR * 60;
+  return hh * 60 + mm;
+}
+
+export function pickupBeforeRegularHours(pickupLocal: string | null | undefined): boolean {
+  const mins = pickupMinutes(pickupLocal);
+  return mins != null && mins < PICKUP_OPEN_HOUR * 60;
+}
+
+export function pickupAfterRegularHours(pickupLocal: string | null | undefined): boolean {
+  const mins = pickupMinutes(pickupLocal);
+  return mins != null && mins > PICKUP_CLOSE_HOUR * 60;
+}
+
+export function pickupOutsideHours(pickupLocal: string | null | undefined): boolean {
+  return pickupBeforeRegularHours(pickupLocal) || pickupAfterRegularHours(pickupLocal);
 }
 
 export function storeManualOpenNow(s: Settings, now: number): boolean {
@@ -283,7 +296,12 @@ export function beforeDailyOpening(s: Settings, now: number): boolean {
   return Number(epochToLocal(now, s.tz).slice(11, 13)) < DAILY_ORDER_OPEN_HOUR;
 }
 
-/** Outside 8:00 AM–7:00 PM: no new orders for today, orders for later days are fine. */
+/** True at/after the regular 7 PM cutoff. Same-day requests may still be submitted for owner review. */
+export function afterDailyCutoff(s: Settings, now: number): boolean {
+  return Number(epochToLocal(now, s.tz).slice(11, 13)) >= DAILY_ORDER_CUTOFF_HOUR;
+}
+
+/** Outside the regular 8:00 AM–7:00 PM window. Used for public status; after 7 PM is soft review, not rejection. */
 export function outsideOrderingHours(s: Settings, now: number): boolean {
   const hour = Number(epochToLocal(now, s.tz).slice(11, 13));
   return hour < DAILY_ORDER_OPEN_HOUR || hour >= DAILY_ORDER_CUTOFF_HOUR;
