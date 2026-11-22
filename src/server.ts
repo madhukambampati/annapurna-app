@@ -9,6 +9,7 @@ import { RateLimiter } from "./limiter.js";
 import { DAILY_ORDER_CUTOFF_HOUR, DAILY_ORDER_CUTOFF_LABEL, DAILY_ORDER_OPEN_HOUR, DAILY_ORDER_OPEN_LABEL, activeWeekendOffer, beforeDailyOpening, dayRange, outsideOrderingHours, itemDays, itemLabel, money, storeOpenOn, total } from "./menu.js";
 import { friendlyName } from "./guards.js";
 import type { ReviewInvite, Store } from "./store.js";
+import { orderStatusSms, type SmsSender } from "./sms.js";
 import { DAYN, dayLabel, formatWhen, nextDateForDow, pad, zonedParts } from "./time.js";
 import type { MenuItem, Order, OrderStatus, Settings } from "./types.js";
 
@@ -323,6 +324,8 @@ export interface ServerDeps {
   assets?: Record<string, string>;
   now?: () => number;
   limiter?: RateLimiter;
+  /** Optional transactional customer SMS transport. */
+  sms?: SmsSender;
 }
 
 export function createServer(d: ServerDeps): Server {
@@ -865,6 +868,19 @@ export function createServer(d: ServerDeps): Server {
             if (note) store.addMessage(o.waId, "agent", note, now());
             // After pickup the assistant thanks the customer and asks for feedback, once per order.
             if (to === "done" && o.status !== "done") store.addMessage(o.waId, "agent", thanksNote(o, s), now());
+          }
+          // External SMS is intentionally limited to the two status changes customers should not miss.
+          // A delivery failure never rolls back the kitchen status; the normal website chat remains the source of truth.
+          if ((to === "ready" || to === "cancelled") && d.sms) {
+            const customer = store.getCustomer(o.waId);
+            const notification = orderStatusSms(o.id, to, customer?.contact ?? "", s.address, reason);
+            if (notification) {
+              try {
+                await d.sms.send(notification.to, notification.body);
+              } catch (e) {
+                console.error(`customer SMS failed for order #${o.id} (${to})`, e instanceof Error ? e.message : e);
+              }
+            }
           }
           return send(req, res, 200, { order: updated });
         }

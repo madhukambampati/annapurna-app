@@ -3,6 +3,7 @@ import { loadConfig } from "./config.js";
 import { FallbackJudge, HeuristicJudge, TypeSafeJudge, type Judge } from "./judge.js";
 import { ClaudeLlm, type Llm } from "./llm.js";
 import { ConsoleNotifier, WebhookNotifier } from "./notify.js";
+import { TwilioSmsSender } from "./sms.js";
 import { createServer } from "./server.js";
 import { Store } from "./store.js";
 
@@ -16,6 +17,12 @@ if (cfg.web.enabled && !cfg.ownerToken && process.env.ALLOW_OPEN_DESK !== "yes")
 }
 if (cfg.ownerToken && cfg.ownerToken.length < 16) {
   console.error("Refusing to start: OWNER_TOKEN is too short (use at least 16 characters).");
+  process.exit(1);
+}
+const twilioParts = [cfg.twilioAccountSid, cfg.twilioAuthToken, cfg.twilioFromNumber];
+const twilioConfigured = twilioParts.every(Boolean);
+if (twilioParts.some(Boolean) && !twilioConfigured) {
+  console.error("Refusing to start: set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER together, or leave all three empty.");
   process.exit(1);
 }
 const store = new Store(cfg.dbPath);
@@ -33,7 +40,8 @@ const llm: Llm = cfg.anthropicKey
     };
 
 const agent = new Agent({ store, judge, llm, cfg, notifier: cfg.notifyUrl ? new WebhookNotifier(cfg.notifyUrl) : new ConsoleNotifier() });
-const server = createServer({ agent, store, cfg });
+const sms = twilioConfigured ? new TwilioSmsSender(cfg.twilioAccountSid, cfg.twilioAuthToken, cfg.twilioFromNumber) : undefined;
+const server = createServer({ agent, store, cfg, sms });
 
 // The customer menu keeps a compact two-column card layout on phones. On narrow screens,
 // let the price label wrap above the amount instead of colliding with it; on very narrow
@@ -74,6 +82,7 @@ server.listen(cfg.port, () => {
   console.log(`  Judgment       : ${cfg.typesafeKey ? `TypeSafe (${cfg.typesafeModel}), rules as fallback` : "rules only (set TYPESAFE_API_KEY to use TypeSafe)"}`);
   console.log(`  Client IP      : ${cfg.web.proxyHops > 0 ? `from X-Forwarded-For, ${cfg.web.proxyHops} proxy hop(s)` : "direct connection (set PROXY_HOPS behind a host proxy, see DEPLOY.md, or rate limits see one IP)"}`);
   console.log(`  Limits         : ${cfg.web.msgPerMinute}/min and ${cfg.web.msgPerDay}/day per customer, ${cfg.web.globalPerDay}/day for everyone`);
+  console.log(`  Customer SMS   : ${sms ? `on from ${cfg.twilioFromNumber} (ready/cancelled only)` : "off (set Twilio env vars to enable)"}`);
   console.log(`  Simulator      : ${cfg.simulator ? "ON (no login, do not use on a public server)" : "off"}`);
 });
 

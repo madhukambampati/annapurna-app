@@ -11,6 +11,10 @@ export interface Config {
   typesafeModel: string;
   judgeTimeoutMs: number;
   notifyUrl: string;
+  /** Twilio credentials for transactional customer SMS. Leave all three empty to disable SMS. */
+  twilioAccountSid: string;
+  twilioAuthToken: string;
+  twilioFromNumber: string;
   /** Developer chat at /sim/*, no login. Keep OFF on a public server. */
   simulator: boolean;
   /** Public customer website chat at / and /web/*. */
@@ -60,6 +64,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     typesafeModel: env.TYPESAFE_MODEL || "jev-latest",
     judgeTimeoutMs: num(env.JUDGE_TIMEOUT_MS, 8000),
     notifyUrl: env.NOTIFY_URL || "",
+    twilioAccountSid: env.TWILIO_ACCOUNT_SID || "",
+    twilioAuthToken: env.TWILIO_AUTH_TOKEN || "",
+    twilioFromNumber: env.TWILIO_FROM_NUMBER || "",
     simulator: env.SIMULATOR === "on",
     web: {
       enabled: env.WEB !== "off",

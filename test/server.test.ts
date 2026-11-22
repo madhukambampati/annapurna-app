@@ -4,12 +4,14 @@ import { after, before, describe, test } from "node:test";
 import type { Server } from "node:http";
 import { loadConfig } from "../src/config.js";
 import { createServer } from "../src/server.js";
+import { MemorySmsSender } from "../src/sms.js";
 import { FRI_6PM, modelReply, setup } from "./helpers.js";
 
 describe("http server", () => {
   const t = setup({ judge: (c) => (c.awaitingConfirmation && /^yes/i.test(c.message) ? { agrees: 0.97 } : {}) });
   let server: Server;
   let base = "";
+  const sms = new MemorySmsSender();
   const call = async (path: string, init: RequestInit & { token?: string } = {}) => {
     const { token, ...rest } = init;
     const r = await fetch(base + path, {
@@ -25,7 +27,7 @@ describe("http server", () => {
 
   before(async () => {
     const cfg = { ...t.cfg, ownerToken: "secret", simulator: true };
-    server = createServer({ agent: t.agent, store: t.store, cfg, assets: { "index.html": "<html>shop</html>", "desk.html": "<html>desk</html>", "desk.js": "//desk" } });
+    server = createServer({ agent: t.agent, store: t.store, cfg, sms, assets: { "index.html": "<html>shop</html>", "desk.html": "<html>desk</html>", "desk.js": "//desk" } });
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
     base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   });
@@ -66,13 +68,33 @@ describe("http server", () => {
     assert.equal((await call("/sim/message", { method: "POST", body: JSON.stringify({ from: "x", text: "y".repeat(200_000) }) })).status, 413);
   });
 
-  test("order status moves follow the allowed steps only", async () => {
+  test("order status moves follow the allowed steps only and ready sends one SMS", async () => {
+    t.store.updateCustomer("+15198043658", { contact: "+15198043658" });
+    const beforeSms = sms.sent.length;
     assert.equal((await post("/api/orders/1/status", { status: "done" }, "secret")).status, 400); // hold -> done not allowed
     assert.equal((await post("/api/orders/1/status", { status: "cook" }, "secret")).json.order.status, "cook"); // owner accepts
     assert.equal((await post("/api/orders/1/status", { status: "ready", confirm: true }, "secret")).json.order.status, "ready");
+    assert.equal(sms.sent.length, beforeSms + 1);
+    assert.equal(sms.sent.at(-1)?.to, "+15198043658");
+    assert.match(sms.sent.at(-1)?.body ?? "", /Order #1 is ready for pickup/);
     assert.equal((await post("/api/orders/1/status", { status: "done", confirm: true }, "secret")).json.order.status, "done");
+    assert.equal(sms.sent.length, beforeSms + 1); // pickup itself does not send another SMS
     assert.equal((await post("/api/orders/1/status", { status: "cancelled" }, "secret")).status, 400); // done is final
     assert.equal((await post("/api/orders/99/status", { status: "ready" }, "secret")).status, 404);
+  });
+
+  test("cancelling a phone customer's order sends one SMS with the reason", async () => {
+    const waId = "web:cancel-sms";
+    t.store.upsertCustomer(waId, "Nina", "(548) 577-4300");
+    const order = t.store.insertOrder({
+      waId, name: "Nina", items: [], pickup: "2026-09-26T13:00", flags: [], status: "hold", notes: "", createdAt: 1,
+    });
+    const beforeSms = sms.sent.length;
+    const r = await post(`/api/orders/${order.id}/status`, { status: "cancelled", reason: "Dish unavailable today" }, "secret");
+    assert.equal(r.json.order.status, "cancelled");
+    assert.equal(sms.sent.length, beforeSms + 1);
+    assert.equal(sms.sent.at(-1)?.to, "+15485774300");
+    assert.match(sms.sent.at(-1)?.body ?? "", /cancelled\. Reason: Dish unavailable today/);
   });
 
   test("accepting a held order clears its flags", async () => {
