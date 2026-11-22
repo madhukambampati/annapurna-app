@@ -195,7 +195,7 @@ test("explicit customer notes survive edits and reach the placed order", async (
   assert.match(order.notes, /Spicy/i);
 });
 
-test("after 7 PM a Weekend Special for today is refused as closed, not pushed later tonight", async () => {
+test("after 7 PM a same-day Weekend Special is submitted for Annapurna capacity review", async () => {
   const now = localToEpoch("2026-11-20T21:25", TZ);
   const t = setup({ judge: yesJudge, now });
   const settings = t.store.getSettings();
@@ -205,15 +205,27 @@ test("after 7 PM a Weekend Special for today is refused as closed, not pushed la
     items: [{ menuId: "kobbari_annam_fry", price: 12 }],
   };
   t.store.putSettings(settings);
+  t.llm.push(modelReply({
+    items: [{ id: "kobbari_annam_fry", qty: 1, pack: "single", promotion: "weekend_special", asked_for: "kobbari annam chicken fry" }],
+    pickup: "2026-11-20T22:00", name: "Asha", stage: "awaiting_confirmation",
+  }));
 
   const r = await t.say("1 Kobbari Annam with Chicken Fry combo Weekend Special, pickup today 10pm");
   assert.equal(t.store.listOrders().length, 0);
-  assert.match(r.replies[0]!, /ordering closed at 7:00 PM/i);
-  assert.match(r.replies[0]!, /future day|tomorrow/i);
-  assert.doesNotMatch(r.replies[0]!, /11:25|later tonight|after .*tonight/i);
+  assert.match(r.replies[0]!, /outside our regular hours/i);
+  assert.match(r.replies[0]!, /confirm or decline the order based on capacity/i);
+
+  const y = await t.say("yes");
+  const order = t.store.listOrders()[0]!;
+  assert.equal(order.status, "hold");
+  assert.ok(order.flags.some((flag) => /Pickup after regular hours/.test(flag)));
+  assert.ok(order.flags.some((flag) => /Same-day order after 7:00 PM/.test(flag)));
+  assert.match(y.replies[0]!, /after-hours request/i);
+  assert.match(y.replies[0]!, /confirm or decline it based on capacity/i);
+  assert.ok(t.notifier.sent.some((n) => /needs you/i.test(n.title)));
 });
 
-test("future pickup must be between 8 AM and 7 PM", async () => {
+test("pickup before 8 AM stays unavailable; pickup after 7 PM becomes owner review", async () => {
   const now = localToEpoch("2026-11-20T21:25", TZ);
   const make = () => {
     const t = setup({ judge: yesJudge, now });
@@ -227,12 +239,22 @@ test("future pickup must be between 8 AM and 7 PM", async () => {
     return t;
   };
 
-  for (const time of ["6am", "11pm"]) {
-    const t = make();
-    const r = await t.say(`1 Kobbari Annam with Chicken Fry combo Weekend Special, pickup Saturday Nov 21 ${time}`);
-    assert.equal(t.store.listOrders().length, 0);
-    assert.match(r.replies[0]!, /Pickup is available from 8:00 AM to 7:00 PM/i);
-  }
+  const early = make();
+  const earlyReply = await early.say("1 Kobbari Annam with Chicken Fry combo Weekend Special, pickup Saturday Nov 21 6am");
+  assert.equal(early.store.listOrders().length, 0);
+  assert.match(earlyReply.replies[0]!, /Regular pickup starts at 8:00 AM/i);
+
+  const late = make();
+  late.llm.push(modelReply({
+    items: [{ id: "kobbari_annam_fry", qty: 1, pack: "single", promotion: "weekend_special", asked_for: "kobbari annam chicken fry" }],
+    pickup: "2026-11-21T23:00", name: "Asha", stage: "awaiting_confirmation",
+  }));
+  const lateReply = await late.say("1 Kobbari Annam with Chicken Fry combo Weekend Special, pickup Saturday Nov 21 11pm");
+  assert.match(lateReply.replies[0]!, /outside our regular hours/i);
+  await late.say("yes");
+  const order = late.store.listOrders()[0]!;
+  assert.equal(order.status, "hold");
+  assert.ok(order.flags.some((flag) => /Pickup after regular hours/.test(flag)));
 });
 
 test("Weekend Special after Nov 22 is rejected explicitly instead of becoming a price-TBC hold", async () => {
@@ -329,7 +351,7 @@ test("an explicit pickup time already in the past is refused instead of held for
   const r = await t.say("1 Bagara Rice and Chicken Fry combo, pickup today 5pm");
   assert.equal(t.store.listOrders().length, 0);
   assert.match(r.replies[0]!, /pickup time has already passed/i);
-  assert.match(r.replies[0]!, /future pickup time between 8:00 AM and 7:00 PM/i);
+  assert.match(r.replies[0]!, /future pickup time/i);
   assert.doesNotMatch(r.replies[0]!, /Please check your order|pickup in the past/i);
 });
 
