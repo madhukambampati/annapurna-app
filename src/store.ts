@@ -234,11 +234,19 @@ export class Store {
   putSettings(s: Settings): void {
     this.kvPut("settings", s);
   }
+  /** Retired menu ids are filtered on every read/write so an old browser payload cannot resurrect them. */
+  private activeMenu(m: MenuItem[]): MenuItem[] {
+    return m.filter((item) => item.id !== "sunday_bogo_special");
+  }
+
   getMenu(): MenuItem[] {
-    return this.kvGet<MenuItem[]>("menu", defaultMenu);
+    const stored = this.kvGet<MenuItem[]>("menu", defaultMenu);
+    const active = this.activeMenu(stored);
+    if (active.length !== stored.length) this.kvPut("menu", active);
+    return active;
   }
   putMenu(m: MenuItem[]): void {
-    this.kvPut("menu", m);
+    this.kvPut("menu", this.activeMenu(m));
   }
 
   /* ----- customers and messages ----- */
