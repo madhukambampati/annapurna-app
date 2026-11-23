@@ -16,7 +16,7 @@ test("default menu matches the posters", () => {
   assert.deepEqual(p("kobbari_annam_fry"), [15, 22]);
   assert.deepEqual(p("chicken_pulao_salan"), [10, 18]);
   assert.deepEqual(p("chicken_kheema_pulao"), [12, 22]);
-  assert.equal(m.get("sunday_bogo_special")!.live, false);
+  assert.equal(m.get("sunday_bogo_special"), undefined, "retired Sunday BOGO is not part of the active/default menu");
   assert.equal(m.get("plan_full")!.plan, 90);
   assert.deepEqual(
     [m.get("full_meal_day")!.kind, m.get("full_meal_day")!.single, m.get("full_meal_day")!.days],
@@ -51,9 +51,17 @@ test("an old stored menu is upgraded once and keeps live/recipe choices", () => 
   const old = defaultMenu().filter((x) => x.id !== "kobbari_annam_fry" && x.id !== "full_meal_day");
   const salan = old.find((x) => x.id === "chicken_pulao_salan")!;
   salan.single = 15; salan.bogo = 22; salan.live = false; salan.recipe = "my recipe";
-  const sun = old.find((x) => x.id === "sunday_bogo_special")!;
-  delete sun.days;
-  sun.desc = "One-day offer. Available only this Sunday.";
+  const legacyBase = old.find((x) => x.id === "fry_piece_pulao")!;
+  old.push({
+    ...legacyBase,
+    id: "sunday_bogo_special",
+    name: "Sunday special: Fry Piece Pulao + free Chicken Kheema Pulao",
+    single: 22,
+    bogo: null,
+    live: false,
+    desc: "One-day offer. Available only this Sunday.",
+    aliases: ["sunday special", "sunday offer", "sunday bogo", "buy 1 fry piece pulao get chicken keema pulao free"],
+  });
   a.putMenu(old);
   (a as unknown as { db: { exec(s: string): void } }).db.exec("DELETE FROM kv WHERE key = 'menu_version'");
   a.close();
@@ -66,8 +74,7 @@ test("an old stored menu is upgraded once and keeps live/recipe choices", () => 
   assert.equal(s.recipe, "my recipe");
   assert.ok(menu.find((x) => x.id === "kobbari_annam_fry"));
   assert.equal(menu.find((x) => x.id === "full_meal_day")!.single, 18, "version 5 adds the priced one-day Full Meal");
-  assert.deepEqual(menu.find((x) => x.id === "sunday_bogo_special")!.days, [0], "the Sunday special is Sunday-only after the upgrade");
-  assert.doesNotMatch(menu.find((x) => x.id === "sunday_bogo_special")!.desc, /only this Sunday/i);
+  assert.equal(menu.find((x) => x.id === "sunday_bogo_special"), undefined, "version 7 removes the retired Sunday BOGO from stored menu data");
 
   // desk edit after the upgrade must survive the next start
   s.single = 11;
@@ -103,17 +110,21 @@ test("option numbers: a bare '5' counts only right after a numbered list", () =>
 
 import { upgradeMenu, extrasMenu } from "../src/menu.js";
 
-test("version 6 removes generic Sunday-special aliases from an existing stored menu", () => {
+test("version 7 removes the retired Sunday BOGO from an existing stored menu", () => {
   const stored = defaultMenu().map((x) => ({ ...x, aliases: [...x.aliases] }));
-  const sun = stored.find((x) => x.id === "sunday_bogo_special")!;
-  sun.name = "Sunday special: Fry Piece Pulao + free Chicken Kheema Pulao";
-  sun.aliases = ["sunday special", "sunday offer", "sunday bogo", "buy 1 fry piece pulao get chicken keema pulao free"];
+  const base = stored.find((x) => x.id === "fry_piece_pulao")!;
+  stored.push({
+    ...base,
+    id: "sunday_bogo_special",
+    name: "Sunday special: Fry Piece Pulao + free Chicken Kheema Pulao",
+    single: 22,
+    bogo: null,
+    live: false,
+    aliases: ["sunday special", "sunday offer", "sunday bogo", "buy 1 fry piece pulao get chicken keema pulao free"],
+  });
 
   const up = upgradeMenu(stored, 5);
-  const migrated = up.find((x) => x.id === "sunday_bogo_special")!;
-  assert.equal(migrated.name, "Fry Piece Pulao BOGO + free Chicken Kheema Pulao");
-  assert.ok(!migrated.aliases.some((a) => /^(?:sunday special|sunday offer|sunday bogo)$/i.test(a)));
-  assert.ok(migrated.aliases.includes("sunday fry piece bogo"));
+  assert.equal(up.find((x) => x.id === "sunday_bogo_special"), undefined);
 });
 
 test("extras: on the default menu with the owner's prices", () => {
