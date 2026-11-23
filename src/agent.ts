@@ -976,7 +976,7 @@ export class Agent {
         break;
       }
       default:
-        await this.modelTurn(msg, text, r, draft, open, customer, settings, out, streak, pickHint, freshResetContext);
+        await this.modelTurn(msg, text, r, draft, open, customer, settings, out, streak, lastCustomer, pickHint, freshResetContext);
     }
 
     for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
@@ -987,7 +987,7 @@ export class Agent {
 
   private async modelTurn(
     msg: Inbound, text: string, r: Route, draft: Draft | null, open: Order[],
-    customer: { name: string; profile: string }, settings: Settings, out: Outcome, streak: number, pickHint?: string, freshContext = false,
+    customer: { name: string; profile: string }, settings: Settings, out: Outcome, streak: number, lastCustomer: string | null, pickHint?: string, freshContext = false,
   ): Promise<void> {
     const { store } = this.d;
     const now = this.now();
