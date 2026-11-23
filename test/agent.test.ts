@@ -148,6 +148,19 @@ test("Weekend Special is refused for a pickup outside its offer dates instead of
 });
 
 
+
+test("switched-off Sunday BOGO with free Kheema is rejected instead of becoming the regular Gongura combo", async () => {
+  const t = setup({ judge: yesJudge });
+  const r = await t.say("I want Sunday special Fry Piece Pulao + free Kheema Pulao");
+
+  assert.equal(r.route, "not_live");
+  assert.match(r.replies[0]!, /Fry Piece Pulao BOGO \+ free Chicken Kheema Pulao isn't running right now/i);
+  assert.doesNotMatch(r.replies.join("\n"), /Gongura Fry Piece Pulao combo.*\$17|Please check your order/i);
+  assert.equal(t.llm.prompts.length, 0, "inactive legacy special must be rejected before the model can substitute it");
+  assert.equal(t.store.getDraft("+15198043658"), null);
+  assert.equal(t.store.listAlerts(true).length, 1);
+});
+
 test("unknown dish gets a clear menu reply and does not replay the old read-back", async () => {
   const t = setup({ judge: yesJudge });
   t.llm.push(modelReply({
@@ -162,7 +175,8 @@ test("unknown dish gets a clear menu reply and does not replay the old read-back
   const prompts = t.llm.prompts.length;
   const unknown = await t.say("I want Mutton Biryani");
   assert.equal(t.llm.prompts.length, prompts, "clearly unknown dish should be handled by code");
-  assert.match(unknown.replies[0]!, /Mutton Biryani isn't on our current menu/i);
+  assert.match(unknown.replies[0]!, /I don't see "Mutton Biryani" on our current menu/i);
+  assert.doesNotMatch(unknown.replies[0]!, /ordering menu.*current menu/i);
   assert.doesNotMatch(unknown.replies[0]!, /Please check your order/i);
   assert.equal(t.store.getDraft("+15198043658")!.items[0]!.id, "chicken_pulao_salan", "existing draft stays unchanged");
 });
