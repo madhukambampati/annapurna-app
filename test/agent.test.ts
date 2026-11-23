@@ -168,9 +168,19 @@ test("legacy Sunday special is rejected even when an old stored row has stale ki
   ]) {
     const t = setup({ judge: yesJudge });
     const menu = t.store.getMenu();
-    const legacy = menu.find((m) => m.id === "sunday_bogo_special")!;
-    legacy.kind = "item"; // simulate an older persisted menu row
-    legacy.live = false;
+    const base = menu.find((m) => m.id === "fry_piece_pulao")!;
+    menu.push({
+      ...base,
+      id: "sunday_bogo_special",
+      name: "Fry Piece Pulao BOGO + free Chicken Kheema Pulao",
+      kind: "item", // simulate stale legacy metadata
+      single: 22,
+      bogo: null,
+      live: false,
+      days: [0],
+      desc: "Retired one-day offer.",
+      aliases: ["fry piece pulao bogo", "fry piece pulao + free chicken kheema pulao"],
+    });
     t.store.putMenu(menu);
 
     const r = await t.say(said);
