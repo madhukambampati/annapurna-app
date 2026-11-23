@@ -88,7 +88,7 @@ export function singleDayFullMeal(): MenuItem {
 }
 
 /** Bump when the poster prices or combos change. Existing databases get the update once. */
-export const MENU_VERSION = 7;
+export const MENU_VERSION = 8;
 
 /**
  * Brings a stored menu up to the poster version. Only names, prices, descriptions and aliases of combos
@@ -125,10 +125,10 @@ export function upgradeMenu(stored: MenuItem[], fromVersion = 0): MenuItem[] {
     }
   }
 
-  // Version 7 retires the old Sunday BOGO completely. The agent keeps a code-level retired-offer
-  // guard so customers asking for the historical offer get a clear unavailable reply, but the
-  // obsolete item can no longer be selected from menu data or proposed as a real order line.
-  if (fromVersion < 7) {
+  // Versions 7/8 retire the old Sunday BOGO completely. Version 8 deliberately repeats the
+  // cleanup for production databases that may already carry a v7 marker but still contain a
+  // resurrected/stale row from an older Owner Desk payload.
+  if (fromVersion < 8) {
     for (let i = out.length - 1; i >= 0; i--) {
       if (out[i]?.id === "sunday_bogo_special") out.splice(i, 1);
     }
