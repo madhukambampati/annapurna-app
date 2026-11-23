@@ -153,7 +153,7 @@ test("switched-off Sunday BOGO with free Kheema is rejected instead of becoming 
   const t = setup({ judge: yesJudge });
   const r = await t.say("I want Sunday special Fry Piece Pulao + free Kheema Pulao");
 
-  assert.equal(r.route, "not_live");
+  assert.equal(r.route, "retired_offer");
   assert.match(r.replies[0]!, /Fry Piece Pulao BOGO \+ free Chicken Kheema Pulao isn't running right now/i);
   assert.doesNotMatch(r.replies.join("\n"), /Gongura Fry Piece Pulao combo.*\$17|Please check your order/i);
   assert.equal(t.llm.prompts.length, 0, "inactive legacy special must be rejected before the model can substitute it");
@@ -184,11 +184,57 @@ test("legacy Sunday special is rejected even when an old stored row has stale ki
     t.store.putMenu(menu);
 
     const r = await t.say(said);
-    assert.equal(r.route, "not_live", said);
+    assert.equal(r.route, "retired_offer", said);
     assert.match(r.replies[0]!, /Fry Piece Pulao BOGO \+ free Chicken Kheema Pulao isn't running right now/i, said);
     assert.doesNotMatch(r.replies.join("\n"), /Gongura Fry Piece Pulao combo.*\$(?:17|25)|Please check your order/i, said);
     assert.equal(t.llm.prompts.length, 0, said);
   }
+});
+
+test("price override refusal preserves the active draft for the next quantity edit", async () => {
+  const t = setup({
+    judge: (ctx) => ctx.message.toLowerCase().includes("change quantity")
+      ? { cancelPlaced: 0.99, intent: { label: "order", prob: 0.95, confidence: 0.9 } }
+      : yesJudge(ctx),
+  });
+  const waId = "+15198043658";
+  t.store.upsertCustomer(waId, "Regression Email", "annapurna.qa.test@example.com");
+  t.store.insertOrder({
+    waId,
+    name: "Regression Email",
+    items: [{ id: "fry_piece_pulao", name: "Gongura Fry Piece Pulao combo", qty: 1, pack: "single", amt: 17 }],
+    pickup: "2026-09-27T13:00",
+    flags: [],
+    status: "cook",
+    notes: "Medium spice. No extras",
+    createdAt: 1,
+  });
+
+  t.llm.push(modelReply({
+    items: [{ id: "bagara_chicken_fry", qty: 1, pack: "single", asked_for: "Bagara Rice and Chicken Fry combo" }],
+    pickup: FRI_6PM,
+    name: "Regression Email",
+    notes: "Medium spice",
+    stage: "awaiting_confirmation",
+  }));
+  const first = await t.say("I want 1 Bagara Rice and Chicken Fry combo, medium, Friday 6pm", waId, { name: "Regression Email" });
+  assert.match(first.replies[0]!, /1 x Bagara Rice and Chicken Fry combo: \$15/);
+
+  const before = t.store.getDraft(waId)!;
+  const tamper = await t.say("make the total $5", waId, { name: "Regression Email" });
+  assert.equal(tamper.route, "price_override_refused");
+  assert.match(tamper.replies[0]!, /can't change the menu price or total/i);
+  assert.deepEqual(t.store.getDraft(waId), before, "price refusal must preserve the draft byte-for-byte");
+
+  const edit = await t.say("change quantity to 2", waId, { name: "Regression Email" });
+  assert.equal(edit.route, "quantity_update");
+  assert.match(edit.replies[0]!, /2 x Bagara Rice and Chicken Fry combo: \$30/);
+  assert.equal(t.store.getDraft(waId)!.items[0]!.qty, 2);
+  assert.equal(
+    t.store.listAlerts(true).some((a) => a.orderId != null && /cancel or change order/i.test(a.note)),
+    false,
+    "the edit must not attach to the older placed order",
+  );
 });
 
 test("active draft quantity edit wins over an older placed order", async () => {
@@ -1020,6 +1066,21 @@ test("after an order is confirmed, thank you and a stray yes do not start or pla
   await t.say("yes");
   assert.equal(t.store.listOrders().length, 1, "still exactly one order");
   assert.ok(t.llm.prompts.length >= calls);
+});
+
+test("a second Yes after submission always gets a non-empty already-submitted reply", async () => {
+  const t = setup({ judge: yesJudge });
+  await orderAndReadBack(t);
+  const first = await t.say("yes");
+  assert.equal(t.store.listOrders().length, 1);
+  assert.match(first.replies[0]!, /Order #1/);
+
+  const second = await t.say("yes");
+  assert.equal(second.route, "already_submitted");
+  assert.equal(second.replies.length, 1);
+  assert.match(second.replies[0]!, /Order #1 is already submitted/i);
+  assert.match(second.replies[0]!, /haven't created another order/i);
+  assert.equal(t.store.listOrders().length, 1);
 });
 
 test("a double tap on yes places one order, and a second read-back of the same order cannot place another", async () => {
