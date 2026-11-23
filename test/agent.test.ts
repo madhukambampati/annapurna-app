@@ -161,6 +161,97 @@ test("switched-off Sunday BOGO with free Kheema is rejected instead of becoming 
   assert.equal(t.store.listAlerts(true).length, 1);
 });
 
+test("legacy Sunday special is rejected even when an old stored row has stale kind metadata", async () => {
+  for (const said of [
+    "Sunday special Fry Piece Pulao + free Kheema Pulao",
+    "Fry Piece Pulao BOGO with free Chicken Kheema Pulao",
+  ]) {
+    const t = setup({ judge: yesJudge });
+    const menu = t.store.getMenu();
+    const legacy = menu.find((m) => m.id === "sunday_bogo_special")!;
+    legacy.kind = "item"; // simulate an older persisted menu row
+    legacy.live = false;
+    t.store.putMenu(menu);
+
+    const r = await t.say(said);
+    assert.equal(r.route, "not_live", said);
+    assert.match(r.replies[0]!, /Fry Piece Pulao BOGO \+ free Chicken Kheema Pulao isn't running right now/i, said);
+    assert.doesNotMatch(r.replies.join("\n"), /Gongura Fry Piece Pulao combo.*\$(?:17|25)|Please check your order/i, said);
+    assert.equal(t.llm.prompts.length, 0, said);
+  }
+});
+
+test("active draft quantity edit wins over an older placed order", async () => {
+  const t = setup({
+    judge: (ctx) => ctx.message.toLowerCase().includes("change quantity")
+      ? { cancelPlaced: 0.99, intent: { label: "order", prob: 0.95, confidence: 0.9 } }
+      : yesJudge(ctx),
+  });
+  const waId = "+15198043658";
+  t.store.upsertCustomer(waId, "Regression Email", "annapurna.qa.test@example.com");
+  t.store.insertOrder({
+    waId,
+    name: "Regression Email",
+    items: [{ id: "chicken_pulao_salan", name: "Chicken Pulao with Mirchi Ka Salan and Raitha", qty: 1, pack: "single", amt: 10 }],
+    pickup: "2026-09-26T14:00",
+    flags: [],
+    status: "cook",
+    notes: "TEST ORDER - DO NOT COOK",
+    createdAt: 1,
+  });
+
+  t.llm.push(modelReply({
+    items: [{ id: "bagara_chicken_fry", qty: 1, pack: "single", asked_for: "Bagara Rice and Chicken Fry combo" }],
+    pickup: FRI_6PM,
+    name: "Regression Email",
+    stage: "awaiting_confirmation",
+  }));
+  const first = await t.say("I want 1 Bagara Rice and Chicken Fry combo, Friday 6pm", waId, { name: "Regression Email" });
+  assert.match(first.replies[0]!, /1 x Bagara Rice and Chicken Fry combo: \$15/);
+
+  const alertsBefore = t.store.listAlerts(true).length;
+  const edit = await t.say("change quantity to 2", waId, { name: "Regression Email" });
+  assert.equal(edit.route, "quantity_update");
+  assert.match(edit.replies[0]!, /2 x Bagara Rice and Chicken Fry combo: \$30/);
+  assert.equal(t.store.getDraft(waId)!.items[0]!.qty, 2);
+  assert.equal(t.store.listAlerts(true).length, alertsBefore, "draft edit must not create a placed-order change alert");
+  assert.doesNotMatch(edit.replies.join("\n"), /passed this to Annapurna|order #1 can be changed or cancelled/i);
+});
+
+test("a new different dish drops stale prep notes and current spice survives later quantity edits", async () => {
+  const t = setup({ judge: yesJudge });
+  const waId = "+15198043658";
+
+  t.llm.push(modelReply({
+    items: [{ id: "fry_piece_pulao", qty: 1, pack: "single", asked_for: "Gongura Fry Piece Pulao combo" }],
+    pickup: FRI_6PM,
+    name: "Asha",
+    notes: "Spicy. No extras",
+    stage: "awaiting_confirmation",
+  }));
+  const oldDraft = await t.say("I want 1 Gongura Fry Piece Pulao combo, spicy, no extras, Friday 6pm", waId);
+  assert.match(oldDraft.replies[0]!, /Note: .*Spicy.*No extras/i);
+
+  // Simulate the model echoing stale history; code must trust the new dish/current customer notes instead.
+  t.llm.push(modelReply({
+    items: [{ id: "bagara_chicken_fry", qty: 1, pack: "single", asked_for: "Bagara Rice and Chicken Fry combo" }],
+    pickup: "2026-09-27T13:00",
+    name: "Asha",
+    notes: "Spicy. No extras. Medium spice",
+    stage: "awaiting_confirmation",
+  }));
+  const fresh = await t.say("I want 1 Bagara Rice and Chicken Fry combo, medium, Sunday 1pm", waId);
+  assert.match(fresh.replies[0]!, /Note: Medium spice/i);
+  assert.doesNotMatch(fresh.replies[0]!, /Note:.*Spicy|No extras/i);
+  assert.equal(t.store.getDraft(waId)!.notes, "Medium spice");
+
+  const edited = await t.say("change quantity to 2", waId);
+  assert.match(edited.replies[0]!, /2 x Bagara Rice and Chicken Fry combo: \$30/);
+  assert.match(edited.replies[0]!, /Note: Medium spice/i);
+  assert.doesNotMatch(edited.replies[0]!, /Spicy|No extras/i);
+  assert.equal(t.store.getDraft(waId)!.notes, "Medium spice");
+});
+
 test("unknown dish gets a clear menu reply and does not replay the old read-back", async () => {
   const t = setup({ judge: yesJudge });
   t.llm.push(modelReply({
