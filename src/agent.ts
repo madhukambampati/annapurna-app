@@ -431,6 +431,46 @@ function simpleCustomPickup(text: string, now: number, tz: string): string | nul
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(clock.h)}:${pad(clock.mi)}`;
 }
 
+/**
+ * Customers often choose the day and time in two messages: "Sunday, for lunch" then "1:15 pm".
+ * If the current message is only a clock time, carry the weekday from the immediately previous
+ * customer message deterministically. This prevents a same-day Sunday from drifting to next Sunday.
+ */
+function carriedWeekdayPickup(previousCustomerText: string | null, text: string, now: number, tz: string): string | null {
+  if (!previousCustomerText) return null;
+  const clock = parseClock(text);
+  if (!clock) return null;
+
+  // Never override a date/day the customer explicitly supplied in the current message.
+  if (/\b(?:today|tomorrow|sun(?:day)?|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|sept|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i.test(text)) return null;
+  if (/\b\d{4}-\d{2}-\d{2}\b/.test(text)) return null;
+
+  const wk = /\b(?:(this|next)\s+)?(sun(?:day)?|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?)\b/i.exec(previousCustomerText);
+  if (!wk) return null;
+
+  const days: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+  const want = days[wk[2]!.slice(0, 3).toLowerCase()]!;
+  let iso = nextDateForDow(now, tz, want);
+  const make = (dateIso: string) => `${dateIso}T${pad(clock.h)}:${pad(clock.mi)}`;
+
+  if (wk[1]?.toLowerCase() === "next") {
+    const d = new Date(`${iso}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 7);
+    iso = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+    return make(iso);
+  }
+
+  let candidate = make(iso);
+  // If the named weekday is today but the chosen time has already passed, use the next occurrence.
+  if (localToEpoch(candidate, tz) <= now) {
+    const d = new Date(`${iso}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 7);
+    iso = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+    candidate = make(iso);
+  }
+  return candidate;
+}
+
 function explicitFuturePickupIntent(text: string, now: number, tz: string): boolean {
   if (/\b(?:tomorrow|next\s+(?:week|sun(?:day)?|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?))\b/i.test(text)) return true;
   if (/\b\d{4}-\d{2}-\d{2}\b/.test(text) || /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|sept|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}\b/i.test(text)) return true;
@@ -500,6 +540,7 @@ export class Agent {
     let customer = store.upsertCustomer(msg.from, msg.name);
     const before = store.getMessages(msg.from, 40);
     const lastShop = [...before].reverse().find((m) => m.who === "agent" || m.who === "owner")?.text ?? null;
+    const lastCustomer = [...before].reverse().find((m) => m.who === "cust")?.text ?? null;
     store.addMessage(msg.from, "cust", text, now);
 
     let draft = store.getDraft(msg.from);
@@ -1057,6 +1098,8 @@ export class Agent {
         custName = typeof rd.customer_name === "string" && rd.customer_name.trim() ? rd.customer_name.trim().slice(0, 60) : null;
       }
       if (ADD_MORE.test(text)) again = true;
+      const carriedPickup = carriedWeekdayPickup(lastCustomer, text, now, settings.tz);
+      if (carriedPickup) pickup = carriedPickup;
       const wk = checkWeekday(text, pickup, now, settings.tz);
       if (wk) {
         issues.push(wk);
