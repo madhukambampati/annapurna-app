@@ -511,7 +511,7 @@ test("a dish that is not on the menu is not swapped for another; Maddy is told",
   const t = setup();
   t.llm.push(modelReply({ reply: "Sure, paneer tikka coming up!", items: [{ id: "kheema_fry", qty: 1, pack: "single", asked_for: "paneer tikka masala" }], pickup: FRI_6PM, stage: "awaiting_confirmation" }));
   const r = await t.say("1 paneer tikka masala friday 6pm");
-  assert.match(r.replies[0]!, /I don't see "paneer tikka masala" on the ordering menu/);
+  assert.match(r.replies[0]!, /I don't see "paneer tikka masala" on our current menu/);
   assert.doesNotMatch(r.replies[0]!, /coming up/);
   assert.equal(t.store.getDraft("+15198043658")!.items.length, 0);
   assert.equal(t.store.listAlerts(true).length, 1);
