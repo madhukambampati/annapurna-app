@@ -138,7 +138,7 @@ function clearlyNormalMenuOrder(text: string, menu: MenuItem[]): boolean {
   });
 }
 
-function requestedSwitchedOffCombo(text: string, menu: MenuItem[]): MenuItem | null {
+function requestedSwitchedOffCombo(text: string, menu: MenuItem[]): Pick<MenuItem, "name"> | null {
   // The legacy Sunday BOGO overlaps heavily with the live Gongura Fry Piece Pulao combo.
   // Treat an explicit "free Kheema/Keema Pulao" request as the old promotion even when the
   // customer omits the word "Chicken"; never silently substitute the regular live combo.
@@ -147,7 +147,9 @@ function requestedSwitchedOffCombo(text: string, menu: MenuItem[]): MenuItem | n
     /\bfry\s+piece\s+(?:pulao|pulav)\b/i.test(text) &&
     /\b(?:free|bogo|buy\s*1\s*get\s*1|buy\s+one\s+get\s+one)\b/i.test(text) &&
     /\b(?:chicken\s+)?(?:kheema|keema)\s+(?:pulao|pulav)\b/i.test(text);
-  if (legacySunday && !legacySunday.live && asksLegacySunday) return legacySunday;
+  if (asksLegacySunday) {
+    return { name: legacySunday?.name || "Fry Piece Pulao BOGO + free Chicken Kheema Pulao" };
+  }
 
   const said = tokens(text);
   if (!said.size) return null;
