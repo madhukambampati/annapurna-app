@@ -72,6 +72,8 @@ const CUSTOM_ABANDON = /(?:\bnever\s*mind\b|\bnevermind\b|\bforget\s+(?:it|that|
 /** Explicit reset of the current unplaced draft. Placed orders are never touched. */
 const DRAFT_RESET = /\b(?:forget\s+everything\s+before\s+this|start\s+over|reset\s+(?:this|the|my)?\s*order|fresh\s+order)\b/i;
 const CUSTOMER_CUSTOM_PRICE = /(?:\$\s*\d{1,5}(?:\.\d{1,2})?|\b\d{1,5}(?:\.\d{1,2})?\s*(?:\$|cad)\b)/i;
+/** A customer cannot override menu pricing on a pending normal order. */
+const PRICE_OVERRIDE_REQUEST = /\b(?:total|price|cost|charge)\b/i;
 const PLACEMENT_CLAIM = /\b(?:order\s+(?:is\s+|has\s+been\s+|was\s+)?(?:confirm(?:ed|ing)|placed|booked)|(?:confirm(?:ed|ing)|placed|booked)\s+(?:this|it|the\s+order|your\s+order)|(?:this|it|that|the\s+order|your\s+order)\s+(?:went|has\s+gone|is\s+going)\s+through|(?:went|gone|going)\s+through|successfully\s+(?:placed|confirmed|booked)|lock(?:ing|ed)?\s+(?:this|it|the order)\s+in)\b/i;
 const PLACED_ORDER_CHANGE = /\b(?:change|modify|cancel|update|edit|replace)\b/i;
 const EXPLICIT_PLACED_ORDER_TARGET = /\b(?:order\s*#\s*\d+|order\s+#?\d+|confirmed\s+order|placed\s+order|existing\s+order)\b/i;
@@ -138,16 +140,17 @@ function clearlyNormalMenuOrder(text: string, menu: MenuItem[]): boolean {
   });
 }
 
-function requestedSwitchedOffCombo(text: string, menu: MenuItem[]): Pick<MenuItem, "name"> | null {
-  // The legacy Sunday BOGO overlaps heavily with the live Gongura Fry Piece Pulao combo.
-  // Treat an explicit "free Kheema/Keema Pulao" request as the old promotion even when the
-  // customer omits the word "Chicken"; never silently substitute the regular live combo.
-  const legacySunday = menu.find((item) => item.id === "sunday_bogo_special");
-  const asksLegacySunday =
-    /\bfry\s+piece\s+(?:pulao|pulav)\b/i.test(text) &&
+function requestedRetiredSundayOffer(text: string): boolean {
+  return /\bfry\s+piece\s+(?:pulao|pulav)\b/i.test(text) &&
     /\b(?:free|bogo|buy\s*1\s*get\s*1|buy\s+one\s+get\s+one)\b/i.test(text) &&
     /\b(?:chicken\s+)?(?:kheema|keema)\s+(?:pulao|pulav)\b/i.test(text);
-  if (asksLegacySunday) {
+}
+
+function requestedSwitchedOffCombo(text: string, menu: MenuItem[]): Pick<MenuItem, "name"> | null {
+  // The legacy Sunday BOGO overlaps heavily with the live Gongura Fry Piece Pulao combo.
+  // Treat an explicit "free Kheema/Keema Pulao" request as retired even if the old menu row is gone.
+  const legacySunday = menu.find((item) => item.id === "sunday_bogo_special");
+  if (requestedRetiredSundayOffer(text)) {
     return { name: legacySunday?.name || "Fry Piece Pulao BOGO + free Chicken Kheema Pulao" };
   }
 
@@ -627,6 +630,33 @@ export class Agent {
       text = remainder;
     }
 
+    // Retired offer wording is blocked before any model, store-hours or menu matching path can
+    // reinterpret it as the live Gongura Fry Piece Pulao combo.
+    if (requestedRetiredSundayOffer(text)) {
+      out.route = "retired_offer";
+      out.issues.push("not_live");
+      out.replies.push("Sorry, Fry Piece Pulao BOGO + free Chicken Kheema Pulao isn't running right now, so I can't take that offer. Please choose a current menu item instead.");
+      await this.raise(
+        msg.from,
+        customer.name || msg.name || "Customer",
+        `Asked for the retired Fry Piece Pulao BOGO + free Chicken Kheema Pulao offer: "${text.slice(0, 140)}"`,
+        null,
+        out,
+      );
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
+    }
+
+    // A second Yes after a draft was already submitted must always get a useful reply.
+    if (!draft && open.length > 0 && (BARE_OK.test(text) || CONFIRM_BUTTON.test(text))) {
+      const latest = open[0]!;
+      out.route = "already_submitted";
+      const state = latest.status === "cook" ? "confirmed" : latest.status === "ready" ? "ready" : "already submitted";
+      out.replies.push(`Order #${latest.id} is ${state}. I haven't created another order.`);
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
+    }
+
     const manuallyClosedToday = !storeManualOpenNow(settings, now);
     const beforeOpenToday = !manuallyClosedToday && beforeDailyOpening(settings, now);
     const explicitPickupFromText = simpleCustomPickup(text, now, settings.tz);
@@ -819,6 +849,23 @@ export class Agent {
     if (draft?.custom && draft.custom.price == null && CUSTOMER_CUSTOM_PRICE.test(text)) {
       out.route = "custom_customer_price_ignored";
       out.replies.push("Thanks — I've noted your message, but the final price must come from Annapurna Home Foods. No order is placed yet.");
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
+    }
+
+    // A price/total override attempt on a normal pending draft is refused without changing or
+    // clearing that draft. This keeps the next "change quantity to 2" attached to the draft,
+    // instead of falling through to an older placed order.
+    if (draft && !draft.custom && CUSTOMER_CUSTOM_PRICE.test(text) && PRICE_OVERRIDE_REQUEST.test(text)) {
+      out.route = "price_override_refused";
+      out.replies.push(`I can't change the menu price or total. Your pending order is still unchanged:\n${this.readBack(draft, settings, now, open)}`);
+      await this.raise(
+        msg.from,
+        customer.name || msg.name || "Customer",
+        `Tried to override the price/total on a pending order: "${text.slice(0, 140)}". Draft was left unchanged.`,
+        null,
+        out,
+      );
       for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
       return out;
     }
