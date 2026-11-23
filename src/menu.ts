@@ -40,11 +40,6 @@ export function posterCombos(): MenuItem[] {
       desc: "",
       aliases: ["chicken kheema pulao with raitha", "chicken kheema pulao", "kheema pulao"],
     },
-    {
-      ...base, id: "sunday_bogo_special", name: "Fry Piece Pulao BOGO + free Chicken Kheema Pulao", kind: "combo", single: 22, bogo: null, live: false, days: [0],
-      desc: "Buy 1 Fry Piece Pulao, get a Chicken Kheema Pulao free.",
-      aliases: ["fry piece pulao bogo", "sunday fry piece bogo", "fry piece pulao + free chicken kheema pulao", "buy 1 fry piece pulao get chicken keema pulao free"],
-    },
   ];
 }
 
@@ -93,7 +88,7 @@ export function singleDayFullMeal(): MenuItem {
 }
 
 /** Bump when the poster prices or combos change. Existing databases get the update once. */
-export const MENU_VERSION = 6;
+export const MENU_VERSION = 7;
 
 /**
  * Brings a stored menu up to the poster version. Only names, prices, descriptions and aliases of combos
@@ -114,8 +109,8 @@ export function upgradeMenu(stored: MenuItem[], fromVersion = 0): MenuItem[] {
   // Version 5 adds an explicit $18 one-day Full Meal Plan option. Once added, owner edits survive future starts.
   if (fromVersion < 5 && !out.some((m) => m.id === "full_meal_day")) out.push(singleDayFullMeal());
 
-  // Version 6 removes the generic "Sunday special" collision. A customer saying
-  // "Weekend Special, Sunday ..." must never be routed to this old switched-off BOGO.
+  // Version 6 removed generic aliases from the old Sunday BOGO so it could not collide with
+  // regular Weekend Special wording.
   if (fromVersion < 6) {
     const oldSunday = out.find((m) => m.id === "sunday_bogo_special");
     if (oldSunday) {
@@ -127,6 +122,15 @@ export function upgradeMenu(stored: MenuItem[], fromVersion = 0): MenuItem[] {
       for (const a of ["fry piece pulao bogo", "sunday fry piece bogo", "fry piece pulao + free chicken kheema pulao"]) {
         if (!oldSunday.aliases.includes(a)) oldSunday.aliases.push(a);
       }
+    }
+  }
+
+  // Version 7 retires the old Sunday BOGO completely. The agent keeps a code-level retired-offer
+  // guard so customers asking for the historical offer get a clear unavailable reply, but the
+  // obsolete item can no longer be selected from menu data or proposed as a real order line.
+  if (fromVersion < 7) {
+    for (let i = out.length - 1; i >= 0; i--) {
+      if (out[i]?.id === "sunday_bogo_special") out.splice(i, 1);
     }
   }
   // Extras are only added when missing, so prices Maddy changed on the desk are kept.
