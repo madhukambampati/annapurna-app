@@ -206,11 +206,12 @@ function renderDashboard() {
   const ready = state.orders.filter((o) => o.status === "ready").length;
   const done = state.orders.filter((o) => o.status === "done").length;
   const active = state.orders.filter((o) => ["hold","cook","ready"].includes(o.status));
-  const launchAt = Number(state.ownerLaunchAt) || 0;
   const tz = state.settings && state.settings.tz ? state.settings.tz : "America/Toronto";
   const today = localDateKey(Date.now(), tz);
+  // Today's sales belongs to today's pickup/business day, not the date the order was originally placed.
+  // Pickup times are stored as kitchen-local YYYY-MM-DDTHH:mm strings, so compare the date portion directly.
   const sales = state.orders
-    .filter((o) => !["hold", "cancelled"].includes(o.status) && Number(o.createdAt || 0) >= launchAt && localDateKey(o.createdAt, tz) === today)
+    .filter((o) => !["hold", "cancelled"].includes(o.status) && typeof o.pickup === "string" && o.pickup.slice(0, 10) === today)
     .reduce((sum, o) => {
       const t = totalOf(o.items);
       return sum + (t == null ? 0 : t);
@@ -249,7 +250,7 @@ function renderDashboard() {
     h("div", { class: "owner-kpi kpi-cook" }, h("small", {}, "To cook"), h("strong", {}, cooking), h("span", {}, "Confirmed orders")),
     h("div", { class: "owner-kpi kpi-ready" }, h("small", {}, "Ready"), h("strong", {}, ready), h("span", {}, "Waiting for pickup")),
     h("div", { class: "owner-kpi kpi-attn" + (activeAlerts + held ? " has-items" : "") }, h("small", {}, "Needs attention"), h("strong", {}, activeAlerts + held), h("span", {}, "Alerts + held orders")),
-    h("div", { class: "owner-kpi kpi-sales" }, h("small", {}, "Today's sales"), h("strong", {}, money(sales)), h("span", {}, "Fresh orders today")),
+    h("div", { class: "owner-kpi kpi-sales" }, h("small", {}, "Today's sales"), h("strong", {}, money(sales)), h("span", {}, "Today's pickup orders")),
     h("div", { class: "owner-kpi kpi-total-sales" }, h("small", {}, "Total sales"), h("strong", {}, money(totalSales)), h("span", {}, "Accepted + completed orders"))
   );
 
