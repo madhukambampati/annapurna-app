@@ -142,7 +142,7 @@ function requestedSwitchedOffCombo(text: string, menu: MenuItem[]): MenuItem | n
   // The legacy Sunday BOGO overlaps heavily with the live Gongura Fry Piece Pulao combo.
   // Treat an explicit "free Kheema/Keema Pulao" request as the old promotion even when the
   // customer omits the word "Chicken"; never silently substitute the regular live combo.
-  const legacySunday = menu.find((item) => item.id === "sunday_bogo_special" && item.kind === "combo");
+  const legacySunday = menu.find((item) => item.id === "sunday_bogo_special");
   const asksLegacySunday =
     /\bfry\s+piece\s+(?:pulao|pulav)\b/i.test(text) &&
     /\b(?:free|bogo|buy\s*1\s*get\s*1|buy\s+one\s+get\s+one)\b/i.test(text) &&
@@ -220,6 +220,17 @@ function deterministicFreshQuantity(text: string, item: MenuItem): number | null
   return explicitFreshQuantity(text, item) ?? 1;
 }
 
+/** A direct edit such as "change quantity to 2" belongs to the active unplaced read-back,
+ * unless the customer explicitly names a placed order. */
+function explicitQuantityEdit(text: string): number | null {
+  const m =
+    /\b(?:change|update|edit|set)\s+(?:the\s+)?(?:quantity|qty)\s+(?:to\s+)?(\d{1,2})\b/i.exec(text) ??
+    /\bmake\s+(?:it\s+)?(?:quantity|qty)\s+(\d{1,2})\b/i.exec(text) ??
+    /\b(?:quantity|qty)\s*(?:to|=|:)\s*(\d{1,2})\b/i.exec(text);
+  const n = m ? Number(m[1]) : 0;
+  return n > 0 && n < 100 ? n : null;
+}
+
 function deterministicFreshDraft(text: string, menu: MenuItem[], now: number, settings: Settings, customerName: string | null): Draft | null {
   if (looksCustom(text, menu)) return null;
   const said = tokens(text);
@@ -291,6 +302,16 @@ function explicitCustomerNotes(text: string): string[] {
 function mergedCustomerNotes(previous: string, modelValue: unknown, text: string): string {
   if (/\b(?:remove|clear|delete)\s+(?:the\s+)?(?:note|notes|instructions)\b|\bno\s+(?:note|notes)\b/i.test(text)) return "";
 
+  const spiceChoice = (value: string): string | null => {
+    const m = /\b(extra\s+spicy|less\s+spicy|no\s+spice|medium(?:\s+spice)?|mild|spicy)\b/i.exec(value);
+    if (!m) return null;
+    const v = m[1]!.toLowerCase();
+    if (v === "medium") return "Medium spice";
+    return v.charAt(0).toUpperCase() + v.slice(1);
+  };
+  // The customer's current words are authoritative. Model notes are only a fallback.
+  const currentSpice = spiceChoice(text) ?? (typeof modelValue === "string" ? spiceChoice(modelValue) : null);
+
   const parts: string[] = [];
   const add = (v: string) => {
     const x = v.replace(/\s+/g, " ").replace(/^[\s,;:.\-–—]+|[\s,;:.\-–—]+$/g, "").trim();
@@ -335,9 +356,16 @@ function mergedCustomerNotes(previous: string, modelValue: unknown, text: string
   if (typeof modelValue === "string") harvest(modelValue.slice(0, 300));
   for (const n of explicitCustomerNotes(text)) harvest(n);
 
-  // If a specific spice note exists, a stray generic "Medium" adds no information.
-  const hasMediumSpice = parts.some((p) => /^medium spice$/i.test(p));
-  const finalParts = hasMediumSpice ? parts.filter((p) => !/^medium$/i.test(p)) : parts;
+  // Spice levels are mutually exclusive. If this turn names a spice level, remove every older/model
+  // spice value and keep exactly the customer's current choice.
+  let finalParts = parts;
+  if (currentSpice) {
+    finalParts = finalParts.filter((p) => !/^(?:extra spicy|less spicy|no spice|medium(?: spice)?|mild|spicy)$/i.test(p));
+    finalParts.push(currentSpice);
+  } else {
+    const hasMediumSpice = finalParts.some((p) => /^medium spice$/i.test(p));
+    if (hasMediumSpice) finalParts = finalParts.filter((p) => !/^medium$/i.test(p));
+  }
   return finalParts.join(". ").slice(0, 300);
 }
 
@@ -886,6 +914,23 @@ export class Agent {
       return out;
     }
 
+    // A direct quantity edit on the active unplaced read-back wins over older placed orders.
+    // "change quantity to 2" must edit this draft, not become a change/cancel alert for order #46.
+    const phraseQty = explicitQuantityEdit(text);
+    if (draft && !draft.custom && draft.items.length === 1 && phraseQty != null &&
+        !EXPLICIT_PLACED_ORDER_TARGET.test(text) &&
+        (draft.stage === "awaiting_confirmation" || /Please check your (?:order|extras)/i.test(lastShop ?? ""))) {
+      const line = { ...draft.items[0]!, qty: phraseQty };
+      line.amt = orderLineAmt(menu, line, settings, now, draft.pickup_local);
+      const next: Draft = { ...draft, items: [line], stage: draft.pickup_local ? "awaiting_confirmation" : "collecting", readback_hash: null };
+      if (next.stage === "awaiting_confirmation") next.readback_hash = draftHash(next);
+      store.putDraft(msg.from, next);
+      out.route = "quantity_update";
+      out.replies.push(this.readBack(next, settings, now, open));
+      for (const reply of out.replies) store.addMessage(msg.from, "agent", reply, this.now());
+      return out;
+    }
+
     // A bare number immediately after a one-line read-back means quantity, not menu option.
     const bareQty = /^\s*([1-7])\s*$/.exec(text);
     if (draft && !draft.custom && draft.items.length === 1 && bareQty &&
@@ -1104,7 +1149,14 @@ export class Agent {
         }
         issues.push(...sanitized.issues);
         pickup = typeof rd.pickup_local === "string" && isLocalIso(rd.pickup_local) ? rd.pickup_local : null;
-        notes = mergedCustomerNotes(notes, rd.notes, text);
+
+        // If the customer explicitly names a different main dish, this is a new/replaced unplaced
+        // order context. Food-prep notes such as "Spicy" or "No extras" from the old draft must not
+        // bleed into the new dish, and stale model notes from history are ignored for this turn.
+        const explicitItemNow = deterministicFreshMenuItem(text, menu);
+        const previousMain = draft?.items.find((old) => findItem(menu, old.id)?.kind !== "addon");
+        const changedMainDish = !!explicitItemNow && !!previousMain && explicitItemNow.id !== previousMain.id;
+        notes = mergedCustomerNotes(changedMainDish ? "" : notes, changedMainDish ? undefined : rd.notes, text);
         custName = typeof rd.customer_name === "string" && rd.customer_name.trim() ? rd.customer_name.trim().slice(0, 60) : null;
       }
       if (ADD_MORE.test(text)) again = true;
