@@ -447,6 +447,30 @@ test("complex fresh reset gives Claude only the post-reset message, never old ch
   assert.doesNotMatch(prompt, /Forget everything before this/i);
 });
 
+test("same-day weekday carried from the previous customer message does not jump a week", async () => {
+  const now = localToEpoch("2026-11-22T12:35", TZ); // Sunday
+  const t = setup({ judge: yesJudge, now });
+  const items: ProposedTestItem[] = [
+    { id: "kobbari_annam_fry", qty: 1, pack: "bogo", asked_for: "Kobbari Annam with Chicken Fry combo" },
+    { id: "bagara_chicken_fry", qty: 1, pack: "bogo", asked_for: "Bagara Rice and Chicken Fry combo" },
+  ];
+
+  t.llm.push(modelReply({ reply: "What pickup day/time works?", items, pickup: null, name: "Nikhila", notes: "Medium spice", stage: "collecting" }));
+  await t.say("I want both combos Buy 1 Get 1 with medium spicy");
+
+  t.llm.push(modelReply({ reply: "What exact time?", items, pickup: null, name: "Nikhila", notes: "Medium spice", stage: "collecting" }));
+  await t.say("Sunday, for lunch");
+
+  // Even if the model incorrectly proposes next Sunday, code must combine the prior weekday with
+  // this time-only reply and keep today because 1:15 PM is still in the future.
+  t.llm.push(modelReply({ reply: "Ready", items, pickup: "2026-11-29T13:15", name: "Nikhila", notes: "Medium spice", stage: "awaiting_confirmation" }));
+  const r = await t.say("1:15 pm");
+
+  assert.equal(t.store.getDraft("+15198043658")!.pickup_local, "2026-11-22T13:15");
+  assert.match(r.replies[0]!, /Pickup: Sun, Nov 22 · 1:15 PM/);
+  assert.doesNotMatch(r.replies[0]!, /Nov 29/);
+});
+
 test("regression: asked for Bagara rice and chicken fry, model wrote kheema fry", async () => {
   const t = setup({ judge: yesJudge });
   const menu = t.store.getMenu();
