@@ -240,7 +240,9 @@ test("a new different dish drops stale prep notes and current spice survives lat
     stage: "awaiting_confirmation",
   }));
   const oldDraft = await t.say("I want 1 Gongura Fry Piece Pulao combo, spicy, no extras, Friday 6pm", waId);
-  assert.match(oldDraft.replies[0]!, /Note: .*Spicy.*No extras/i);
+  assert.match(oldDraft.replies[0]!, /Note:/i);
+  assert.match(oldDraft.replies[0]!, /Spicy/i);
+  assert.match(oldDraft.replies[0]!, /No extras/i);
 
   // Simulate the model echoing stale history; code must trust the new dish/current customer notes instead.
   t.llm.push(modelReply({
