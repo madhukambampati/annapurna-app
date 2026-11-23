@@ -1001,20 +1001,13 @@ test("the simulator stays off unless switched on, and the desk needs the token",
 });
 
 describe("web: menu status, pickup days and human handoff", () => {
-  test("every dish shows exactly one availability status; the Sunday special is off, and shows its date when on", () =>
-    withRig(async ({ t, call }) => {
+  test("every active dish shows one availability status; the retired Sunday BOGO is not published", () =>
+    withRig(async ({ call }) => {
       const m = (await call("GET", "/web/menu")).json;
       const by = (id: string) => m.items.find((x: any) => x.id === id);
-      assert.equal(by("sunday_bogo_special").live, false);
-      assert.equal(by("sunday_bogo_special").availability, "Not running right now");
-      assert.doesNotMatch(by("sunday_bogo_special").desc, /only this Sunday|Available only/i);
+      assert.equal(by("sunday_bogo_special"), undefined);
       assert.equal(by("kheema_fry").availability, "Pickup Fri to Sun");
       assert.equal(by("plan_full").availability, "Pickup Mon to Fri");
-      const menu = t.store.getMenu();
-      menu.find((x) => x.id === "sunday_bogo_special")!.live = true;
-      t.store.putMenu(menu);
-      const on = (await call("GET", "/web/menu")).json.items.find((x: any) => x.id === "sunday_bogo_special");
-      assert.match(on.availability, /^Sunday only · September 27$/);
       assert.deepEqual(m.contact, { instagram: "annapurna_hometaste", phone: "" });
     }));
 
