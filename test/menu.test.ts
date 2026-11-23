@@ -74,7 +74,7 @@ test("an old stored menu is upgraded once and keeps live/recipe choices", () => 
   assert.equal(s.recipe, "my recipe");
   assert.ok(menu.find((x) => x.id === "kobbari_annam_fry"));
   assert.equal(menu.find((x) => x.id === "full_meal_day")!.single, 18, "version 5 adds the priced one-day Full Meal");
-  assert.equal(menu.find((x) => x.id === "sunday_bogo_special"), undefined, "version 7 removes the retired Sunday BOGO from stored menu data");
+  assert.equal(menu.find((x) => x.id === "sunday_bogo_special"), undefined, "menu migration removes the retired Sunday BOGO from stored menu data");
 
   // desk edit after the upgrade must survive the next start
   s.single = 11;
@@ -110,7 +110,7 @@ test("option numbers: a bare '5' counts only right after a numbered list", () =>
 
 import { upgradeMenu, extrasMenu } from "../src/menu.js";
 
-test("version 7 removes the retired Sunday BOGO from an existing stored menu", () => {
+test("version 8 removes the retired Sunday BOGO even from a database already marked version 7", () => {
   const stored = defaultMenu().map((x) => ({ ...x, aliases: [...x.aliases] }));
   const base = stored.find((x) => x.id === "fry_piece_pulao")!;
   stored.push({
@@ -123,8 +123,27 @@ test("version 7 removes the retired Sunday BOGO from an existing stored menu", (
     aliases: ["sunday special", "sunday offer", "sunday bogo", "buy 1 fry piece pulao get chicken keema pulao free"],
   });
 
-  const up = upgradeMenu(stored, 5);
+  const up = upgradeMenu(stored, 7);
   assert.equal(up.find((x) => x.id === "sunday_bogo_special"), undefined);
+});
+
+test("Store filters a retired Sunday BOGO on both menu write and read", () => {
+  const store = new Store(":memory:");
+  const menu = store.getMenu();
+  const base = menu.find((x) => x.id === "fry_piece_pulao")!;
+  store.putMenu([
+    ...menu,
+    {
+      ...base,
+      id: "sunday_bogo_special",
+      name: "Fry Piece Pulao BOGO + free Chicken Kheema Pulao",
+      single: 22,
+      bogo: null,
+      live: false,
+    },
+  ]);
+  assert.equal(store.getMenu().some((x) => x.id === "sunday_bogo_special"), false);
+  store.close();
 });
 
 test("extras: on the default menu with the owner's prices", () => {
