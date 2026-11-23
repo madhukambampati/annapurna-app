@@ -139,6 +139,16 @@ function clearlyNormalMenuOrder(text: string, menu: MenuItem[]): boolean {
 }
 
 function requestedSwitchedOffCombo(text: string, menu: MenuItem[]): MenuItem | null {
+  // The legacy Sunday BOGO overlaps heavily with the live Gongura Fry Piece Pulao combo.
+  // Treat an explicit "free Kheema/Keema Pulao" request as the old promotion even when the
+  // customer omits the word "Chicken"; never silently substitute the regular live combo.
+  const legacySunday = menu.find((item) => item.id === "sunday_bogo_special" && item.kind === "combo");
+  const asksLegacySunday =
+    /\bfry\s+piece\s+(?:pulao|pulav)\b/i.test(text) &&
+    /\b(?:free|bogo|buy\s*1\s*get\s*1|buy\s+one\s+get\s+one)\b/i.test(text) &&
+    /\b(?:chicken\s+)?(?:kheema|keema)\s+(?:pulao|pulav)\b/i.test(text);
+  if (legacySunday && !legacySunday.live && asksLegacySunday) return legacySunday;
+
   const said = tokens(text);
   if (!said.size) return null;
 
@@ -704,7 +714,7 @@ export class Agent {
     if (!draft?.custom && unknownDish) {
       out.route = "unknown_dish";
       out.issues.push("unknown_dish");
-      out.replies.push(`I don't see "${unknownDish}" on the ordering menu. ${unknownDish} isn't on our current menu. I've let Annapurna Home Foods know. Would you like something from the menu instead?`);
+      out.replies.push(`I don't see "${unknownDish}" on our current menu. I've let Annapurna Home Foods know. Would you like something from the menu instead?`);
       await this.raise(
         msg.from,
         customer.name || msg.name || "Customer",
