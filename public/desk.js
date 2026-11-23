@@ -121,6 +121,17 @@ function when(p) {
   return dt.toLocaleDateString("en-CA", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" }) + " · " + dt.toLocaleTimeString("en-US", { timeZone: "UTC", hour: "numeric", minute: "2-digit" });
 }
 const timeOf = (ts) => new Date(ts).toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+function orderPlacedAt(ts, tz) {
+  if (!Number.isFinite(Number(ts))) return "";
+  try {
+    const d = new Date(Number(ts));
+    const date = d.toLocaleDateString("en-CA", { timeZone: tz || "America/Toronto", weekday: "short", month: "short", day: "numeric" });
+    const time = d.toLocaleTimeString("en-US", { timeZone: tz || "America/Toronto", hour: "numeric", minute: "2-digit" });
+    return date + " · " + time;
+  } catch {
+    return timeOf(ts);
+  }
+}
 function localDateKey(ts, tz) {
   try {
     return new Intl.DateTimeFormat("en-CA", { timeZone: tz || "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ts));
@@ -326,7 +337,8 @@ function ticket(o) {
   const statusLabel = { hold: "Needs approval", cook: "To cook", ready: "Ready for pickup", done: "Picked up", cancelled: "Cancelled" }[o.status] || o.status;
   return h("article", { class: "ticket" + (isCustom ? " custom-ticket" : "") + (cancelAlert ? " cancellation-ticket" : ""), "data-status": o.status },
     h("div", { class: "ticket-band" }, h("span", { class: "ticket-status" }, statusLabel), h("span", { class: "ticket-no" }, "#" + o.id)),
-    h("div", { class: "when" }, when(o.pickup)),
+    h("div", { class: "when" }, "Pickup: " + when(o.pickup)),
+    o.createdAt ? h("div", { class: "ticket-ordered-at" }, "Ordered: " + orderPlacedAt(o.createdAt, state.settings && state.settings.tz)) : null,
     h("div", { class: "ticket-title" }, h("b", {}, o.name),
       isCustom ? h("span", { class: "flag custom-flag" }, "Custom") : null,
       isWeekendSpecial ? h("span", { class: "flag" }, "Weekend Special") : null,
